@@ -13,9 +13,14 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as ComplianceRouteImport } from './routes/compliance'
 import { Route as DiarioRouteImport } from './routes/diario'
 import { Route as EngenhariaRouteImport } from './routes/engenharia'
+import { Route as LgpdRouteImport } from './routes/lgpd'
 import { Route as PatenteRouteImport } from './routes/patente'
 import { Route as RiscosRouteImport } from './routes/riscos'
 import { Route as TarefasRouteImport } from './routes/tarefas'
+import { Route as TermosRouteImport } from './routes/termos'
+import { Route as WikiRouteImport } from './routes/wiki'
+import { Route as WikiIndexRouteImport } from './routes/wiki.index'
+import { Route as WikiSlugRouteImport } from './routes/wiki.$slug'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -37,6 +42,11 @@ const EngenhariaRoute = EngenhariaRouteImport.update({
   path: '/engenharia',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LgpdRoute = LgpdRouteImport.update({
+  id: '/lgpd',
+  path: '/lgpd',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PatenteRoute = PatenteRouteImport.update({
   id: '/patente',
   path: '/patente',
@@ -52,24 +62,53 @@ const TarefasRoute = TarefasRouteImport.update({
   path: '/tarefas',
   getParentRoute: () => rootRouteImport,
 } as any)
+const TermosRoute = TermosRouteImport.update({
+  id: '/termos',
+  path: '/termos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WikiRoute = WikiRouteImport.update({
+  id: '/wiki',
+  path: '/wiki',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WikiIndexRoute = WikiIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => WikiRoute,
+} as any)
+const WikiSlugRoute = WikiSlugRouteImport.update({
+  id: '/$slug',
+  path: '/$slug',
+  getParentRoute: () => WikiRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/compliance': typeof ComplianceRoute
   '/diario': typeof DiarioRoute
   '/engenharia': typeof EngenhariaRoute
+  '/lgpd': typeof LgpdRoute
   '/patente': typeof PatenteRoute
   '/riscos': typeof RiscosRoute
   '/tarefas': typeof TarefasRoute
+  '/termos': typeof TermosRoute
+  '/wiki': typeof WikiRouteWithChildren
+  '/wiki/$slug': typeof WikiSlugRoute
+  '/wiki/': typeof WikiIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/compliance': typeof ComplianceRoute
   '/diario': typeof DiarioRoute
   '/engenharia': typeof EngenhariaRoute
+  '/lgpd': typeof LgpdRoute
   '/patente': typeof PatenteRoute
   '/riscos': typeof RiscosRoute
   '/tarefas': typeof TarefasRoute
+  '/termos': typeof TermosRoute
+  '/wiki/$slug': typeof WikiSlugRoute
+  '/wiki': typeof WikiIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -77,9 +116,14 @@ export interface FileRoutesById {
   '/compliance': typeof ComplianceRoute
   '/diario': typeof DiarioRoute
   '/engenharia': typeof EngenhariaRoute
+  '/lgpd': typeof LgpdRoute
   '/patente': typeof PatenteRoute
   '/riscos': typeof RiscosRoute
   '/tarefas': typeof TarefasRoute
+  '/termos': typeof TermosRoute
+  '/wiki': typeof WikiRouteWithChildren
+  '/wiki/$slug': typeof WikiSlugRoute
+  '/wiki/': typeof WikiIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -88,27 +132,41 @@ export interface FileRouteTypes {
     | '/compliance'
     | '/diario'
     | '/engenharia'
+    | '/lgpd'
     | '/patente'
     | '/riscos'
     | '/tarefas'
+    | '/termos'
+    | '/wiki'
+    | '/wiki/$slug'
+    | '/wiki/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/compliance'
     | '/diario'
     | '/engenharia'
+    | '/lgpd'
     | '/patente'
     | '/riscos'
     | '/tarefas'
+    | '/termos'
+    | '/wiki/$slug'
+    | '/wiki'
   id:
     | '__root__'
     | '/'
     | '/compliance'
     | '/diario'
     | '/engenharia'
+    | '/lgpd'
     | '/patente'
     | '/riscos'
     | '/tarefas'
+    | '/termos'
+    | '/wiki'
+    | '/wiki/$slug'
+    | '/wiki/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -116,9 +174,12 @@ export interface RootRouteChildren {
   ComplianceRoute: typeof ComplianceRoute
   DiarioRoute: typeof DiarioRoute
   EngenhariaRoute: typeof EngenhariaRoute
+  LgpdRoute: typeof LgpdRoute
   PatenteRoute: typeof PatenteRoute
   RiscosRoute: typeof RiscosRoute
   TarefasRoute: typeof TarefasRoute
+  TermosRoute: typeof TermosRoute
+  WikiRoute: typeof WikiRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
@@ -151,6 +212,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EngenhariaRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/lgpd': {
+      id: '/lgpd'
+      path: '/lgpd'
+      fullPath: '/lgpd'
+      preLoaderRoute: typeof LgpdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/patente': {
       id: '/patente'
       path: '/patente'
@@ -172,17 +240,60 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TarefasRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/termos': {
+      id: '/termos'
+      path: '/termos'
+      fullPath: '/termos'
+      preLoaderRoute: typeof TermosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/wiki': {
+      id: '/wiki'
+      path: '/wiki'
+      fullPath: '/wiki'
+      preLoaderRoute: typeof WikiRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/wiki/': {
+      id: '/wiki/'
+      path: '/'
+      fullPath: '/wiki/'
+      preLoaderRoute: typeof WikiIndexRouteImport
+      parentRoute: typeof WikiRoute
+    }
+    '/wiki/$slug': {
+      id: '/wiki/$slug'
+      path: '/$slug'
+      fullPath: '/wiki/$slug'
+      preLoaderRoute: typeof WikiSlugRouteImport
+      parentRoute: typeof WikiRoute
+    }
   }
 }
+
+interface WikiRouteChildren {
+  WikiSlugRoute: typeof WikiSlugRoute
+  WikiIndexRoute: typeof WikiIndexRoute
+}
+
+const WikiRouteChildren: WikiRouteChildren = {
+  WikiSlugRoute: WikiSlugRoute,
+  WikiIndexRoute: WikiIndexRoute,
+}
+
+const WikiRouteWithChildren = WikiRoute._addFileChildren(WikiRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ComplianceRoute: ComplianceRoute,
   DiarioRoute: DiarioRoute,
   EngenhariaRoute: EngenhariaRoute,
+  LgpdRoute: LgpdRoute,
   PatenteRoute: PatenteRoute,
   RiscosRoute: RiscosRoute,
   TarefasRoute: TarefasRoute,
+  TermosRoute: TermosRoute,
+  WikiRoute: WikiRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
