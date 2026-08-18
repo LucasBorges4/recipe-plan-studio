@@ -77,14 +77,20 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
-      { name: "description", content: "Lovable Generated Project" },
-      { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "Lovable Generated Project" },
+      { title: "Portal de Governança — Grupo Geos" },
+      {
+        name: "description",
+        content:
+          "Portal de Governança Corporativa do Grupo Geos: painel executivo, tarefas, compliance, riscos e documentos.",
+      },
+      { name: "author", content: "Grupo Geos" },
+      { property: "og:title", content: "Portal de Governança — Grupo Geos" },
+      {
+        property: "og:description",
+        content: "Gestão integrada de governança, compliance e engenharia do Grupo Geos.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:site", content: "@Lovable" },
     ],
     links: [
       {
@@ -99,6 +105,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   notFoundComponent: NotFoundComponent,
   errorComponent: ErrorComponent,
 });
+
 
 function RootShell({ children }: { children: ReactNode }) {
   return (
