@@ -76,7 +76,7 @@ function DiarioPage() {
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-xs text-muted-foreground">{m.date}</span>
-                  <StatusBadge tone={typeTone[m.type]}>{m.type}</StatusBadge>
+                  <StatusBadge tone={typeTone[m.type] ?? "neutral"}>{m.type}</StatusBadge>
                 </div>
                 <h2 className="mt-1 text-base font-semibold text-foreground">{m.title}</h2>
                 <p className="mt-1 text-sm text-muted-foreground">{m.description}</p>

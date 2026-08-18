@@ -94,9 +94,9 @@ function Index() {
                 <li key={m.id}>
                   <Link
                     to="/tarefas"
-                    search={{ modulo: m.name }}
                     className="flex flex-wrap items-center gap-3 rounded-lg px-2 py-3 transition-colors hover:bg-surface"
                   >
+
                     <span className="flex min-w-0 flex-1 flex-col gap-1">
                       <span className="flex flex-wrap items-center gap-2">
                         <span className="truncate text-sm font-medium text-foreground">
