@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AdminRouteImport } from './routes/admin'
 import { Route as ComplianceRouteImport } from './routes/compliance'
 import { Route as DiarioRouteImport } from './routes/diario'
 import { Route as EngenhariaRouteImport } from './routes/engenharia'
@@ -25,6 +26,11 @@ import { Route as WikiSlugRouteImport } from './routes/wiki.$slug'
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminRoute = AdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ComplianceRoute = ComplianceRouteImport.update({
@@ -85,6 +91,7 @@ const WikiSlugRoute = WikiSlugRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/admin': typeof AdminRoute
   '/compliance': typeof ComplianceRoute
   '/diario': typeof DiarioRoute
   '/engenharia': typeof EngenhariaRoute
@@ -99,6 +106,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/admin': typeof AdminRoute
   '/compliance': typeof ComplianceRoute
   '/diario': typeof DiarioRoute
   '/engenharia': typeof EngenhariaRoute
@@ -113,6 +121,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/admin': typeof AdminRoute
   '/compliance': typeof ComplianceRoute
   '/diario': typeof DiarioRoute
   '/engenharia': typeof EngenhariaRoute
@@ -129,6 +138,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/admin'
     | '/compliance'
     | '/diario'
     | '/engenharia'
@@ -143,6 +153,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/admin'
     | '/compliance'
     | '/diario'
     | '/engenharia'
@@ -156,6 +167,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/admin'
     | '/compliance'
     | '/diario'
     | '/engenharia'
@@ -171,6 +183,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AdminRoute: typeof AdminRoute
   ComplianceRoute: typeof ComplianceRoute
   DiarioRoute: typeof DiarioRoute
   EngenhariaRoute: typeof EngenhariaRoute
@@ -189,6 +202,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin': {
+      id: '/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AdminRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/compliance': {
@@ -285,6 +305,7 @@ const WikiRouteWithChildren = WikiRoute._addFileChildren(WikiRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AdminRoute: AdminRoute,
   ComplianceRoute: ComplianceRoute,
   DiarioRoute: DiarioRoute,
   EngenhariaRoute: EngenhariaRoute,
