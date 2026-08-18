@@ -159,7 +159,9 @@ export function usePortal() {
     listeners.add(l);
     hydrate();
     l();
-    return () => listeners.delete(l);
+    return () => {
+      listeners.delete(l);
+    };
   }, []);
   return snapshot;
 }
@@ -215,7 +217,7 @@ export function moveTask(id: string, column: string, reason?: string) {
     entityId: id,
     before: task.column,
     after: column,
-    reason,
+    ...(reason ? { reason } : {}),
   });
 }
 
