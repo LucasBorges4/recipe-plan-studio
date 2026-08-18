@@ -12,6 +12,10 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ComplianceRouteImport } from './routes/compliance'
 import { Route as DiarioRouteImport } from './routes/diario'
+import { Route as EngenhariaRouteImport } from './routes/engenharia'
+import { Route as PatenteRouteImport } from './routes/patente'
+import { Route as RiscosRouteImport } from './routes/riscos'
+import { Route as TarefasRouteImport } from './routes/tarefas'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -28,35 +32,93 @@ const DiarioRoute = DiarioRouteImport.update({
   path: '/diario',
   getParentRoute: () => rootRouteImport,
 } as any)
+const EngenhariaRoute = EngenhariaRouteImport.update({
+  id: '/engenharia',
+  path: '/engenharia',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PatenteRoute = PatenteRouteImport.update({
+  id: '/patente',
+  path: '/patente',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RiscosRoute = RiscosRouteImport.update({
+  id: '/riscos',
+  path: '/riscos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TarefasRoute = TarefasRouteImport.update({
+  id: '/tarefas',
+  path: '/tarefas',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/compliance': typeof ComplianceRoute
   '/diario': typeof DiarioRoute
+  '/engenharia': typeof EngenhariaRoute
+  '/patente': typeof PatenteRoute
+  '/riscos': typeof RiscosRoute
+  '/tarefas': typeof TarefasRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/compliance': typeof ComplianceRoute
   '/diario': typeof DiarioRoute
+  '/engenharia': typeof EngenhariaRoute
+  '/patente': typeof PatenteRoute
+  '/riscos': typeof RiscosRoute
+  '/tarefas': typeof TarefasRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/compliance': typeof ComplianceRoute
   '/diario': typeof DiarioRoute
+  '/engenharia': typeof EngenhariaRoute
+  '/patente': typeof PatenteRoute
+  '/riscos': typeof RiscosRoute
+  '/tarefas': typeof TarefasRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/compliance' | '/diario'
+  fullPaths:
+    | '/'
+    | '/compliance'
+    | '/diario'
+    | '/engenharia'
+    | '/patente'
+    | '/riscos'
+    | '/tarefas'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/compliance' | '/diario'
-  id: '__root__' | '/' | '/compliance' | '/diario'
+  to:
+    | '/'
+    | '/compliance'
+    | '/diario'
+    | '/engenharia'
+    | '/patente'
+    | '/riscos'
+    | '/tarefas'
+  id:
+    | '__root__'
+    | '/'
+    | '/compliance'
+    | '/diario'
+    | '/engenharia'
+    | '/patente'
+    | '/riscos'
+    | '/tarefas'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ComplianceRoute: typeof ComplianceRoute
   DiarioRoute: typeof DiarioRoute
+  EngenhariaRoute: typeof EngenhariaRoute
+  PatenteRoute: typeof PatenteRoute
+  RiscosRoute: typeof RiscosRoute
+  TarefasRoute: typeof TarefasRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -82,6 +144,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DiarioRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/engenharia': {
+      id: '/engenharia'
+      path: '/engenharia'
+      fullPath: '/engenharia'
+      preLoaderRoute: typeof EngenhariaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/patente': {
+      id: '/patente'
+      path: '/patente'
+      fullPath: '/patente'
+      preLoaderRoute: typeof PatenteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/riscos': {
+      id: '/riscos'
+      path: '/riscos'
+      fullPath: '/riscos'
+      preLoaderRoute: typeof RiscosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/tarefas': {
+      id: '/tarefas'
+      path: '/tarefas'
+      fullPath: '/tarefas'
+      preLoaderRoute: typeof TarefasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -89,6 +179,10 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ComplianceRoute: ComplianceRoute,
   DiarioRoute: DiarioRoute,
+  EngenhariaRoute: EngenhariaRoute,
+  PatenteRoute: PatenteRoute,
+  RiscosRoute: RiscosRoute,
+  TarefasRoute: TarefasRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
