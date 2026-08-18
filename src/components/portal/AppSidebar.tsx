@@ -12,10 +12,12 @@ import {
   BadgeCheck,
   Settings,
   PanelLeft,
+  ScrollText,
   X,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { roleLabel, setCurrentUser, useCurrentUser, users } from "@/lib/store";
 
 const mainNav = [
   { to: "/", label: "Painel Executivo", icon: LayoutDashboard },
@@ -28,11 +30,40 @@ const mainNav = [
 ] as const;
 
 const legalNav = [
+  { to: "/auditoria", label: "Auditoria", icon: ScrollText },
   { to: "/termos", label: "Termos de Uso", icon: FileText },
   { to: "/lgpd", label: "Política LGPD", icon: Lock },
   { to: "/patente", label: "Patente", icon: BadgeCheck },
   { to: "/admin", label: "Administração", icon: Settings },
 ] as const;
+
+function UserSwitcher() {
+  const user = useCurrentUser();
+  return (
+    <div className="border-t border-sidebar-border px-4 py-3">
+      <p className="text-[11px] tracking-wider text-sidebar-foreground/45">SESSÃO ATUAL</p>
+      <p className="mt-1 truncate text-sm font-medium text-sidebar-primary-foreground">
+        {user.name}
+      </p>
+      <p className="text-[11px] text-sidebar-foreground/60">
+        {user.jobTitle} · {roleLabel[user.role]}
+      </p>
+      <select
+        aria-label="Trocar usuário da sessão"
+        value={user.id}
+        onChange={(e) => setCurrentUser(e.target.value)}
+        className="mt-2 w-full rounded-md border border-sidebar-border bg-sidebar-accent px-2 py-1.5 text-xs text-sidebar-primary-foreground"
+      >
+        {users.map((u) => (
+          <option key={u.id} value={u.id}>
+            {u.name} — {roleLabel[u.role]}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
 
 function NavList({ onNavigate }: { onNavigate?: () => void }) {
   return (
