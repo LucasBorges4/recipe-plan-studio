@@ -133,6 +133,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <aside className="hidden w-64 shrink-0 flex-col bg-sidebar lg:flex lg:fixed lg:inset-y-0">
         <Brand />
         <NavList />
+        <UserSwitcher />
         <p className="border-t border-sidebar-border px-5 py-3 text-[11px] text-sidebar-foreground/40">
           © 2026 Grupo Geos
         </p>
@@ -155,6 +156,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </button>
             <Brand />
             <NavList onNavigate={() => setOpen(false)} />
+            <UserSwitcher />
           </div>
         </div>
       ) : null}
