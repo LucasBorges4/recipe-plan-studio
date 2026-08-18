@@ -12,14 +12,24 @@ import {
   MessageSquare,
   Inbox,
   MoreVertical,
+  History,
 } from "lucide-react";
 import { PageHeader } from "@/components/portal/PageHeader";
 import { StatusBadge } from "@/components/portal/StatusBadge";
 import { Initials } from "@/components/portal/ProgressBar";
-import { kanbanColumns, tasks as seedTasks } from "@/data/tasks";
 import type { Priority, Task } from "@/data/types";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import {
+  addColumn as addColumnToBoard,
+  addComment,
+  can,
+  createTask,
+  formatDateTime,
+  moveTask,
+  useCurrentUser,
+  usePortal,
+} from "@/lib/store";
 import {
   Dialog,
   DialogContent,
@@ -56,15 +66,18 @@ const priorityBar: Record<Priority, string> = {
 const priorityTone = { Alta: "danger", Média: "warning", Baixa: "info" } as const;
 
 function TarefasPage() {
-  const [items, setItems] = useState<Task[]>(seedTasks);
-  const [columns, setColumns] = useState<string[]>([...kanbanColumns]);
+  const { tasks: items, columns, comments, audit } = usePortal();
+  const user = useCurrentUser();
   const [query, setQuery] = useState("");
   const [priority, setPriority] = useState("Todas");
   const [assignee, setAssignee] = useState("Todos");
   const [moduleFilter, setModuleFilter] = useState("Todos módulos");
   const [view, setView] = useState<"board" | "list">("board");
-  const [detail, setDetail] = useState<Task | null>(null);
+  const [detailId, setDetailId] = useState<string | null>(null);
   const [dragging, setDragging] = useState<string | null>(null);
+  const [commentDraft, setCommentDraft] = useState("");
+
+  const detail = items.find((t) => t.id === detailId) ?? null;
 
   const assignees = useMemo(
     () => ["Todos", ...Array.from(new Set(items.map((t) => t.assignee)))],
@@ -84,39 +97,66 @@ function TarefasPage() {
   );
 
   function move(id: string, column: string) {
-    setItems((prev) => prev.map((t) => (t.id === id ? { ...t, column } : t)));
+    const task = items.find((t) => t.id === id);
+    if (!task) return;
+    const approving = column === "Concluído" && task.column === "Em Aprovação";
+    if (approving && !can(user.role, "task.approve")) {
+      toast.error(`${user.name} não tem permissão para aprovar tarefas.`);
+      return;
+    }
+    if (!approving && !can(user.role, "task.move")) {
+      toast.error(`${user.name} não tem permissão para mover tarefas.`);
+      return;
+    }
+    moveTask(id, column);
   }
 
-  function addTask() {
+  function handleAddTask() {
+    if (!can(user.role, "task.create")) {
+      toast.error("Somente gestor ou administrador pode criar tarefas.");
+      return;
+    }
     const id = `t${Date.now()}`;
-    setItems((prev) => [
-      {
-        id,
-        title: "Nova tarefa",
-        description: "Descreva o escopo desta tarefa.",
-        column: columns[0] ?? "Backlog",
-        priority: "Média",
-        tags: [],
-        assignee: "Não atribuída",
-      },
-      ...prev,
-    ]);
-    toast.success("Tarefa criada no Backlog.");
+    createTask({
+      id,
+      title: "Nova tarefa",
+      description: "Descreva o escopo desta tarefa.",
+      column: columns[0] ?? "Backlog",
+      priority: "Média",
+      tags: [],
+      assignee: user.name,
+    });
+    toast.success("Tarefa criada no Backlog e registrada na auditoria.");
   }
 
-  function addColumn() {
+  function handleAddColumn() {
+    if (!can(user.role, "task.create")) {
+      toast.error("Somente gestor ou administrador pode alterar o board.");
+      return;
+    }
     const name = `Nova Coluna ${columns.length + 1}`;
-    setColumns((prev) => [...prev, name]);
+    addColumnToBoard(name);
     toast.success(`Coluna "${name}" adicionada.`);
   }
 
+  function submitComment() {
+    if (!detail || !commentDraft.trim()) return;
+    if (!can(user.role, "task.comment")) {
+      toast.error("Seu papel não permite comentar.");
+      return;
+    }
+    addComment(detail.id, commentDraft.trim());
+    setCommentDraft("");
+  }
+
   function TaskCard({ t }: { t: Task }) {
+    const count = comments.filter((c) => c.taskId === t.id).length + (t.comments ?? 0);
     return (
       <article
         draggable
         onDragStart={() => setDragging(t.id)}
         onDragEnd={() => setDragging(null)}
-        onClick={() => setDetail(t)}
+        onClick={() => setDetailId(t.id)}
         className={cn(
           "cursor-pointer rounded-lg border border-border border-l-4 bg-card p-3 shadow-sm transition-shadow hover:shadow-md",
           priorityBar[t.priority],
@@ -147,9 +187,9 @@ function TarefasPage() {
               <Clock className="size-3" /> {t.due}
             </span>
           ) : null}
-          {t.comments ? (
+          {count ? (
             <span className="flex items-center gap-1">
-              <MessageSquare className="size-3" /> {t.comments}
+              <MessageSquare className="size-3" /> {count}
             </span>
           ) : null}
         </div>
@@ -159,7 +199,6 @@ function TarefasPage() {
               onClick={(e) => {
                 e.stopPropagation();
                 move(t.id, "Concluído");
-                toast.success("Tarefa aprovada.");
               }}
               className="flex flex-1 items-center justify-center gap-1 rounded-md bg-success px-2 py-1.5 text-xs font-medium text-success-foreground"
             >
@@ -169,7 +208,6 @@ function TarefasPage() {
               onClick={(e) => {
                 e.stopPropagation();
                 move(t.id, "Em Progresso");
-                toast("Tarefa devolvida para Em Progresso.");
               }}
               className="flex flex-1 items-center justify-center gap-1 rounded-md bg-danger px-2 py-1.5 text-xs font-medium text-danger-foreground"
             >
@@ -180,6 +218,11 @@ function TarefasPage() {
       </article>
     );
   }
+
+  const detailComments = detail ? comments.filter((c) => c.taskId === detail.id) : [];
+  const detailHistory = detail
+    ? audit.filter((a) => a.entity === "tarefa" && a.entityId === detail.id)
+    : [];
 
   return (
     <>
@@ -233,26 +276,32 @@ function TarefasPage() {
           <button
             aria-label="Visão em board"
             onClick={() => setView("board")}
-            className={cn("px-2.5 py-2", view === "board" ? "bg-brand text-brand-foreground" : "bg-card")}
+            className={cn(
+              "px-2.5 py-2",
+              view === "board" ? "bg-brand text-brand-foreground" : "bg-card",
+            )}
           >
             <LayoutGrid className="size-4" />
           </button>
           <button
             aria-label="Visão em lista"
             onClick={() => setView("list")}
-            className={cn("px-2.5 py-2", view === "list" ? "bg-brand text-brand-foreground" : "bg-card")}
+            className={cn(
+              "px-2.5 py-2",
+              view === "list" ? "bg-brand text-brand-foreground" : "bg-card",
+            )}
           >
             <List className="size-4" />
           </button>
         </div>
         <button
-          onClick={addColumn}
+          onClick={handleAddColumn}
           className="flex items-center gap-1.5 rounded-md border border-input bg-card px-3 py-2 text-sm text-foreground"
         >
           <Plus className="size-4" /> Nova Coluna
         </button>
         <button
-          onClick={addTask}
+          onClick={handleAddTask}
           className="flex items-center gap-1.5 rounded-md bg-brand px-3 py-2 text-sm font-medium text-brand-foreground"
         >
           <Plus className="size-4" /> Nova Tarefa
@@ -300,7 +349,7 @@ function TarefasPage() {
           {filtered.map((t) => (
             <li
               key={t.id}
-              onClick={() => setDetail(t)}
+              onClick={() => setDetailId(t.id)}
               className={cn(
                 "cursor-pointer rounded-lg border border-border border-l-4 bg-card p-4",
                 priorityBar[t.priority],
@@ -319,14 +368,14 @@ function TarefasPage() {
         </ul>
       )}
 
-      <Dialog open={!!detail} onOpenChange={(o) => !o && setDetail(null)}>
-        <DialogContent>
+      <Dialog open={!!detail} onOpenChange={(o) => !o && setDetailId(null)}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{detail?.title}</DialogTitle>
             <DialogDescription>{detail?.description}</DialogDescription>
           </DialogHeader>
           {detail ? (
-            <div className="space-y-3 text-sm">
+            <div className="space-y-4 text-sm">
               <p className="text-muted-foreground">
                 Coluna: <span className="text-foreground">{detail.column}</span> · Prioridade:{" "}
                 <span className="text-foreground">{detail.priority}</span>
@@ -335,24 +384,70 @@ function TarefasPage() {
                 Responsável: <span className="text-foreground">{detail.assignee}</span>
                 {detail.due ? ` · Prazo: ${detail.due}` : ""}
               </p>
+
               <div>
                 <p className="mb-2 text-xs font-semibold text-foreground">Comentários</p>
-                <p className="rounded-md bg-surface p-3 text-xs text-muted-foreground">
-                  {detail.comments
-                    ? `${detail.comments} comentário(s) registrados nesta tarefa.`
-                    : "Nenhum comentário ainda."}
-                </p>
+                <ul className="space-y-2">
+                  {detailComments.map((c) => (
+                    <li key={c.id} className="rounded-md bg-surface p-3 text-xs">
+                      <p className="text-foreground">{c.body}</p>
+                      <p className="mt-1 text-muted-foreground">
+                        {c.author} · {formatDateTime(c.at)}
+                      </p>
+                    </li>
+                  ))}
+                  {detailComments.length === 0 ? (
+                    <li className="rounded-md bg-surface p-3 text-xs text-muted-foreground">
+                      Nenhum comentário ainda.
+                    </li>
+                  ) : null}
+                </ul>
+                <div className="mt-2 flex gap-2">
+                  <input
+                    value={commentDraft}
+                    onChange={(e) => setCommentDraft(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && submitComment()}
+                    placeholder={`Comentar como ${user.name}...`}
+                    className="flex-1 rounded-md border border-input bg-card px-3 py-2 text-xs text-foreground"
+                  />
+                  <button
+                    onClick={submitComment}
+                    className="rounded-md bg-brand px-3 py-2 text-xs font-medium text-brand-foreground"
+                  >
+                    Enviar
+                  </button>
+                </div>
               </div>
+
+              <div>
+                <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                  <History className="size-3.5 text-brand" /> Histórico da tarefa
+                </p>
+                <ul className="space-y-2">
+                  {detailHistory.map((h) => (
+                    <li key={h.id} className="rounded-md border border-border p-3 text-xs">
+                      <p className="text-foreground">{h.action}</p>
+                      <p className="mt-1 text-muted-foreground">
+                        {h.actor} · {formatDateTime(h.at)}
+                        {h.before && h.after ? ` · ${h.before} → ${h.after}` : ""}
+                      </p>
+                    </li>
+                  ))}
+                  {detailHistory.length === 0 ? (
+                    <li className="rounded-md border border-dashed border-border p-3 text-xs text-muted-foreground">
+                      Sem movimentações registradas nesta sessão.
+                    </li>
+                  ) : null}
+                </ul>
+              </div>
+
               <div className="flex flex-wrap gap-2">
                 {columns
                   .filter((c) => c !== detail.column)
                   .map((c) => (
                     <button
                       key={c}
-                      onClick={() => {
-                        move(detail.id, c);
-                        setDetail({ ...detail, column: c });
-                      }}
+                      onClick={() => move(detail.id, c)}
                       className="rounded-md border border-input px-2.5 py-1.5 text-xs text-muted-foreground hover:text-foreground"
                     >
                       Mover para {c}
