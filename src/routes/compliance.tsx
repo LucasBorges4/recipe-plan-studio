@@ -1,12 +1,20 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { ShieldCheck, Paperclip, AlertTriangle } from "lucide-react";
+import { ShieldCheck, Paperclip, AlertTriangle, Check, X, CalendarCheck } from "lucide-react";
 import { PageHeader } from "@/components/portal/PageHeader";
-import { NoticeBanner } from "@/components/portal/NoticeBanner";
 import { StatusBadge } from "@/components/portal/StatusBadge";
 import { ProgressBar } from "@/components/portal/ProgressBar";
-import { controls } from "@/data/compliance";
 import { toast } from "sonner";
+import {
+  attachEvidence,
+  can,
+  computeStatus,
+  formatDateTime,
+  reviewControl,
+  reviewEvidence,
+  useCurrentUser,
+  usePortal,
+} from "@/lib/store";
 
 export const Route = createFileRoute("/compliance")({
   head: () => ({
@@ -15,7 +23,7 @@ export const Route = createFileRoute("/compliance")({
       {
         name: "description",
         content:
-          "Controles de conformidade LGPD, ISO 27001 e SOX com responsáveis, status e datas de revisão.",
+          "Controles de conformidade LGPD, ISO 27001 e SOX com responsáveis, evidências e vencimentos calculados.",
       },
       { property: "og:title", content: "Compliance — Grupo Geos" },
       {
@@ -28,31 +36,60 @@ export const Route = createFileRoute("/compliance")({
 });
 
 const norms = ["Todas", "LGPD", "ISO 27001", "SOX"] as const;
-const statuses = ["Todos", "Conforme", "Em Andamento", "Pendente", "Não Conforme"] as const;
+const statuses = [
+  "Todos",
+  "Conforme",
+  "Próximo do vencimento",
+  "Vencido",
+  "Não conforme",
+] as const;
 
 function CompliancePage() {
+  const { controls, evidences } = usePortal();
+  const user = useCurrentUser();
   const [norm, setNorm] = useState<(typeof norms)[number]>("Todas");
   const [status, setStatus] = useState<(typeof statuses)[number]>("Todos");
 
-  const list = useMemo(
-    () =>
-      controls.filter(
-        (c) => (norm === "Todas" || c.norm === norm) && (status === "Todos" || c.status === status),
-      ),
-    [norm, status],
+  const computed = useMemo(
+    () => controls.map((c) => ({ control: c, ...computeStatus(c) })),
+    [controls],
   );
 
-  const conform = controls.filter((c) => c.status === "Conforme").length;
-  const overdue = controls.filter((c) => c.overdue).length;
+  const list = computed.filter(
+    (row) =>
+      (norm === "Todas" || row.control.norm === norm) &&
+      (status === "Todos" || row.status === status),
+  );
+
+  const conform = computed.filter((r) => r.status === "Conforme").length;
+  const overdue = computed.filter((r) => r.status === "Vencido").length;
+  const pending = evidences.filter((e) => e.status === "Em revisão").length;
+
+  function handleAttach(controlId: string, controlName: string) {
+    if (!can(user.role, "evidence.attach")) {
+      toast.error("Seu papel não permite anexar evidências.");
+      return;
+    }
+    attachEvidence(controlId, `evidencia-${Date.now()}.pdf`);
+    toast.success(`Evidência enviada para revisão no controle "${controlName}".`);
+  }
+
+  function handleReview(id: string, approved: boolean) {
+    if (!can(user.role, "evidence.review")) {
+      toast.error("Somente diretor ou administrador revisa evidências.");
+      return;
+    }
+    reviewEvidence(id, approved);
+    toast.success(approved ? "Evidência aprovada." : "Evidência rejeitada.");
+  }
 
   return (
     <>
       <PageHeader
         icon={ShieldCheck}
         title="Compliance"
-        subtitle="Controles de conformidade e obrigações regulatórias"
+        subtitle="Controles, evidências e vencimentos calculados pela data atual"
       />
-      <NoticeBanner />
 
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
         <div className="rounded-xl border border-border bg-card p-5">
@@ -63,14 +100,16 @@ function CompliancePage() {
           <ProgressBar value={(conform / controls.length) * 100} className="mt-3" />
         </div>
         <div className="rounded-xl border border-border bg-card p-5">
-          <p className="text-xs text-muted-foreground">Controles monitorados</p>
-          <p className="mt-1 text-2xl font-semibold text-foreground">{controls.length}</p>
-          <p className="mt-3 text-xs text-muted-foreground">LGPD, ISO 27001 e SOX</p>
-        </div>
-        <div className="rounded-xl border border-border bg-card p-5">
           <p className="text-xs text-muted-foreground">Revisões vencidas</p>
           <p className="mt-1 text-2xl font-semibold text-danger">{overdue}</p>
-          <p className="mt-3 text-xs text-muted-foreground">Exigem ação imediata</p>
+          <p className="mt-3 text-xs text-muted-foreground">
+            Pendência gerada automaticamente pela data de próxima revisão
+          </p>
+        </div>
+        <div className="rounded-xl border border-border bg-card p-5">
+          <p className="text-xs text-muted-foreground">Evidências em revisão</p>
+          <p className="mt-1 text-2xl font-semibold text-warning">{pending}</p>
+          <p className="mt-3 text-xs text-muted-foreground">Aguardando diretor ou administrador</p>
         </div>
       </div>
 
@@ -98,39 +137,105 @@ function CompliancePage() {
       </div>
 
       <ul className="space-y-3">
-        {list.map((c) => (
-          <li
-            key={c.id}
-            className={`rounded-xl border bg-card p-5 ${c.overdue ? "border-danger/40" : "border-border"}`}
-          >
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="min-w-0">
+        {list.map(({ control: c, status: st, tone, daysLeft }) => {
+          const items = evidences.filter((e) => e.controlId === c.id);
+          return (
+            <li
+              key={c.id}
+              className={`rounded-xl border bg-card p-5 ${st === "Vencido" || st === "Não conforme" ? "border-danger/40" : "border-border"}`}
+            >
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className="text-sm font-semibold text-foreground">{c.control}</h2>
+                    <StatusBadge tone="neutral">{c.norm}</StatusBadge>
+                    {st === "Vencido" ? (
+                      <span className="flex items-center gap-1 text-xs text-danger">
+                        <AlertTriangle className="size-3" /> Revisão vencida há{" "}
+                        {Math.abs(daysLeft ?? 0)} dias
+                      </span>
+                    ) : null}
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">Responsável: {c.owner}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Última revisão: {c.lastReview} · Próxima revisão: {c.nextReview}
+                    {daysLeft !== null && daysLeft >= 0 ? ` · faltam ${daysLeft} dias` : ""}
+                  </p>
+                </div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="text-sm font-semibold text-foreground">{c.control}</h2>
-                  <StatusBadge tone="neutral">{c.norm}</StatusBadge>
-                  {c.overdue ? (
-                    <span className="flex items-center gap-1 text-xs text-danger">
-                      <AlertTriangle className="size-3" /> Revisão vencida
-                    </span>
+                  <StatusBadge tone={tone}>{st}</StatusBadge>
+                  <button
+                    onClick={() => handleAttach(c.id, c.control)}
+                    className="flex items-center gap-1 rounded-md border border-input px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
+                  >
+                    <Paperclip className="size-3" /> Anexar evidência
+                  </button>
+                  {can(user.role, "evidence.review") ? (
+                    <button
+                      onClick={() => {
+                        reviewControl(c.id);
+                        toast.success("Revisão registrada; próxima revisão em 6 meses.");
+                      }}
+                      className="flex items-center gap-1 rounded-md border border-input px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
+                    >
+                      <CalendarCheck className="size-3" /> Registrar revisão
+                    </button>
                   ) : null}
                 </div>
-                <p className="mt-1 text-xs text-muted-foreground">Responsável: {c.owner}</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Última revisão: {c.lastReview} · Próxima revisão: {c.nextReview}
-                </p>
               </div>
-              <div className="flex items-center gap-3">
-                <StatusBadge tone={c.tone}>{c.status}</StatusBadge>
-                <button
-                  onClick={() => toast.success(`Evidência anexada ao controle "${c.control}".`)}
-                  className="flex items-center gap-1 rounded-md border border-input px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
-                >
-                  <Paperclip className="size-3" /> Anexar evidência
-                </button>
-              </div>
-            </div>
-          </li>
-        ))}
+
+              {items.length ? (
+                <ul className="mt-4 space-y-2 border-t border-border pt-3">
+                  {items.map((e) => (
+                    <li
+                      key={e.id}
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-surface p-3 text-xs"
+                    >
+                      <span className="min-w-0">
+                        <span className="text-foreground">{e.fileName}</span>
+                        <span className="ml-2 text-muted-foreground">
+                          enviada por {e.sentBy} em {formatDateTime(e.at)}
+                          {e.reviewer ? ` · revisada por ${e.reviewer}` : ""}
+                        </span>
+                      </span>
+                      <span className="flex items-center gap-2">
+                        <StatusBadge
+                          tone={
+                            e.status === "Aprovada"
+                              ? "success"
+                              : e.status === "Rejeitada"
+                                ? "danger"
+                                : "warning"
+                          }
+                        >
+                          {e.status}
+                        </StatusBadge>
+                        {e.status === "Em revisão" ? (
+                          <>
+                            <button
+                              aria-label="Aprovar evidência"
+                              onClick={() => handleReview(e.id, true)}
+                              className="rounded-md bg-success p-1 text-success-foreground"
+                            >
+                              <Check className="size-3" />
+                            </button>
+                            <button
+                              aria-label="Rejeitar evidência"
+                              onClick={() => handleReview(e.id, false)}
+                              className="rounded-md bg-danger p-1 text-danger-foreground"
+                            >
+                              <X className="size-3" />
+                            </button>
+                          </>
+                        ) : null}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </li>
+          );
+        })}
         {list.length === 0 ? (
           <li className="rounded-xl border border-border bg-card p-6 text-center text-sm text-muted-foreground">
             Nenhum controle encontrado com esses filtros.
