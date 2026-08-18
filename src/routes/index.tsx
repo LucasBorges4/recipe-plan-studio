@@ -5,6 +5,7 @@ import { NoticeBanner } from "@/components/portal/NoticeBanner";
 import { StatusBadge } from "@/components/portal/StatusBadge";
 import { ProgressBar } from "@/components/portal/ProgressBar";
 import { modules, nextSteps } from "@/data/modules";
+import { parseBR, usePortal } from "@/lib/store";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -53,9 +54,33 @@ function Gauge0({ value }: { value: number }) {
 }
 
 function Index() {
+  const { tasks, audit } = usePortal();
   const done = modules.reduce((s, m) => s + m.done, 0);
   const total = modules.reduce((s, m) => s + m.total, 0);
   const pct = total ? (done / total) * 100 : 0;
+
+  const today = new Date();
+  const kpis = [
+    { label: "Concluídas", value: tasks.filter((t) => t.column === "Concluído").length, tone: "text-success" },
+    {
+      label: "Em progresso",
+      value: tasks.filter((t) => t.column === "Em Progresso").length,
+      tone: "text-info",
+    },
+    {
+      label: "Em aprovação",
+      value: tasks.filter((t) => t.column === "Em Aprovação").length,
+      tone: "text-warning",
+    },
+    {
+      label: "Atrasadas",
+      value: tasks.filter((t) => {
+        const d = t.due ? parseBR(t.due) : null;
+        return !!d && d < today && t.column !== "Concluído";
+      }).length,
+      tone: "text-danger",
+    },
+  ];
 
   return (
     <>
@@ -65,6 +90,28 @@ function Index() {
         subtitle="Visão geral do progresso do projeto ERP"
       />
       <NoticeBanner />
+
+      <div className="mb-6 grid gap-4 sm:grid-cols-4">
+        {kpis.map((k) => (
+          <Link
+            key={k.label}
+            to="/tarefas"
+            className="rounded-xl border border-border bg-card p-5 transition-colors hover:border-brand"
+          >
+            <p className="text-xs text-muted-foreground">{k.label}</p>
+            <p className={`mt-1 text-2xl font-semibold ${k.tone}`}>{k.value}</p>
+          </Link>
+        ))}
+      </div>
+      <div className="mb-6 rounded-xl border border-border bg-card p-4 text-xs text-muted-foreground">
+        {audit.length
+          ? `${audit.length} ação(ões) registradas na trilha de auditoria desta base local.`
+          : "Nenhuma ação registrada ainda — cada movimentação passa a constar na Auditoria."}{" "}
+        <Link to="/auditoria" className="text-brand">
+          Ver auditoria
+        </Link>
+      </div>
+
 
       <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
         <section className="rounded-xl border border-border bg-card p-6">
