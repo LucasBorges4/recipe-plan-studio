@@ -293,24 +293,18 @@ export function reviewEvidence(id: string, approved: boolean, note?: string) {
   const status: Evidence["status"] = approved ? "Aprovada" : "Rejeitada";
   update({
     evidences: state.evidences.map((e) =>
-      e.id === id ? { ...e, status, reviewer: a.name, reviewedAt: nowISO(), note } : e,
+      e.id === id
+        ? { ...e, status, reviewer: a.name, reviewedAt: nowISO(), ...(note ? { note } : {}) }
+        : e,
     ),
   });
-  const controls = approved
-    ? state.controls.map((c) =>
-        c.controlId(ev.controlId)
-          ? c
-          : c,
-      )
-    : state.controls;
-  void controls;
   log({
     action: approved ? "Evidência aprovada" : "Evidência rejeitada",
     entity: "evidência",
     entityId: id,
     before: ev.status,
     after: status,
-    reason: note,
+    ...(note ? { reason: note } : {}),
   });
 }
 
