@@ -4,8 +4,9 @@ import { PageHeader } from "@/components/portal/PageHeader";
 import { NoticeBanner } from "@/components/portal/NoticeBanner";
 import { StatusBadge } from "@/components/portal/StatusBadge";
 import { ProgressBar } from "@/components/portal/ProgressBar";
-import { modules, nextSteps } from "@/data/modules";
-import { parseBR, usePortal } from "@/lib/store";
+import { modules as seedModules, nextSteps } from "@/data/modules";
+import { parseBR } from "@/lib/portal-utils";
+import { usePortalData } from "@/lib/api-hooks";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -32,7 +33,14 @@ function Gauge0({ value }: { value: number }) {
   return (
     <div className="relative flex size-48 items-center justify-center">
       <svg viewBox="0 0 160 160" className="size-full -rotate-90">
-        <circle cx="80" cy="80" r={r} fill="none" strokeWidth="14" className="stroke-neutral-soft" />
+        <circle
+          cx="80"
+          cy="80"
+          r={r}
+          fill="none"
+          strokeWidth="14"
+          className="stroke-neutral-soft"
+        />
         <circle
           cx="80"
           cy="80"
@@ -54,14 +62,22 @@ function Gauge0({ value }: { value: number }) {
 }
 
 function Index() {
-  const { tasks, audit } = usePortal();
-  const done = modules.reduce((s, m) => s + m.done, 0);
-  const total = modules.reduce((s, m) => s + m.total, 0);
+  const { data: state } = usePortalData();
+  const tasks = state?.tasks ?? [];
+  const auditCount = state?.auditCount ?? 0;
+  const mods = state?.modules ?? seedModules;
+
+  const done = mods.reduce((s, m) => s + m.done, 0);
+  const total = mods.reduce((s, m) => s + m.total, 0);
   const pct = total ? (done / total) * 100 : 0;
 
   const today = new Date();
   const kpis = [
-    { label: "Concluídas", value: tasks.filter((t) => t.column === "Concluído").length, tone: "text-success" },
+    {
+      label: "Concluídas",
+      value: tasks.filter((t) => t.column === "Concluído").length,
+      tone: "text-success",
+    },
     {
       label: "Em progresso",
       value: tasks.filter((t) => t.column === "Em Progresso").length,
@@ -104,14 +120,13 @@ function Index() {
         ))}
       </div>
       <div className="mb-6 rounded-xl border border-border bg-card p-4 text-xs text-muted-foreground">
-        {audit.length
-          ? `${audit.length} ação(ões) registradas na trilha de auditoria desta base local.`
+        {auditCount
+          ? `${auditCount} ação(ões) registradas na trilha de auditoria.`
           : "Nenhuma ação registrada ainda — cada movimentação passa a constar na Auditoria."}{" "}
         <Link to="/auditoria" className="text-brand">
           Ver auditoria
         </Link>
       </div>
-
 
       <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
         <section className="rounded-xl border border-border bg-card p-6">
@@ -121,7 +136,7 @@ function Index() {
           <div className="mt-6 flex flex-col items-center">
             <Gauge0 value={pct} />
             <p className="mt-6 text-center text-xs text-muted-foreground">
-              {done} de {total} entregáveis concluídos em {modules.length} módulos
+              {done} de {total} entregáveis concluídos em {mods.length} módulos
             </p>
           </div>
         </section>
@@ -131,11 +146,11 @@ function Index() {
             <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
               <Boxes className="size-4 text-brand" /> Módulos do Sistema
             </h2>
-            <StatusBadge tone="brand">{modules.length} módulos</StatusBadge>
+            <StatusBadge tone="brand">{mods.length} módulos</StatusBadge>
           </div>
 
           <ul className="mt-4 divide-y divide-border">
-            {modules.map((m) => {
+            {mods.map((m) => {
               const mp = m.total ? (m.done / m.total) * 100 : 0;
               return (
                 <li key={m.id}>
@@ -143,7 +158,6 @@ function Index() {
                     to="/tarefas"
                     className="flex flex-wrap items-center gap-3 rounded-lg px-2 py-3 transition-colors hover:bg-surface"
                   >
-
                     <span className="flex min-w-0 flex-1 flex-col gap-1">
                       <span className="flex flex-wrap items-center gap-2">
                         <span className="truncate text-sm font-medium text-foreground">

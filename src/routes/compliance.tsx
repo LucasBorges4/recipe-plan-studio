@@ -1,20 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
+import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { ShieldCheck, Paperclip, AlertTriangle, Check, X, CalendarCheck } from "lucide-react";
 import { PageHeader } from "@/components/portal/PageHeader";
 import { StatusBadge } from "@/components/portal/StatusBadge";
 import { ProgressBar } from "@/components/portal/ProgressBar";
 import { toast } from "sonner";
-import {
-  attachEvidence,
-  can,
-  computeStatus,
-  formatDateTime,
-  reviewControl,
-  reviewEvidence,
-  useCurrentUser,
-  usePortal,
-} from "@/lib/store";
+import { can } from "@/lib/rbac";
+import { computeStatus, formatDateTime } from "@/lib/portal-utils";
+import { usePortalData, useSession, qk } from "@/lib/api-hooks";
+import { attachEvidenceFn, reviewEvidenceFn, reviewControlFn } from "@/lib/portal-api";
 
 export const Route = createFileRoute("/compliance")({
   head: () => ({
@@ -36,19 +31,40 @@ export const Route = createFileRoute("/compliance")({
 });
 
 const norms = ["Todas", "LGPD", "ISO 27001", "SOX"] as const;
-const statuses = [
-  "Todos",
-  "Conforme",
-  "Próximo do vencimento",
-  "Vencido",
-  "Não conforme",
-] as const;
+const statuses = ["Todos", "Conforme", "Próximo do vencimento", "Vencido", "Não conforme"] as const;
 
 function CompliancePage() {
-  const { controls, evidences } = usePortal();
-  const user = useCurrentUser();
+  const qc = useQueryClient();
+  const { data: state } = usePortalData();
+  const { data: session } = useSession();
+
+  const controls = state?.controls ?? [];
+  const evidences = state?.evidences ?? [];
+  const user = session?.user ?? null;
+  const may = (p: Parameters<typeof can>[1]) => !!user && can(user.role, p);
+
   const [norm, setNorm] = useState<(typeof norms)[number]>("Todas");
   const [status, setStatus] = useState<(typeof statuses)[number]>("Todos");
+
+  const attachM = useMutation({
+    mutationFn: (v: { controlId: string; fileName: string }) => attachEvidenceFn({ data: v }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.portal }),
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Falha ao anexar evidência."),
+  });
+  const reviewEvM = useMutation({
+    mutationFn: (v: { id: string; approved: boolean; note?: string }) =>
+      reviewEvidenceFn({ data: v }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.portal }),
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Falha ao revisar evidência."),
+  });
+  const reviewCtrlM = useMutation({
+    mutationFn: (v: { id: string }) => reviewControlFn({ data: v }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.portal });
+      toast.success("Revisão registrada; próxima revisão em 6 meses.");
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Falha ao registrar revisão."),
+  });
 
   const computed = useMemo(
     () => controls.map((c) => ({ control: c, ...computeStatus(c) })),
@@ -66,21 +82,20 @@ function CompliancePage() {
   const pending = evidences.filter((e) => e.status === "Em revisão").length;
 
   function handleAttach(controlId: string, controlName: string) {
-    if (!can(user.role, "evidence.attach")) {
+    if (!may("evidence.attach")) {
       toast.error("Seu papel não permite anexar evidências.");
       return;
     }
-    attachEvidence(controlId, `evidencia-${Date.now()}.pdf`);
+    attachM.mutate({ controlId, fileName: `evidencia-${Date.now()}.pdf` });
     toast.success(`Evidência enviada para revisão no controle "${controlName}".`);
   }
 
   function handleReview(id: string, approved: boolean) {
-    if (!can(user.role, "evidence.review")) {
+    if (!may("evidence.review")) {
       toast.error("Somente diretor ou administrador revisa evidências.");
       return;
     }
-    reviewEvidence(id, approved);
-    toast.success(approved ? "Evidência aprovada." : "Evidência rejeitada.");
+    reviewEvM.mutate({ id, approved });
   }
 
   return (
@@ -95,9 +110,9 @@ function CompliancePage() {
         <div className="rounded-xl border border-border bg-card p-5">
           <p className="text-xs text-muted-foreground">Aderência geral</p>
           <p className="mt-1 text-2xl font-semibold text-foreground">
-            {Math.round((conform / controls.length) * 100)}%
+            {controls.length ? Math.round((conform / controls.length) * 100) : 0}%
           </p>
-          <ProgressBar value={(conform / controls.length) * 100} className="mt-3" />
+          <ProgressBar value={(conform / (controls.length || 1)) * 100} className="mt-3" />
         </div>
         <div className="rounded-xl border border-border bg-card p-5">
           <p className="text-xs text-muted-foreground">Revisões vencidas</p>
@@ -170,12 +185,9 @@ function CompliancePage() {
                   >
                     <Paperclip className="size-3" /> Anexar evidência
                   </button>
-                  {can(user.role, "evidence.review") ? (
+                  {may("evidence.review") ? (
                     <button
-                      onClick={() => {
-                        reviewControl(c.id);
-                        toast.success("Revisão registrada; próxima revisão em 6 meses.");
-                      }}
+                      onClick={() => reviewCtrlM.mutate({ id: c.id })}
                       className="flex items-center gap-1 rounded-md border border-input px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
                     >
                       <CalendarCheck className="size-3" /> Registrar revisão
@@ -194,8 +206,8 @@ function CompliancePage() {
                       <span className="min-w-0">
                         <span className="text-foreground">{e.fileName}</span>
                         <span className="ml-2 text-muted-foreground">
-                          enviada por {e.sentBy} em {formatDateTime(e.at)}
-                          {e.reviewer ? ` · revisada por ${e.reviewer}` : ""}
+                          enviada por {e.sentByName} em {formatDateTime(e.at)}
+                          {e.reviewerName ? ` · revisada por ${e.reviewerName}` : ""}
                         </span>
                       </span>
                       <span className="flex items-center gap-2">

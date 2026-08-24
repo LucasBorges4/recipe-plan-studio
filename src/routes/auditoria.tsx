@@ -3,7 +3,9 @@ import { useState } from "react";
 import { ScrollText, ShieldAlert, Download } from "lucide-react";
 import { PageHeader } from "@/components/portal/PageHeader";
 import { StatusBadge } from "@/components/portal/StatusBadge";
-import { can, formatDateTime, roleLabel, useCurrentUser, usePortal } from "@/lib/store";
+import { can, auditableRoleLabel, roleLabel } from "@/lib/rbac";
+import { formatDateTime } from "@/lib/portal-utils";
+import { useAuditList, useSession } from "@/lib/api-hooks";
 
 export const Route = createFileRoute("/auditoria")({
   head: () => ({
@@ -25,11 +27,15 @@ export const Route = createFileRoute("/auditoria")({
 });
 
 function AuditoriaPage() {
-  const { audit } = usePortal();
-  const user = useCurrentUser();
+  const { data: session } = useSession();
+  const user = session?.user ?? null;
+  const allowed = !!user && can(user.role, "audit.read");
+  const { data: res } = useAuditList(allowed);
+  const audit = res?.ok ? res.data : [];
+
   const [entity, setEntity] = useState("Todas");
 
-  if (!can(user.role, "audit.read")) {
+  if (!allowed) {
     return (
       <>
         <PageHeader icon={ScrollText} title="Auditoria" subtitle="Trilha de registro do portal" />
@@ -38,7 +44,7 @@ function AuditoriaPage() {
           <p className="mt-3 text-sm font-medium text-foreground">Acesso restrito</p>
           <p className="mt-1 text-xs text-muted-foreground">
             A trilha de auditoria é visível a administrador, diretor e auditor. Você está como{" "}
-            {user.name} ({roleLabel[user.role]}).
+            {user ? `${user.name} (${roleLabel[user.role]})` : "usuário não autenticado"}.
           </p>
         </div>
       </>
@@ -63,7 +69,9 @@ function AuditoriaPage() {
         a.reason ?? "",
       ]),
     ];
-    const csv = rows.map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(";")).join("\n");
+    const csv = rows
+      .map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(";"))
+      .join("\n");
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
     const link = document.createElement("a");
     link.href = url;
@@ -107,7 +115,7 @@ function AuditoriaPage() {
               <span className="text-sm font-medium text-foreground">{a.action}</span>
               <span className="flex items-center gap-2">
                 <StatusBadge tone="neutral">{a.entity}</StatusBadge>
-                <StatusBadge tone="brand">{roleLabel[a.actorRole]}</StatusBadge>
+                <StatusBadge tone="brand">{auditableRoleLabel[a.actorRole]}</StatusBadge>
               </span>
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
@@ -125,8 +133,8 @@ function AuditoriaPage() {
         ))}
         {list.length === 0 ? (
           <li className="rounded-xl border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground">
-            Nenhuma ação registrada ainda. Movimente uma tarefa ou envie uma evidência para começar a
-            trilha.
+            Nenhuma ação registrada ainda. Movimente uma tarefa ou envie uma evidência para começar
+            a trilha.
           </li>
         ) : null}
       </ul>

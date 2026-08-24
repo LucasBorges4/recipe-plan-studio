@@ -13,8 +13,8 @@ import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { AppShell } from "@/components/portal/AppSidebar";
 import { Toaster } from "@/components/ui/sonner";
-
-
+import { qk } from "@/lib/api-hooks";
+import { meFn, getPortalStateFn } from "@/lib/portal-api";
 
 function NotFoundComponent() {
   return (
@@ -77,6 +77,14 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
 }
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
+  loader: ({ context }) =>
+    Promise.all([
+      context.queryClient.ensureQueryData({ queryKey: qk.session, queryFn: () => meFn() }),
+      context.queryClient.ensureQueryData({
+        queryKey: qk.portal,
+        queryFn: () => getPortalStateFn(),
+      }),
+    ]),
   head: () => ({
     meta: [
       { charSet: "utf-8" },
@@ -110,7 +118,6 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   errorComponent: ErrorComponent,
 });
 
-
 function RootShell({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
@@ -138,5 +145,3 @@ function RootComponent() {
     </QueryClientProvider>
   );
 }
-
-

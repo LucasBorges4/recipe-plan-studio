@@ -16,8 +16,13 @@ import {
   X,
 } from "lucide-react";
 import { useState } from "react";
+import { useQueryClient, useMutation } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { LogOut, LogIn } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { roleLabel, setCurrentUser, useCurrentUser, users } from "@/lib/store";
+import { roleLabel } from "@/lib/rbac";
+import { useSession, qk } from "@/lib/api-hooks";
+import { logoutFn } from "@/lib/portal-api";
 
 const mainNav = [
   { to: "/", label: "Painel Executivo", icon: LayoutDashboard },
@@ -37,8 +42,37 @@ const legalNav = [
   { to: "/admin", label: "Administração", icon: Settings },
 ] as const;
 
-function UserSwitcher() {
-  const user = useCurrentUser();
+function SessionBox() {
+  const queryClient = useQueryClient();
+  const { data: session } = useSession();
+
+  const logout = useMutation({
+    mutationFn: () => logoutFn(),
+    onSuccess: async () => {
+      queryClient.setQueryData(qk.session, { user: null, persistent: session?.persistent ?? true });
+      await queryClient.invalidateQueries({ queryKey: qk.portal });
+      await queryClient.invalidateQueries({ queryKey: qk.audit });
+      await queryClient.invalidateQueries({ queryKey: qk.users });
+      toast.success("Sessão encerrada.");
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : "Falha ao sair."),
+  });
+
+  if (!session?.user) {
+    return (
+      <div className="border-t border-sidebar-border px-4 py-3">
+        <p className="text-[11px] tracking-wider text-sidebar-foreground/45">SESSÃO</p>
+        <Link
+          to="/login"
+          className="mt-2 flex items-center justify-center gap-2 rounded-md bg-sidebar-primary px-3 py-2 text-sm font-medium text-sidebar-primary-foreground transition-colors hover:bg-sidebar-primary/90"
+        >
+          <LogIn className="size-4" /> Entrar
+        </Link>
+      </div>
+    );
+  }
+
+  const user = session.user;
   return (
     <div className="border-t border-sidebar-border px-4 py-3">
       <p className="text-[11px] tracking-wider text-sidebar-foreground/45">SESSÃO ATUAL</p>
@@ -46,24 +80,20 @@ function UserSwitcher() {
         {user.name}
       </p>
       <p className="text-[11px] text-sidebar-foreground/60">
-        {user.jobTitle} · {roleLabel[user.role]}
+        {user.jobTitle ? `${user.jobTitle} · ` : ""}
+        {roleLabel[user.role]}
       </p>
-      <select
-        aria-label="Trocar usuário da sessão"
-        value={user.id}
-        onChange={(e) => setCurrentUser(e.target.value)}
-        className="mt-2 w-full rounded-md border border-sidebar-border bg-sidebar-accent px-2 py-1.5 text-xs text-sidebar-primary-foreground"
+      <button
+        type="button"
+        onClick={() => logout.mutate()}
+        disabled={logout.isPending}
+        className="mt-2 flex w-full items-center justify-center gap-2 rounded-md border border-sidebar-border bg-sidebar-accent px-3 py-1.5 text-xs text-sidebar-primary-foreground transition-colors hover:bg-sidebar-accent/70"
       >
-        {users.map((u) => (
-          <option key={u.id} value={u.id}>
-            {u.name} — {roleLabel[u.role]}
-          </option>
-        ))}
-      </select>
+        <LogOut className="size-3.5" /> {logout.isPending ? "Saindo..." : "Sair"}
+      </button>
     </div>
   );
 }
-
 
 function NavList({ onNavigate }: { onNavigate?: () => void }) {
   return (
@@ -133,7 +163,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <aside className="hidden w-64 shrink-0 flex-col bg-sidebar lg:flex lg:fixed lg:inset-y-0">
         <Brand />
         <NavList />
-        <UserSwitcher />
+        <SessionBox />
         <p className="border-t border-sidebar-border px-5 py-3 text-[11px] text-sidebar-foreground/40">
           © 2026 Grupo Geos
         </p>
@@ -156,7 +186,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </button>
             <Brand />
             <NavList onNavigate={() => setOpen(false)} />
-            <UserSwitcher />
+            <SessionBox />
           </div>
         </div>
       ) : null}

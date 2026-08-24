@@ -1,13 +1,23 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
+import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { Settings, Trash2, Plus, ShieldAlert } from "lucide-react";
 import { PageHeader } from "@/components/portal/PageHeader";
 import { NoticeBanner } from "@/components/portal/NoticeBanner";
 import { StatusBadge } from "@/components/portal/StatusBadge";
 import { Initials } from "@/components/portal/ProgressBar";
-import { modules as seedModules } from "@/data/modules";
-import { kanbanColumns } from "@/data/tasks";
 import { termsDoc, lgpdDoc } from "@/data/legal";
+import { roles, roleLabel } from "@/lib/rbac";
+import type { Role } from "@/lib/rbac";
+import { useAdminUsers, usePortalData, useSession, qk } from "@/lib/api-hooks";
+import {
+  setUserRoleFn,
+  deleteUserFn,
+  addModuleFn,
+  removeModuleFn,
+  addColumnFn,
+  deleteColumnFn,
+} from "@/lib/portal-api";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   AlertDialog,
@@ -41,26 +51,13 @@ export const Route = createFileRoute("/admin")({
   component: AdminPage,
 });
 
-interface UserRow {
-  name: string;
-  email: string;
-  role: "Administrador" | "Gestor" | "Colaborador" | "Auditor";
-}
-
-const seedUsers: UserRow[] = [
-  { name: "Weverson Rafael", email: "weverson@grupogeos.com.br", role: "Administrador" },
-  { name: "Henrique Fernandes", email: "henrique@grupogeos.com.br", role: "Gestor" },
-  { name: "Ana Beatriz Silva", email: "ana@grupogeos.com.br", role: "Gestor" },
-  { name: "Vitor Eduardo", email: "vitor@grupogeos.com.br", role: "Colaborador" },
-  { name: "Rafael Mendes", email: "rafael@grupogeos.com.br", role: "Auditor" },
-];
-
-const roleTone = {
-  Administrador: "danger",
-  Gestor: "info",
-  Colaborador: "neutral",
-  Auditor: "warning",
-} as const;
+const roleTone: Record<Role, "danger" | "info" | "neutral" | "warning"> = {
+  admin: "danger",
+  diretor: "info",
+  gestor: "info",
+  desenvolvedor: "neutral",
+  auditor: "warning",
+};
 
 function DeleteButton({ label, onConfirm }: { label: string; onConfirm: () => void }) {
   return (
@@ -90,11 +87,75 @@ function DeleteButton({ label, onConfirm }: { label: string; onConfirm: () => vo
 }
 
 function AdminPage() {
-  const [users, setUsers] = useState(seedUsers);
-  const [mods, setMods] = useState(seedModules.map((m) => m.name));
-  const [cols, setCols] = useState<string[]>([...kanbanColumns]);
+  const qc = useQueryClient();
+  const { data: session } = useSession();
+  const isAdmin = !!session?.user && session.user.role === "admin";
+  const persistent = session?.persistent ?? true;
+
+  const { data: usersRes } = useAdminUsers(isAdmin);
+  const users = usersRes?.ok ? usersRes.data : [];
+  const { data: state } = usePortalData();
+  const mods = state?.modules ?? [];
+  const cols = state?.columns ?? [];
+
   const [newCol, setNewCol] = useState("");
   const [newMod, setNewMod] = useState("");
+
+  const setRoleM = useMutation({
+    mutationFn: (v: { userId: string; role: Role }) => setUserRoleFn({ data: v }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.users }),
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Falha ao alterar o papel."),
+  });
+  const deleteUserM = useMutation({
+    mutationFn: (v: { userId: string }) => deleteUserFn({ data: v }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.users }),
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Falha ao remover usuário."),
+  });
+  const addModuleM = useMutation({
+    mutationFn: (v: { name: string }) => addModuleFn({ data: v }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.portal });
+      setNewMod("");
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Falha ao adicionar módulo."),
+  });
+  const removeModuleM = useMutation({
+    mutationFn: (v: { id: string }) => removeModuleFn({ data: v }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.portal }),
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Falha ao remover módulo."),
+  });
+  const addColumnM = useMutation({
+    mutationFn: (v: { name: string }) => addColumnFn({ data: v }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.portal });
+      setNewCol("");
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Falha ao adicionar coluna."),
+  });
+  const removeColumnM = useMutation({
+    mutationFn: (v: { name: string }) => deleteColumnFn({ data: v }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.portal }),
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Falha ao remover coluna."),
+  });
+
+  if (!isAdmin) {
+    return (
+      <>
+        <PageHeader
+          icon={Settings}
+          title="Administração"
+          subtitle="Usuários, módulos, board e documentos institucionais"
+        />
+        <div className="rounded-xl border border-border bg-card p-8 text-center">
+          <ShieldAlert className="mx-auto size-6 text-warning" />
+          <p className="mt-3 text-sm font-medium text-foreground">Acesso restrito</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Esta área é exclusiva para administradores.
+          </p>
+        </div>
+      </>
+    );
+  }
 
   return (
     <>
@@ -104,8 +165,10 @@ function AdminPage() {
         subtitle="Usuários, módulos, board e documentos institucionais"
       />
       <NoticeBanner>
-        Área restrita a administradores. Nesta demonstração as alterações valem apenas para a sessão
-        atual.
+        Área restrita a administradores. As alterações são salvas no banco de dados
+        {persistent
+          ? " e persistem entre reinicializações."
+          : ", mas neste modo o armazenamento é em memória e reinicia a cada instância."}
       </NoticeBanner>
 
       <div className="mb-6 flex items-start gap-3 rounded-lg border border-warning/25 bg-warning-soft px-4 py-3 text-sm text-warning">
@@ -127,7 +190,7 @@ function AdminPage() {
         <TabsContent value="usuarios" className="mt-4">
           <ul className="divide-y divide-border rounded-xl border border-border bg-card">
             {users.map((u) => (
-              <li key={u.email} className="flex flex-wrap items-center gap-3 p-4">
+              <li key={u.id} className="flex flex-wrap items-center gap-3 p-4">
                 <Initials name={u.name} className="size-8 text-xs" />
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium text-foreground">{u.name}</p>
@@ -136,29 +199,32 @@ function AdminPage() {
                 <select
                   value={u.role}
                   aria-label={`Papel de ${u.name}`}
-                  onChange={(e) => {
-                    const role = e.target.value as UserRow["role"];
-                    setUsers((prev) =>
-                      prev.map((p) => (p.email === u.email ? { ...p, role } : p)),
-                    );
-                    toast.success(`${u.name} agora é ${role}.`);
-                  }}
-                  className="rounded-md border border-input bg-card px-2 py-1.5 text-xs"
+                  disabled={u.id === session?.user?.id}
+                  onChange={(e) => setRoleM.mutate({ userId: u.id, role: e.target.value as Role })}
+                  className="rounded-md border border-input bg-card px-2 py-1.5 text-xs disabled:opacity-60"
                 >
-                  {(["Administrador", "Gestor", "Colaborador", "Auditor"] as const).map((r) => (
-                    <option key={r}>{r}</option>
+                  {roles.map((r) => (
+                    <option key={r} value={r}>
+                      {roleLabel[r]}
+                    </option>
                   ))}
                 </select>
-                <StatusBadge tone={roleTone[u.role]}>{u.role}</StatusBadge>
+                <StatusBadge tone={roleTone[u.role]}>{roleLabel[u.role]}</StatusBadge>
                 <DeleteButton
                   label={u.name}
                   onConfirm={() => {
-                    setUsers((prev) => prev.filter((p) => p.email !== u.email));
-                    toast.success("Usuário removido.");
+                    if (u.id === session?.user?.id) {
+                      toast.error("Você não pode remover a própria conta.");
+                      return;
+                    }
+                    deleteUserM.mutate({ userId: u.id });
                   }}
                 />
               </li>
             ))}
+            {users.length === 0 ? (
+              <li className="p-4 text-sm text-muted-foreground">Nenhum usuário cadastrado.</li>
+            ) : null}
           </ul>
         </TabsContent>
 
@@ -172,12 +238,7 @@ function AdminPage() {
                 className="flex-1 rounded-md border border-input bg-card px-3 py-2 text-sm"
               />
               <button
-                onClick={() => {
-                  if (!newMod.trim()) return;
-                  setMods((prev) => [...prev, newMod.trim()]);
-                  setNewMod("");
-                  toast.success("Módulo adicionado.");
-                }}
+                onClick={() => newMod.trim() && addModuleM.mutate({ name: newMod.trim() })}
                 className="flex items-center gap-1 rounded-md bg-brand px-3 py-2 text-sm font-medium text-brand-foreground"
               >
                 <Plus className="size-4" /> Adicionar
@@ -185,17 +246,17 @@ function AdminPage() {
             </div>
             <ul className="divide-y divide-border">
               {mods.map((m) => (
-                <li key={m} className="flex items-center justify-between py-2.5 text-sm">
-                  <span className="text-foreground">{m}</span>
+                <li key={m.id} className="flex items-center justify-between py-2.5 text-sm">
+                  <span className="text-foreground">{m.name}</span>
                   <DeleteButton
-                    label={m}
-                    onConfirm={() => {
-                      setMods((prev) => prev.filter((p) => p !== m));
-                      toast.success("Módulo removido.");
-                    }}
+                    label={m.name}
+                    onConfirm={() => removeModuleM.mutate({ id: m.id })}
                   />
                 </li>
               ))}
+              {mods.length === 0 ? (
+                <li className="py-2.5 text-sm text-muted-foreground">Nenhum módulo cadastrado.</li>
+              ) : null}
             </ul>
           </div>
         </TabsContent>
@@ -210,12 +271,7 @@ function AdminPage() {
                 className="flex-1 rounded-md border border-input bg-card px-3 py-2 text-sm"
               />
               <button
-                onClick={() => {
-                  if (!newCol.trim()) return;
-                  setCols((prev) => [...prev, newCol.trim()]);
-                  setNewCol("");
-                  toast.success("Coluna adicionada.");
-                }}
+                onClick={() => newCol.trim() && addColumnM.mutate({ name: newCol.trim() })}
                 className="flex items-center gap-1 rounded-md bg-brand px-3 py-2 text-sm font-medium text-brand-foreground"
               >
                 <Plus className="size-4" /> Adicionar
@@ -225,15 +281,12 @@ function AdminPage() {
               {cols.map((c) => (
                 <li key={c} className="flex items-center justify-between py-2.5 text-sm">
                   <span className="text-foreground">{c}</span>
-                  <DeleteButton
-                    label={c}
-                    onConfirm={() => {
-                      setCols((prev) => prev.filter((p) => p !== c));
-                      toast.success("Coluna removida.");
-                    }}
-                  />
+                  <DeleteButton label={c} onConfirm={() => removeColumnM.mutate({ name: c })} />
                 </li>
               ))}
+              {cols.length === 0 ? (
+                <li className="py-2.5 text-sm text-muted-foreground">Nenhuma coluna cadastrada.</li>
+              ) : null}
             </ul>
           </div>
         </TabsContent>

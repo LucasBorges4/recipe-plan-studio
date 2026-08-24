@@ -16,6 +16,7 @@ import { Route as ComplianceRouteImport } from './routes/compliance'
 import { Route as DiarioRouteImport } from './routes/diario'
 import { Route as EngenhariaRouteImport } from './routes/engenharia'
 import { Route as LgpdRouteImport } from './routes/lgpd'
+import { Route as LoginRouteImport } from './routes/login'
 import { Route as PatenteRouteImport } from './routes/patente'
 import { Route as RiscosRouteImport } from './routes/riscos'
 import { Route as TarefasRouteImport } from './routes/tarefas'
@@ -57,6 +58,11 @@ const EngenhariaRoute = EngenhariaRouteImport.update({
 const LgpdRoute = LgpdRouteImport.update({
   id: '/lgpd',
   path: '/lgpd',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PatenteRoute = PatenteRouteImport.update({
@@ -103,6 +109,7 @@ export interface FileRoutesByFullPath {
   '/diario': typeof DiarioRoute
   '/engenharia': typeof EngenhariaRoute
   '/lgpd': typeof LgpdRoute
+  '/login': typeof LoginRoute
   '/patente': typeof PatenteRoute
   '/riscos': typeof RiscosRoute
   '/tarefas': typeof TarefasRoute
@@ -119,6 +126,7 @@ export interface FileRoutesByTo {
   '/diario': typeof DiarioRoute
   '/engenharia': typeof EngenhariaRoute
   '/lgpd': typeof LgpdRoute
+  '/login': typeof LoginRoute
   '/patente': typeof PatenteRoute
   '/riscos': typeof RiscosRoute
   '/tarefas': typeof TarefasRoute
@@ -135,6 +143,7 @@ export interface FileRoutesById {
   '/diario': typeof DiarioRoute
   '/engenharia': typeof EngenhariaRoute
   '/lgpd': typeof LgpdRoute
+  '/login': typeof LoginRoute
   '/patente': typeof PatenteRoute
   '/riscos': typeof RiscosRoute
   '/tarefas': typeof TarefasRoute
@@ -153,6 +162,7 @@ export interface FileRouteTypes {
     | '/diario'
     | '/engenharia'
     | '/lgpd'
+    | '/login'
     | '/patente'
     | '/riscos'
     | '/tarefas'
@@ -169,6 +179,7 @@ export interface FileRouteTypes {
     | '/diario'
     | '/engenharia'
     | '/lgpd'
+    | '/login'
     | '/patente'
     | '/riscos'
     | '/tarefas'
@@ -184,6 +195,7 @@ export interface FileRouteTypes {
     | '/diario'
     | '/engenharia'
     | '/lgpd'
+    | '/login'
     | '/patente'
     | '/riscos'
     | '/tarefas'
@@ -201,6 +213,7 @@ export interface RootRouteChildren {
   DiarioRoute: typeof DiarioRoute
   EngenhariaRoute: typeof EngenhariaRoute
   LgpdRoute: typeof LgpdRoute
+  LoginRoute: typeof LoginRoute
   PatenteRoute: typeof PatenteRoute
   RiscosRoute: typeof RiscosRoute
   TarefasRoute: typeof TarefasRoute
@@ -257,6 +270,13 @@ declare module '@tanstack/react-router' {
       path: '/lgpd'
       fullPath: '/lgpd'
       preLoaderRoute: typeof LgpdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/patente': {
@@ -331,6 +351,7 @@ const rootRouteChildren: RootRouteChildren = {
   DiarioRoute: DiarioRoute,
   EngenhariaRoute: EngenhariaRoute,
   LgpdRoute: LgpdRoute,
+  LoginRoute: LoginRoute,
   PatenteRoute: PatenteRoute,
   RiscosRoute: RiscosRoute,
   TarefasRoute: TarefasRoute,

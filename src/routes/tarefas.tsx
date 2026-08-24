@@ -1,5 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
+import { useQueryClient, useMutation } from "@tanstack/react-query";
+import { toast } from "sonner";
 import {
   KanbanSquare,
   Search,
@@ -19,24 +21,21 @@ import { StatusBadge } from "@/components/portal/StatusBadge";
 import { Initials } from "@/components/portal/ProgressBar";
 import type { Priority, Task } from "@/data/types";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
-import {
-  addColumn as addColumnToBoard,
-  addComment,
-  can,
-  createTask,
-  formatDateTime,
-  moveTask,
-  useCurrentUser,
-  usePortal,
-} from "@/lib/store";
+import { can } from "@/lib/rbac";
+import { formatDateTime } from "@/lib/portal-utils";
+import { usePortalData, useSession, useTaskHistory, qk } from "@/lib/api-hooks";
+import { moveTaskFn, createTaskFn, addColumnFn, addCommentFn } from "@/lib/portal-api";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/tarefas")({
   head: () => ({
@@ -66,8 +65,17 @@ const priorityBar: Record<Priority, string> = {
 const priorityTone = { Alta: "danger", Média: "warning", Baixa: "info" } as const;
 
 function TarefasPage() {
-  const { tasks: items, columns, comments, audit } = usePortal();
-  const user = useCurrentUser();
+  const qc = useQueryClient();
+  const { data: state } = usePortalData();
+  const { data: session } = useSession();
+
+  const items = state?.tasks ?? [];
+  const columns = state?.columns ?? [];
+  const comments = state?.comments ?? [];
+
+  const user = session?.user ?? null;
+  const may = (p: Parameters<typeof can>[1]) => !!user && can(user.role, p);
+
   const [query, setQuery] = useState("");
   const [priority, setPriority] = useState("Todas");
   const [assignee, setAssignee] = useState("Todos");
@@ -76,8 +84,45 @@ function TarefasPage() {
   const [detailId, setDetailId] = useState<string | null>(null);
   const [dragging, setDragging] = useState<string | null>(null);
   const [commentDraft, setCommentDraft] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [newTitle, setNewTitle] = useState("");
+  const [newPriority, setNewPriority] = useState<Priority>("Média");
+  const [newAssignee, setNewAssignee] = useState("");
+  const [newDue, setNewDue] = useState("");
 
   const detail = items.find((t) => t.id === detailId) ?? null;
+  const { data: historyRes } = useTaskHistory(detailId);
+  const detailHistory = historyRes?.ok ? historyRes.data : [];
+
+  const moveM = useMutation({
+    mutationFn: (v: { taskId: string; column: string }) => moveTaskFn({ data: v }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.portal }),
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Falha ao mover a tarefa."),
+  });
+  const createM = useMutation({
+    mutationFn: (v: { title: string; priority: Priority; assignee: string; due?: string }) =>
+      createTaskFn({ data: v }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.portal });
+      toast.success("Tarefa criada no Backlog e registrada na auditoria.");
+      setCreating(false);
+      setNewTitle("");
+      setNewAssignee("");
+      setNewDue("");
+      setNewPriority("Média");
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Falha ao criar a tarefa."),
+  });
+  const columnM = useMutation({
+    mutationFn: (v: { name: string }) => addColumnFn({ data: v }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.portal }),
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Falha ao adicionar a coluna."),
+  });
+  const commentM = useMutation({
+    mutationFn: (v: { taskId: string; body: string }) => addCommentFn({ data: v }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.portal }),
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Falha ao comentar."),
+  });
 
   const assignees = useMemo(
     () => ["Todos", ...Array.from(new Set(items.map((t) => t.assignee)))],
@@ -100,52 +145,32 @@ function TarefasPage() {
     const task = items.find((t) => t.id === id);
     if (!task) return;
     const approving = column === "Concluído" && task.column === "Em Aprovação";
-    if (approving && !can(user.role, "task.approve")) {
-      toast.error(`${user.name} não tem permissão para aprovar tarefas.`);
+    if (approving && !may("task.approve")) {
+      toast.error("Seu papel não tem permissão para aprovar tarefas.");
       return;
     }
-    if (!approving && !can(user.role, "task.move")) {
-      toast.error(`${user.name} não tem permissão para mover tarefas.`);
+    if (!approving && !may("task.move")) {
+      toast.error("Seu papel não tem permissão para mover tarefas.");
       return;
     }
-    moveTask(id, column);
-  }
-
-  function handleAddTask() {
-    if (!can(user.role, "task.create")) {
-      toast.error("Somente gestor ou administrador pode criar tarefas.");
-      return;
-    }
-    const id = `t${Date.now()}`;
-    createTask({
-      id,
-      title: "Nova tarefa",
-      description: "Descreva o escopo desta tarefa.",
-      column: columns[0] ?? "Backlog",
-      priority: "Média",
-      tags: [],
-      assignee: user.name,
-    });
-    toast.success("Tarefa criada no Backlog e registrada na auditoria.");
+    moveM.mutate({ taskId: id, column });
   }
 
   function handleAddColumn() {
-    if (!can(user.role, "task.create")) {
+    if (!may("task.create")) {
       toast.error("Somente gestor ou administrador pode alterar o board.");
       return;
     }
-    const name = `Nova Coluna ${columns.length + 1}`;
-    addColumnToBoard(name);
-    toast.success(`Coluna "${name}" adicionada.`);
+    columnM.mutate({ name: `Nova Coluna ${columns.length + 1}` });
   }
 
   function submitComment() {
     if (!detail || !commentDraft.trim()) return;
-    if (!can(user.role, "task.comment")) {
+    if (!may("task.comment")) {
       toast.error("Seu papel não permite comentar.");
       return;
     }
-    addComment(detail.id, commentDraft.trim());
+    commentM.mutate({ taskId: detail.id, body: commentDraft.trim() });
     setCommentDraft("");
   }
 
@@ -220,9 +245,6 @@ function TarefasPage() {
   }
 
   const detailComments = detail ? comments.filter((c) => c.taskId === detail.id) : [];
-  const detailHistory = detail
-    ? audit.filter((a) => a.entity === "tarefa" && a.entityId === detail.id)
-    : [];
 
   return (
     <>
@@ -301,7 +323,13 @@ function TarefasPage() {
           <Plus className="size-4" /> Nova Coluna
         </button>
         <button
-          onClick={handleAddTask}
+          onClick={() => {
+            if (!may("task.create")) {
+              toast.error("Somente gestor ou administrador pode criar tarefas.");
+              return;
+            }
+            setCreating(true);
+          }}
           className="flex items-center gap-1.5 rounded-md bg-brand px-3 py-2 text-sm font-medium text-brand-foreground"
         >
           <Plus className="size-4" /> Nova Tarefa
@@ -392,7 +420,7 @@ function TarefasPage() {
                     <li key={c.id} className="rounded-md bg-surface p-3 text-xs">
                       <p className="text-foreground">{c.body}</p>
                       <p className="mt-1 text-muted-foreground">
-                        {c.author} · {formatDateTime(c.at)}
+                        {c.authorName} · {formatDateTime(c.at)}
                       </p>
                     </li>
                   ))}
@@ -407,7 +435,7 @@ function TarefasPage() {
                     value={commentDraft}
                     onChange={(e) => setCommentDraft(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && submitComment()}
-                    placeholder={`Comentar como ${user.name}...`}
+                    placeholder={`Comentar como ${user?.name ?? "convidado"}...`}
                     className="flex-1 rounded-md border border-input bg-card px-3 py-2 text-xs text-foreground"
                   />
                   <button
@@ -435,7 +463,7 @@ function TarefasPage() {
                   ))}
                   {detailHistory.length === 0 ? (
                     <li className="rounded-md border border-dashed border-border p-3 text-xs text-muted-foreground">
-                      Sem movimentações registradas nesta sessão.
+                      Sem movimentações registradas.
                     </li>
                   ) : null}
                 </ul>
@@ -456,6 +484,79 @@ function TarefasPage() {
               </div>
             </div>
           ) : null}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={creating} onOpenChange={(o) => !o && setCreating(false)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Nova tarefa</DialogTitle>
+            <DialogDescription>
+              Cria uma tarefa no Backlog e registra na auditoria.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 text-sm">
+            <div className="space-y-1.5">
+              <Label htmlFor="task-title">Título</Label>
+              <Input
+                id="task-title"
+                value={newTitle}
+                onChange={(e) => setNewTitle(e.target.value)}
+                placeholder="Ex.: Integrar módulo de notas fiscais"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="task-priority">Prioridade</Label>
+                <select
+                  id="task-priority"
+                  value={newPriority}
+                  onChange={(e) => setNewPriority(e.target.value as Priority)}
+                  className="w-full rounded-md border border-input bg-card px-3 py-2 text-sm"
+                >
+                  {(["Alta", "Média", "Baixa"] as Priority[]).map((p) => (
+                    <option key={p}>{p}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="task-due">Prazo (opcional)</Label>
+                <Input
+                  id="task-due"
+                  value={newDue}
+                  onChange={(e) => setNewDue(e.target.value)}
+                  placeholder="dd/mm/aaaa"
+                />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="task-assignee">Responsável</Label>
+              <Input
+                id="task-assignee"
+                value={newAssignee}
+                onChange={(e) => setNewAssignee(e.target.value)}
+                placeholder={user?.name ?? "Nome do responsável"}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCreating(false)}>
+              Cancelar
+            </Button>
+            <Button
+              disabled={!newTitle.trim() || createM.isPending}
+              onClick={() =>
+                createM.mutate({
+                  title: newTitle.trim(),
+                  priority: newPriority,
+                  assignee: newAssignee.trim() || user?.name || "",
+                  ...(newDue.trim() ? { due: newDue.trim() } : {}),
+                })
+              }
+            >
+              {createM.isPending ? "Criando..." : "Criar"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </>
