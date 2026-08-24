@@ -22,7 +22,8 @@ export const patentStages: PatentStage[] = [
   {
     id: "p3",
     title: "Depósito no INPI",
-    description: "Protocolo do pedido de patente junto ao Instituto Nacional da Propriedade Industrial.",
+    description:
+      "Protocolo do pedido de patente junto ao Instituto Nacional da Propriedade Industrial.",
     owner: "Rafael Mendes",
     deadline: "01 Mar 2026",
     status: "Em Andamento",
@@ -30,7 +31,8 @@ export const patentStages: PatentStage[] = [
   {
     id: "p4",
     title: "Exame Formal",
-    description: "Análise formal pelo INPI para verificar documentação e requisitos administrativos.",
+    description:
+      "Análise formal pelo INPI para verificar documentação e requisitos administrativos.",
     owner: "INPI",
     deadline: "01 Jun 2026",
     status: "Pendente",
@@ -47,7 +49,8 @@ export const patentStages: PatentStage[] = [
   {
     id: "p6",
     title: "Exame Técnico",
-    description: "Análise técnica de patenteabilidade: novidade, atividade inventiva e aplicação industrial.",
+    description:
+      "Análise técnica de patenteabilidade: novidade, atividade inventiva e aplicação industrial.",
     owner: "INPI",
     deadline: "A definir",
     status: "Aguardando",

@@ -78,7 +78,6 @@
   --color-surface: var(--surface);
 }
 
-
 :root {
   --radius: 0.625rem;
   --background: oklch(1 0 0);
@@ -131,7 +130,6 @@
   --danger-soft: oklch(0.95 0.04 25);
   --surface: oklch(0.985 0.004 262);
 }
-
 
 .dark {
   --background: oklch(0.129 0.042 264.695);

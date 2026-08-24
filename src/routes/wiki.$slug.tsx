@@ -16,7 +16,12 @@ export const Route = createFileRoute("/wiki/$slug")({
   },
   head: ({ loaderData }) => {
     if (!loaderData) {
-      return { meta: [{ title: "Artigo indisponível — Wiki Grupo Geos" }, { name: "robots", content: "noindex" }] };
+      return {
+        meta: [
+          { title: "Artigo indisponível — Wiki Grupo Geos" },
+          { name: "robots", content: "noindex" },
+        ],
+      };
     }
     const { article } = loaderData;
     return {

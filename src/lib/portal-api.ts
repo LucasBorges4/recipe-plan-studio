@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { roleLabel, defaultRoleForNewUser } from "@/lib/rbac";
+import { roleLabel, defaultRoleForNewUser, movePermission } from "@/lib/rbac";
+import { addMonthsBR, fmtBR } from "@/lib/portal-utils";
 import type { PublicUser } from "@/lib/rbac";
 import type { AuditEntry, PortalStatePayload } from "@/lib/records";
 import type { Priority } from "@/data/types";
@@ -20,20 +21,6 @@ function errorMsg(e: unknown): string {
 /* ------------------------------------------------------------------ */
 /* Helpers de data (puro, seguro no cliente)                           */
 /* ------------------------------------------------------------------ */
-
-function fmtBR(d: Date): string {
-  return d.toLocaleDateString("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
-}
-
-function addMonthsBR(d: Date, months: number): Date {
-  const copy = new Date(d);
-  copy.setMonth(copy.getMonth() + months);
-  return copy;
-}
 
 const BR_DATE = /^\d{2}\/\d{2}\/\d{4}$/;
 
@@ -358,8 +345,8 @@ export const moveTaskFn = createServerFn({ method: "POST" })
 
       if (task.column === data.column) return { ok: true, data: null };
 
-      const approving = data.column === "Concluído" && task.column === "Em Aprovação";
-      const perm = approving ? "task.approve" : "task.move";
+      const approving = data.column === "Concluído";
+      const perm = movePermission(data.column);
       const user = await c.auth.requirePermission(c.storage, perm);
 
       await c.storage.updateTaskColumn(data.taskId, data.column);

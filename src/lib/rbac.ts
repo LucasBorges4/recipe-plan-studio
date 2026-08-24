@@ -64,6 +64,16 @@ export function can(role: Role, permission: Permission) {
   return matrix[role].includes(permission);
 }
 
+/**
+ * Permissão exigida para mover uma tarefa para a coluna de destino.
+ * Mover para "Concluído" exige aprovação (task.approve) — nunca apenas
+ * task.move — independentemente da coluna de origem, para evitar que um
+ * gestor/desenvolvedor conclua uma tarefa sem a revisão obrigatória.
+ */
+export function movePermission(targetColumn: string): Permission {
+  return targetColumn === "Concluído" ? "task.approve" : "task.move";
+}
+
 export function isAdminRole(role: Role) {
   return role === "admin";
 }

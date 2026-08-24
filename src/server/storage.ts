@@ -233,7 +233,7 @@ function rowToUser(r: Record<string, SqlValue>): UserRow {
   };
 }
 
-class SqliteStorage implements Storage {
+export class SqliteStorage implements Storage {
   readonly kind = "sqlite" as const;
 
   private constructor(private db: SqlDatabase) {}
@@ -359,6 +359,7 @@ class SqliteStorage implements Storage {
     return Number(res.changes) > 0;
   }
   async deleteColumn(name: string) {
+    if ((await this.countTasksInColumn(name)) > 0) return false;
     const res = this.db.prepare("DELETE FROM board_columns WHERE name = ?").run(name);
     return Number(res.changes) > 0;
   }
@@ -624,7 +625,7 @@ function safeTags(v: SqlValue | undefined): string[] {
 /* Driver em memória                                                   */
 /* ------------------------------------------------------------------ */
 
-class MemoryStorage implements Storage {
+export class MemoryStorage implements Storage {
   readonly kind = "memory" as const;
 
   private users: UserRow[] = [];

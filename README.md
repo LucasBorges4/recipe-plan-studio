@@ -37,7 +37,7 @@ autenticação real (substitui o antigo estado em `localStorage`).
 - **Senhas**: Argon2id (`hash-wasm`) com **salt** por usuário (16 bytes) e
   **pepper** global injetado como `secret` do Argon2 (keyed hashing). O pepper
   vem de `AUTH_PEPPER` ou é gerado e persistido na tabela `meta`. O login é
-  *timing-safe* (hash dummy quando o e-mail não existe).
+  _timing-safe_ (hash dummy quando o e-mail não existe).
 - **Sessões**: cookie `httpOnly` `geos_session` com token opaco; o banco guarda
   apenas o SHA-256 do token.
 - **Papéis (RBAC)**: `admin`, `diretor`, `gestor`, `desenvolvedor`, `auditor`.

@@ -20,19 +20,19 @@ Ativar o backend (Lovable Cloud) e criar a base de identidade e autorização.
 
 ### Matriz de papéis (para aprovação)
 
-| Ação | Admin | Diretor | Gestor | Dev | Auditor |
-|---|---|---|---|---|---|
-| Ver painel, riscos, compliance, wiki | ✔ | ✔ | ✔ | ✔ | ✔ |
-| Criar/editar tarefas | ✔ | – | ✔ | – | – |
-| Atualizar status da própria tarefa | ✔ | – | ✔ | ✔ | – |
-| Aprovar/rejeitar tarefa | ✔ | ✔ | – | – | – |
-| Anexar evidência | ✔ | – | ✔ | ✔ | – |
-| Revisar/aprovar evidência | ✔ | ✔ | – | – | – |
-| Editar wiki | ✔ | – | ✔ | ✔ | – |
-| Aprovar versão de wiki | ✔ | ✔ | – | – | – |
-| Gerenciar usuários, papéis, módulos | ✔ | – | – | – | – |
-| Ver auditoria e gerar relatórios | ✔ | ✔ | – | – | ✔ |
-| Apagar auditoria | – | – | – | – | – |
+| Ação                                 | Admin | Diretor | Gestor | Dev | Auditor |
+| ------------------------------------ | ----- | ------- | ------ | --- | ------- |
+| Ver painel, riscos, compliance, wiki | ✔     | ✔       | ✔      | ✔   | ✔       |
+| Criar/editar tarefas                 | ✔     | –       | ✔      | –   | –       |
+| Atualizar status da própria tarefa   | ✔     | –       | ✔      | ✔   | –       |
+| Aprovar/rejeitar tarefa              | ✔     | ✔       | –      | –   | –       |
+| Anexar evidência                     | ✔     | –       | ✔      | ✔   | –       |
+| Revisar/aprovar evidência            | ✔     | ✔       | –      | –   | –       |
+| Editar wiki                          | ✔     | –       | ✔      | ✔   | –       |
+| Aprovar versão de wiki               | ✔     | ✔       | –      | –   | –       |
+| Gerenciar usuários, papéis, módulos  | ✔     | –       | –      | –   | –       |
+| Ver auditoria e gerar relatórios     | ✔     | ✔       | –      | –   | ✔       |
+| Apagar auditoria                     | –     | –       | –      | –   | –       |
 
 ### Schema da Fase 1 (para aprovação)
 

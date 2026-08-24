@@ -1,5 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { BadgeCheck, CircleCheck, CircleDot, Circle, CircleDashed, User, Calendar } from "lucide-react";
+import {
+  BadgeCheck,
+  CircleCheck,
+  CircleDot,
+  Circle,
+  CircleDashed,
+  User,
+  Calendar,
+} from "lucide-react";
 import { PageHeader } from "@/components/portal/PageHeader";
 import { NoticeBanner } from "@/components/portal/NoticeBanner";
 import { StatusBadge } from "@/components/portal/StatusBadge";
@@ -26,10 +34,7 @@ export const Route = createFileRoute("/patente")({
   component: PatentePage,
 });
 
-const config: Record<
-  string,
-  { tone: StatusTone; icon: typeof CircleCheck; className: string }
-> = {
+const config: Record<string, { tone: StatusTone; icon: typeof CircleCheck; className: string }> = {
   Concluído: { tone: "success", icon: CircleCheck, className: "text-success" },
   "Em Andamento": { tone: "info", icon: CircleDot, className: "text-info" },
   Pendente: { tone: "warning", icon: Circle, className: "text-warning" },
@@ -65,10 +70,7 @@ function PatentePage() {
           const c = config[s.status] ?? config["Aguardando"]!;
           const Icon = c.icon;
           return (
-            <li
-              key={s.id}
-              className="flex gap-4 rounded-xl border border-border bg-card p-5"
-            >
+            <li key={s.id} className="flex gap-4 rounded-xl border border-border bg-card p-5">
               <Icon className={`mt-0.5 size-5 shrink-0 ${c.className}`} />
               <div className="flex min-w-0 flex-1 flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">

@@ -12,7 +12,7 @@ const toneClasses: Record<StatusTone, string> = {
 
 export function toneForStatus(status: string): StatusTone {
   const s = status.toLowerCase();
-  if (s.includes("conclu") || s.includes("conforme") && !s.includes("não")) return "success";
+  if (s.includes("conclu") || (s.includes("conforme") && !s.includes("não"))) return "success";
   if (s.includes("não conforme")) return "danger";
   if (s.includes("andamento") || s.includes("progresso")) return "info";
   if (s.includes("pendente") || s.includes("levantamento") || s.includes("aprova"))

@@ -8,7 +8,12 @@ import type { ComplianceControl } from "@/data/types";
 export function parseBR(date: string) {
   const [d, m, y] = date.split("/").map(Number);
   if (!d || !m || !y) return null;
-  return new Date(y, m - 1, d);
+  const parsed = new Date(y, m - 1, d);
+  // Rejeita overflow do Date (ex.: 31/13 vira janeiro do ano seguinte).
+  if (parsed.getFullYear() !== y || parsed.getMonth() !== m - 1 || parsed.getDate() !== d) {
+    return null;
+  }
+  return parsed;
 }
 
 export type ComputedStatus = "Conforme" | "Próximo do vencimento" | "Vencido" | "Não conforme";
@@ -30,4 +35,28 @@ export function computeStatus(
 export function formatDateTime(iso: string) {
   const d = new Date(iso);
   return d.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+}
+
+/** Formata uma data como dd/mm/aaaa (pt-BR). */
+export function fmtBR(d: Date): string {
+  return d.toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
+
+/**
+ * Soma `months` meses a uma data, preservando o dia quando possível e
+ * ajustando para o último dia do mês quando a virada ultrapassa o mês
+ * destino (ex.: 31/ago + 6m → 28/fev, não 03/mar).
+ */
+export function addMonthsBR(d: Date, months: number): Date {
+  const copy = new Date(d);
+  const day = copy.getDate();
+  copy.setDate(1);
+  copy.setMonth(copy.getMonth() + months);
+  const lastDay = new Date(copy.getFullYear(), copy.getMonth() + 1, 0).getDate();
+  copy.setDate(Math.min(day, lastDay));
+  return copy;
 }
