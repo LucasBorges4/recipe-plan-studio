@@ -931,6 +931,44 @@ export class MemoryStorage implements Storage {
   async setMeta(key: string, value: string) {
     this.meta.set(key, value);
   }
+
+  async listDocs() {
+    return this.docs.map((d) => ({ ...d }));
+  }
+  async listDocsByKind(kind: string) {
+    return this.docs.filter((d) => d.kind === kind).map((d) => ({ ...d }));
+  }
+  async getDoc(id: string) {
+    return this.docs.find((d) => d.id === id) ?? null;
+  }
+  async upsertDoc(doc: DocRecord) {
+    const idx = this.docs.findIndex((d) => d.id === doc.id);
+    if (idx >= 0) this.docs[idx] = doc;
+    else this.docs.push(doc);
+  }
+  async deleteDoc(id: string) {
+    const before = this.docs.length;
+    this.docs = this.docs.filter((d) => d.id !== id);
+    return this.docs.length < before;
+  }
+
+  async insertInvite(i: InviteRow) {
+    this.invites.push(i);
+  }
+  async listInvites() {
+    return [...this.invites].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+  async getInviteByHash(codeHash: string) {
+    return this.invites.find((i) => i.codeHash === codeHash) ?? null;
+  }
+  async markInviteUsed(codeHash: string, usedAt: string, usedBy: string) {
+    this.invites = this.invites.map((i) => (i.codeHash === codeHash ? { ...i, usedAt, usedBy } : i));
+  }
+  async deleteInvite(id: string) {
+    const before = this.invites.length;
+    this.invites = this.invites.filter((i) => i.id !== id);
+    return this.invites.length < before;
+  }
 }
 
 /* ------------------------------------------------------------------ */
