@@ -79,6 +79,7 @@ export interface Storage {
   getTask(id: string): Promise<Task | null>;
   insertTask(task: Task): Promise<void>;
   updateTaskColumn(id: string, column: string): Promise<Task | null>;
+  deleteTask(id: string): Promise<boolean>;
 
   listComments(): Promise<CommentRecord[]>;
   insertComment(comment: CommentRecord): Promise<void>;
@@ -472,6 +473,10 @@ export class SqliteStorage implements Storage {
     if (!task) return null;
     this.db.prepare("UPDATE tasks SET column_name = ? WHERE id = ?").run(column, id);
     return { ...task, column };
+  }
+  async deleteTask(id: string) {
+    const info = this.db.prepare("DELETE FROM tasks WHERE id = ?").run(id);
+    return Number(info.changes) > 0;
   }
 
   async listComments() {
@@ -867,6 +872,11 @@ export class MemoryStorage implements Storage {
     task.column = column;
     return task;
   }
+  async deleteTask(id: string) {
+    const before = this.tasks.length;
+    this.tasks = this.tasks.filter((t) => t.id !== id);
+    return this.tasks.length < before;
+  }
 
   async listComments() {
     return [...this.comments];
@@ -985,30 +995,31 @@ export class MemoryStorage implements Storage {
 
 async function seedIfEmpty(storage: Storage): Promise<void> {
   if ((await storage.listColumns()).length === 0) {
-    const [{ kanbanColumns, tasks }, { controls }, { modules }] = await Promise.all([
+    const [{ kanbanColumns }, { controls }, { modules }] = await Promise.all([
       import("@/data/tasks"),
       import("@/data/compliance"),
       import("@/data/modules"),
     ]);
     for (const name of kanbanColumns) await storage.insertColumn(name);
-    for (const t of tasks) await storage.insertTask(t);
     for (const c of controls) await storage.insertControl(c);
     for (const m of modules) await storage.insertModule(m);
   }
   await seedDocsIfEmpty(storage);
+  await purgeDemoData(storage);
 }
 
-/** Popula os módulos genéricos (riscos, diário, engenharia, patente, wiki) na primeira execução. */
+/**
+ * Popula os módulos de referência (riscos, engenharia, patente, wiki) na primeira
+ * execução. Tarefas, marcos e releases NÃO são semeados: são cadastrados no portal.
+ */
 async function seedDocsIfEmpty(storage: Storage): Promise<void> {
   if ((await storage.listDocs()).length > 0) return;
-  const [{ risks }, { milestones, releases }, { stack, team }, { patentStages }, { wikiArticles }] =
-    await Promise.all([
-      import("@/data/risks"),
-      import("@/data/journal"),
-      import("@/data/team"),
-      import("@/data/patent"),
-      import("@/data/wiki"),
-    ]);
+  const [{ risks }, { stack, team }, { patentStages }, { wikiArticles }] = await Promise.all([
+    import("@/data/risks"),
+    import("@/data/team"),
+    import("@/data/patent"),
+    import("@/data/wiki"),
+  ]);
   const now = new Date().toISOString();
   let n = 0;
   const put = async (kind: string, data: JsonObject) => {
@@ -1025,11 +1036,6 @@ async function seedDocsIfEmpty(storage: Storage): Promise<void> {
     const { id: _id, ...rest } = r;
     await put("risk", { ...rest });
   }
-  for (const m of milestones) {
-    const { id: _id, ...rest } = m;
-    await put("milestone", { ...rest });
-  }
-  for (const r of releases) await put("release", { ...r });
   for (const t of stack) await put("tech", { ...t });
   for (const m of team) await put("member", { name: m.name, role: m.role, bio: m.bio });
   for (const s of patentStages) {
@@ -1037,6 +1043,27 @@ async function seedDocsIfEmpty(storage: Storage): Promise<void> {
     await put("patent", { ...rest });
   }
   for (const a of wikiArticles) await put("wiki", { ...a });
+}
+
+/**
+ * Limpeza única de bancos criados antes desta versão: remove as tarefas e os
+ * marcos/releases de demonstração para que o portal comece limpo, sem apagar
+ * nada que tenha sido cadastrado pelos usuários.
+ */
+async function purgeDemoData(storage: Storage): Promise<void> {
+  const FLAG = "demo_purge_v1";
+  if (await storage.getMeta(FLAG)) return;
+  const { tasks: demoTasks } = await import("@/data/tasks");
+  const demoIds = new Set(demoTasks.map((t) => t.id));
+  for (const task of await storage.listTasks()) {
+    if (demoIds.has(task.id)) await storage.deleteTask(task.id);
+  }
+  for (const doc of await storage.listDocs()) {
+    if (doc.id.startsWith("seed_milestone_") || doc.id.startsWith("seed_release_")) {
+      await storage.deleteDoc(doc.id);
+    }
+  }
+  await storage.setMeta(FLAG, new Date().toISOString());
 }
 
 let storagePromise: Promise<Storage> | undefined;
@@ -1058,7 +1085,7 @@ function resolveDatabasePath(): string {
  * 1. SQLite em arquivo (persistente) quando DATABASE_PATH abre com sucesso;
  * 2. SQLite em memória quando há node:sqlite mas não FS gravável;
  * 3. Driver JS em memória como último recurso.
- * Em todos os casos o banco começa populado com os dados de demonstração.
+ * Tarefas, marcos e releases começam vazios: são cadastrados pelos usuários.
  */
 export function getStorage(): Promise<Storage> {
   storagePromise ??= initStorage();
