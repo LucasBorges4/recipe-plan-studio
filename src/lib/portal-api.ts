@@ -24,6 +24,14 @@ function errorMsg(e: unknown): string {
 
 const BR_DATE = /^\d{2}\/\d{2}\/\d{4}$/;
 
+/** SHA-256 hex — usado para guardar apenas o hash dos códigos de convite. */
+async function sha256Hex(input: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(input));
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
 /* ------------------------------------------------------------------ */
 /* Acesso ao contexto server (import dinâmico, fora do bundle cliente) */
 /* ------------------------------------------------------------------ */
@@ -63,6 +71,7 @@ export const registerFn = createServerFn({ method: "POST" })
         email: z.string().trim().email("E-mail inválido").max(120, "E-mail muito longo"),
         password: z.string().trim().min(8, "Senha muito curta").max(200, "Senha muito longa"),
         jobTitle: z.string().trim().max(80, "Cargo muito longo").optional(),
+        code: z.string().trim().max(80, "Código inválido").optional(),
       })
       .strict(),
   )
@@ -81,7 +90,34 @@ export const registerFn = createServerFn({ method: "POST" })
       }
 
       const count = await c.storage.countUsers();
-      const role = count === 0 ? "admin" : defaultRoleForNewUser;
+      let role = count === 0 ? "admin" : defaultRoleForNewUser;
+      let inviteHash: string | null = null;
+
+      // Fora do primeiro acesso (bootstrap do admin), o cadastro só ocorre
+      // com um convite válido: código secreto emitido para aquele e-mail.
+      if (count > 0) {
+        const code = (data.code ?? "").trim();
+        if (!code) {
+          c.registerFailure(key);
+          return { ok: false, error: "Cadastro apenas por convite. Informe o código secreto." };
+        }
+        const hash = await sha256Hex(code);
+        const invite = await c.storage.getInviteByHash(hash);
+        if (!invite || invite.usedAt) {
+          c.registerFailure(key);
+          return { ok: false, error: "Código de convite inválido ou já utilizado." };
+        }
+        if (new Date(invite.expiresAt).getTime() < Date.now()) {
+          c.registerFailure(key);
+          return { ok: false, error: "Este convite expirou. Solicite um novo ao administrador." };
+        }
+        if (invite.email.toLowerCase() !== email) {
+          c.registerFailure(key);
+          return { ok: false, error: "Este convite foi emitido para outro e-mail." };
+        }
+        role = invite.role;
+        inviteHash = invite.codeHash;
+      }
       const salt = c.pw.generateSaltHex();
       const hash = await c.pw.hashPassword(data.password, c.pepper, salt);
 
@@ -97,6 +133,8 @@ export const registerFn = createServerFn({ method: "POST" })
         passwordSalt: salt,
         createdAt: now,
       });
+
+      if (inviteHash) await c.storage.markInviteUsed(inviteHash, now, userId);
 
       await c.auth.createSession(c.storage, userId);
       c.clearFailures(key);
@@ -215,7 +253,8 @@ export const getPortalStateFn = createServerFn({ method: "GET" }).handler(
   async (): Promise<PortalStatePayload> => {
     const { getStorage, isStoragePersistent } = await import("@/server/storage");
     const storage = await getStorage();
-    const [tasks, columns, controls, comments, evidences, modules, auditCount] = await Promise.all([
+    const [tasks, columns, controls, comments, evidences, modules, auditCount, docs] =
+      await Promise.all([
       storage.listTasks(),
       storage.listColumns(),
       storage.listControls(),
@@ -223,6 +262,7 @@ export const getPortalStateFn = createServerFn({ method: "GET" }).handler(
       storage.listEvidences(),
       storage.listModules(),
       storage.countAudit(),
+      storage.listDocs(),
     ]);
     return {
       persistent: isStoragePersistent(),
@@ -233,6 +273,7 @@ export const getPortalStateFn = createServerFn({ method: "GET" }).handler(
       evidences,
       modules,
       auditCount,
+      docs,
     };
   },
 );
