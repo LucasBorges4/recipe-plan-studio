@@ -103,6 +103,34 @@ export interface Storage {
 
   getMeta(key: string): Promise<string | null>;
   setMeta(key: string, value: string): Promise<void>;
+
+  listDocs(): Promise<DocRecord[]>;
+  listDocsByKind(kind: string): Promise<DocRecord[]>;
+  getDoc(id: string): Promise<DocRecord | null>;
+  upsertDoc(doc: DocRecord): Promise<void>;
+  deleteDoc(id: string): Promise<boolean>;
+
+  insertInvite(invite: InviteRow): Promise<void>;
+  listInvites(): Promise<InviteRow[]>;
+  getInviteByHash(codeHash: string): Promise<InviteRow | null>;
+  markInviteUsed(codeHash: string, usedAt: string, usedBy: string): Promise<void>;
+  deleteInvite(id: string): Promise<boolean>;
+}
+
+/** Registro genérico de módulo (riscos, marcos, releases, stack, equipe, patente, wiki). */
+export interface InviteRow {
+  id: string;
+  codeHash: string;
+  email: string;
+  role: Role;
+  /** Prefixo visível do código, para o admin reconhecer o convite. */
+  hint: string;
+  createdBy: string | null;
+  createdByName: string;
+  createdAt: string;
+  expiresAt: string;
+  usedAt: string | null;
+  usedBy: string | null;
 }
 
 /* ------------------------------------------------------------------ */
