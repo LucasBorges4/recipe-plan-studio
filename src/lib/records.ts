@@ -65,10 +65,13 @@ export interface PortalStatePayload {
  * `kind` identifica o módulo e `data` guarda os campos validados por zod
  * (src/lib/doc-schemas.ts) tanto no cliente quanto no servidor.
  */
+export type JsonValue = string | number | boolean | null | JsonValue[] | { [k: string]: JsonValue };
+export type JsonObject = { [k: string]: JsonValue };
+
 export interface DocRecord {
   id: string;
   kind: string;
-  data: Record<string, unknown>;
+  data: JsonObject;
   createdAt: string;
   updatedAt: string;
 }

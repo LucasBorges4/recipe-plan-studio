@@ -1,5 +1,11 @@
 import type { ComplianceControl, Module, Priority, Task } from "@/data/types";
-import type { AuditEntry, CommentRecord, DocRecord, EvidenceRecord } from "@/lib/records";
+import type {
+  AuditEntry,
+  CommentRecord,
+  DocRecord,
+  EvidenceRecord,
+  JsonObject,
+} from "@/lib/records";
 import type { Role } from "@/lib/rbac";
 
 /**
@@ -720,12 +726,12 @@ export class SqliteStorage implements Storage {
   }
 }
 
-function safeJson(v: SqlValue | undefined): Record<string, unknown> {
+function safeJson(v: SqlValue | undefined): JsonObject {
   if (typeof v !== "string") return {};
   try {
     const parsed: unknown = JSON.parse(v);
     return parsed && typeof parsed === "object" && !Array.isArray(parsed)
-      ? (parsed as Record<string, unknown>)
+      ? (parsed as JsonObject)
       : {};
   } catch {
     return {};
@@ -1005,7 +1011,7 @@ async function seedDocsIfEmpty(storage: Storage): Promise<void> {
     ]);
   const now = new Date().toISOString();
   let n = 0;
-  const put = async (kind: string, data: Record<string, unknown>) => {
+  const put = async (kind: string, data: JsonObject) => {
     n += 1;
     await storage.upsertDoc({
       id: `seed_${kind}_${n}`,

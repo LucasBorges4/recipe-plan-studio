@@ -3,7 +3,7 @@ import { z } from "zod";
 import { roleLabel, defaultRoleForNewUser, movePermission } from "@/lib/rbac";
 import { addMonthsBR, fmtBR } from "@/lib/portal-utils";
 import type { PublicUser } from "@/lib/rbac";
-import type { AuditEntry, PortalStatePayload, PublicInvite } from "@/lib/records";
+import type { AuditEntry, JsonObject, PortalStatePayload, PublicInvite } from "@/lib/records";
 import { docKinds, docKindLabel, docSchemas } from "@/lib/doc-schemas";
 import type { Priority } from "@/data/types";
 
@@ -826,7 +826,7 @@ export const saveRecordFn = createServerFn({ method: "POST" })
         const first = parsed.error.issues[0];
         return { ok: false, error: first ? first.message : "Dados inválidos." };
       }
-      const payload = parsed.data as Record<string, unknown>;
+      const payload = parsed.data as JsonObject;
       const label = docKindLabel[data.kind];
       const now = new Date().toISOString();
 
