@@ -79,6 +79,7 @@ export interface Storage {
   getTask(id: string): Promise<Task | null>;
   insertTask(task: Task): Promise<void>;
   updateTaskColumn(id: string, column: string): Promise<Task | null>;
+  deleteTask(id: string): Promise<boolean>;
 
   listComments(): Promise<CommentRecord[]>;
   insertComment(comment: CommentRecord): Promise<void>;
