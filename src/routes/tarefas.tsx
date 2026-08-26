@@ -344,6 +344,17 @@ function TarefasPage() {
         </button>
       </div>
 
+      {items.length === 0 ? (
+        <div className="mb-6 flex flex-col items-center gap-2 rounded-xl border border-dashed border-border bg-card/60 py-12 text-center">
+          <Inbox className="size-6 text-muted-foreground" />
+          <p className="text-sm font-medium text-foreground">Nenhuma tarefa cadastrada ainda</p>
+          <p className="max-w-sm text-xs text-muted-foreground">
+            Crie a primeira tarefa em "Nova Tarefa". Depois arraste o cartão entre as colunas para
+            registrar o andamento.
+          </p>
+        </div>
+      ) : null}
+
       {view === "board" ? (
         <div className="flex gap-4 overflow-x-auto pb-4">
           {columns.map((col) => {
