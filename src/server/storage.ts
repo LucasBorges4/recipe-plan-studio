@@ -214,6 +214,27 @@ CREATE TABLE IF NOT EXISTS meta (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS docs (
+  id TEXT PRIMARY KEY,
+  kind TEXT NOT NULL,
+  data TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS docs_kind_idx ON docs(kind);
+CREATE TABLE IF NOT EXISTS invites (
+  code_hash TEXT PRIMARY KEY,
+  id TEXT NOT NULL,
+  email TEXT NOT NULL,
+  role TEXT NOT NULL,
+  hint TEXT NOT NULL,
+  created_by TEXT,
+  created_by_name TEXT,
+  created_at TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  used_at TEXT,
+  used_by TEXT
+);
 `;
 
 const str = (v: SqlValue | undefined, fallback = ""): string =>
