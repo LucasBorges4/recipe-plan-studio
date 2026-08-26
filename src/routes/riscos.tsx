@@ -4,7 +4,15 @@ import { AlertTriangle } from "lucide-react";
 import { PageHeader } from "@/components/portal/PageHeader";
 import { NoticeBanner } from "@/components/portal/NoticeBanner";
 import { StatusBadge } from "@/components/portal/StatusBadge";
-import { risks, severityLabel, severityTone } from "@/data/risks";
+import {
+  RecordDialog,
+  DeleteRecordButton,
+  useCanManageRecords,
+  type FieldDef,
+} from "@/components/portal/RecordForm";
+import { severityLabel, severityTone } from "@/data/risks";
+import { readDocs } from "@/lib/doc-schemas";
+import { usePortalData } from "@/lib/api-hooks";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/riscos")({
@@ -35,9 +43,24 @@ const cellTone = (score: number) =>
         ? "bg-info-soft"
         : "bg-success-soft";
 
+const riskFields: FieldDef[] = [
+  { name: "title", label: "Risco", type: "text", placeholder: "Ex.: Atraso na homologação fiscal" },
+  { name: "category", label: "Categoria", type: "text", placeholder: "Ex.: Prazo, Segurança" },
+  { name: "owner", label: "Dono do risco", type: "text" },
+  { name: "probability", label: "Probabilidade (1 a 5)", type: "number", min: 1, max: 5 },
+  { name: "impact", label: "Impacto (1 a 5)", type: "number", min: 1, max: 5 },
+  { name: "mitigation", label: "Plano de mitigação", type: "textarea" },
+];
+
 function RiscosPage() {
+  const { data: portal, isLoading } = usePortalData();
+  const canManage = useCanManageRecords();
   const [cell, setCell] = useState<{ p: number; i: number } | null>(null);
-  const list = cell ? risks.filter((r) => r.probability === cell.p && r.impact === cell.i) : risks;
+
+  const risks = readDocs(portal?.docs, "risk");
+  const list = cell
+    ? risks.filter((r) => r.data.probability === cell.p && r.data.impact === cell.i)
+    : risks;
 
   return (
     <>
@@ -47,6 +70,12 @@ function RiscosPage() {
         subtitle="Probabilidade x impacto dos riscos do projeto"
       />
       <NoticeBanner />
+
+      {canManage ? (
+        <div className="mb-4 flex justify-end">
+          <RecordDialog kind="risk" fields={riskFields} triggerLabel="Novo risco" />
+        </div>
+      ) : null}
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,420px)_1fr]">
         <section className="rounded-xl border border-border bg-card p-6">
@@ -64,7 +93,9 @@ function RiscosPage() {
                 {[5, 4, 3, 2, 1].map((p) =>
                   [1, 2, 3, 4, 5].map((i) => {
                     const score = p * i;
-                    const inCell = risks.filter((r) => r.probability === p && r.impact === i);
+                    const inCell = risks.filter(
+                      (r) => r.data.probability === p && r.data.impact === i,
+                    );
                     const selected = cell?.p === p && cell?.i === i;
                     return (
                       <button
@@ -105,28 +136,43 @@ function RiscosPage() {
 
         <section className="space-y-3">
           {list.map((r) => {
-            const score = r.probability * r.impact;
+            const score = r.data.probability * r.data.impact;
             return (
               <article key={r.id} className="rounded-xl border border-border bg-card p-5">
                 <div className="flex flex-wrap items-start justify-between gap-2">
-                  <h2 className="text-sm font-semibold text-foreground">{r.title}</h2>
-                  <StatusBadge tone={severityTone(score)}>
-                    {severityLabel(score)} · {score}
-                  </StatusBadge>
+                  <h2 className="text-sm font-semibold text-foreground">{r.data.title}</h2>
+                  <div className="flex items-center gap-1">
+                    <StatusBadge tone={severityTone(score)}>
+                      {severityLabel(score)} · {score}
+                    </StatusBadge>
+                    {canManage ? (
+                      <>
+                        <RecordDialog
+                          kind="risk"
+                          fields={riskFields}
+                          id={r.id}
+                          initial={r.data}
+                          variant="icon"
+                        />
+                        <DeleteRecordButton id={r.id} label={r.data.title} />
+                      </>
+                    ) : null}
+                  </div>
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  {r.category} · Dono: {r.owner} · P{r.probability} x I{r.impact}
+                  {r.data.category} · Dono: {r.data.owner} · P{r.data.probability} x I
+                  {r.data.impact}
                 </p>
                 <p className="mt-2 text-sm text-muted-foreground">
                   <span className="font-medium text-foreground">Mitigação: </span>
-                  {r.mitigation}
+                  {r.data.mitigation}
                 </p>
               </article>
             );
           })}
           {list.length === 0 ? (
             <p className="rounded-xl border border-border bg-card p-6 text-center text-sm text-muted-foreground">
-              Nenhum risco nesta combinação de probabilidade e impacto.
+              {isLoading ? "Carregando riscos..." : "Nenhum risco nesta combinação."}
             </p>
           ) : null}
         </section>

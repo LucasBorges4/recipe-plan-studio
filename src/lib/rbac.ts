@@ -41,7 +41,9 @@ export type Permission =
   | "evidence.attach"
   | "evidence.review"
   | "audit.read"
-  | "admin.manage";
+  | "admin.manage"
+  | "record.manage"
+  | "invite.manage";
 
 const matrix: Record<Role, Permission[]> = {
   admin: [
@@ -53,9 +55,11 @@ const matrix: Record<Role, Permission[]> = {
     "evidence.review",
     "audit.read",
     "admin.manage",
+    "record.manage",
+    "invite.manage",
   ],
-  diretor: ["task.approve", "task.comment", "evidence.review", "audit.read"],
-  gestor: ["task.create", "task.move", "task.comment", "evidence.attach"],
+  diretor: ["task.approve", "task.comment", "evidence.review", "audit.read", "record.manage"],
+  gestor: ["task.create", "task.move", "task.comment", "evidence.attach", "record.manage"],
   desenvolvedor: ["task.move", "task.comment", "evidence.attach"],
   auditor: ["audit.read"],
 };

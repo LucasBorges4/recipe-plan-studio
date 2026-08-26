@@ -1,5 +1,11 @@
 import type { ComplianceControl, Module, Priority, Task } from "@/data/types";
-import type { AuditEntry, CommentRecord, EvidenceRecord } from "@/lib/records";
+import type {
+  AuditEntry,
+  CommentRecord,
+  DocRecord,
+  EvidenceRecord,
+  JsonObject,
+} from "@/lib/records";
 import type { Role } from "@/lib/rbac";
 
 /**
@@ -103,6 +109,34 @@ export interface Storage {
 
   getMeta(key: string): Promise<string | null>;
   setMeta(key: string, value: string): Promise<void>;
+
+  listDocs(): Promise<DocRecord[]>;
+  listDocsByKind(kind: string): Promise<DocRecord[]>;
+  getDoc(id: string): Promise<DocRecord | null>;
+  upsertDoc(doc: DocRecord): Promise<void>;
+  deleteDoc(id: string): Promise<boolean>;
+
+  insertInvite(invite: InviteRow): Promise<void>;
+  listInvites(): Promise<InviteRow[]>;
+  getInviteByHash(codeHash: string): Promise<InviteRow | null>;
+  markInviteUsed(codeHash: string, usedAt: string, usedBy: string): Promise<void>;
+  deleteInvite(id: string): Promise<boolean>;
+}
+
+/** Registro genérico de módulo (riscos, marcos, releases, stack, equipe, patente, wiki). */
+export interface InviteRow {
+  id: string;
+  codeHash: string;
+  email: string;
+  role: Role;
+  /** Prefixo visível do código, para o admin reconhecer o convite. */
+  hint: string;
+  createdBy: string | null;
+  createdByName: string;
+  createdAt: string;
+  expiresAt: string;
+  usedAt: string | null;
+  usedBy: string | null;
 }
 
 /* ------------------------------------------------------------------ */
@@ -213,6 +247,27 @@ CREATE TABLE IF NOT EXISTS modules (
 CREATE TABLE IF NOT EXISTS meta (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS docs (
+  id TEXT PRIMARY KEY,
+  kind TEXT NOT NULL,
+  data TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS docs_kind_idx ON docs(kind);
+CREATE TABLE IF NOT EXISTS invites (
+  code_hash TEXT PRIMARY KEY,
+  id TEXT NOT NULL,
+  email TEXT NOT NULL,
+  role TEXT NOT NULL,
+  hint TEXT NOT NULL,
+  created_by TEXT,
+  created_by_name TEXT,
+  created_at TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  used_at TEXT,
+  used_by TEXT
 );
 `;
 
@@ -609,6 +664,104 @@ export class SqliteStorage implements Storage {
       )
       .run(key, value);
   }
+
+  /* --- registros genéricos de módulo --- */
+  async listDocs() {
+    return this.many("SELECT * FROM docs ORDER BY rowid ASC").map(rowToDoc);
+  }
+  async listDocsByKind(kind: string) {
+    return this.many("SELECT * FROM docs WHERE kind = ? ORDER BY rowid ASC", kind).map(rowToDoc);
+  }
+  async getDoc(id: string) {
+    const r = this.one("SELECT * FROM docs WHERE id = ?", id);
+    return r ? rowToDoc(r) : null;
+  }
+  async upsertDoc(doc: DocRecord) {
+    this.db
+      .prepare(
+        `INSERT INTO docs (id, kind, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at`,
+      )
+      .run(doc.id, doc.kind, JSON.stringify(doc.data), doc.createdAt, doc.updatedAt);
+  }
+  async deleteDoc(id: string) {
+    return Number(this.db.prepare("DELETE FROM docs WHERE id = ?").run(id).changes) > 0;
+  }
+
+  /* --- convites de cadastro --- */
+  async insertInvite(i: InviteRow) {
+    this.db
+      .prepare(
+        `INSERT INTO invites (code_hash, id, email, role, hint, created_by, created_by_name, created_at, expires_at, used_at, used_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        i.codeHash,
+        i.id,
+        i.email,
+        i.role,
+        i.hint,
+        i.createdBy,
+        i.createdByName,
+        i.createdAt,
+        i.expiresAt,
+        i.usedAt,
+        i.usedBy,
+      );
+  }
+  async listInvites() {
+    return this.many("SELECT * FROM invites ORDER BY created_at DESC").map(rowToInvite);
+  }
+  async getInviteByHash(codeHash: string) {
+    const r = this.one("SELECT * FROM invites WHERE code_hash = ?", codeHash);
+    return r ? rowToInvite(r) : null;
+  }
+  async markInviteUsed(codeHash: string, usedAt: string, usedBy: string) {
+    this.db
+      .prepare("UPDATE invites SET used_at = ?, used_by = ? WHERE code_hash = ?")
+      .run(usedAt, usedBy, codeHash);
+  }
+  async deleteInvite(id: string) {
+    return Number(this.db.prepare("DELETE FROM invites WHERE id = ?").run(id).changes) > 0;
+  }
+}
+
+function safeJson(v: SqlValue | undefined): JsonObject {
+  if (typeof v !== "string") return {};
+  try {
+    const parsed: unknown = JSON.parse(v);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as JsonObject)
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+function rowToDoc(r: Record<string, SqlValue>): DocRecord {
+  return {
+    id: str(r["id"]),
+    kind: str(r["kind"]),
+    data: safeJson(r["data"]),
+    createdAt: str(r["created_at"]),
+    updatedAt: str(r["updated_at"]),
+  };
+}
+
+function rowToInvite(r: Record<string, SqlValue>): InviteRow {
+  return {
+    id: str(r["id"]),
+    codeHash: str(r["code_hash"]),
+    email: str(r["email"]),
+    role: str(r["role"]) as Role,
+    hint: str(r["hint"]),
+    createdBy: nul(r["created_by"]),
+    createdByName: str(r["created_by_name"]),
+    createdAt: str(r["created_at"]),
+    expiresAt: str(r["expires_at"]),
+    usedAt: nul(r["used_at"]),
+    usedBy: nul(r["used_by"]),
+  };
 }
 
 function safeTags(v: SqlValue | undefined): string[] {
@@ -638,6 +791,8 @@ export class MemoryStorage implements Storage {
   private audit: AuditEntry[] = [];
   private modules: Module[] = [];
   private meta = new Map<string, string>();
+  private docs: DocRecord[] = [];
+  private invites: InviteRow[] = [];
 
   async countUsers() {
     return this.users.length;
@@ -784,6 +939,44 @@ export class MemoryStorage implements Storage {
   async setMeta(key: string, value: string) {
     this.meta.set(key, value);
   }
+
+  async listDocs() {
+    return this.docs.map((d) => ({ ...d }));
+  }
+  async listDocsByKind(kind: string) {
+    return this.docs.filter((d) => d.kind === kind).map((d) => ({ ...d }));
+  }
+  async getDoc(id: string) {
+    return this.docs.find((d) => d.id === id) ?? null;
+  }
+  async upsertDoc(doc: DocRecord) {
+    const idx = this.docs.findIndex((d) => d.id === doc.id);
+    if (idx >= 0) this.docs[idx] = doc;
+    else this.docs.push(doc);
+  }
+  async deleteDoc(id: string) {
+    const before = this.docs.length;
+    this.docs = this.docs.filter((d) => d.id !== id);
+    return this.docs.length < before;
+  }
+
+  async insertInvite(i: InviteRow) {
+    this.invites.push(i);
+  }
+  async listInvites() {
+    return [...this.invites].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+  async getInviteByHash(codeHash: string) {
+    return this.invites.find((i) => i.codeHash === codeHash) ?? null;
+  }
+  async markInviteUsed(codeHash: string, usedAt: string, usedBy: string) {
+    this.invites = this.invites.map((i) => (i.codeHash === codeHash ? { ...i, usedAt, usedBy } : i));
+  }
+  async deleteInvite(id: string) {
+    const before = this.invites.length;
+    this.invites = this.invites.filter((i) => i.id !== id);
+    return this.invites.length < before;
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -791,18 +984,59 @@ export class MemoryStorage implements Storage {
 /* ------------------------------------------------------------------ */
 
 async function seedIfEmpty(storage: Storage): Promise<void> {
-  if ((await storage.listColumns()).length > 0) return;
-  const [{ kanbanColumns, tasks }, { controls }, { modules }] = await Promise.all([
-    import("@/data/tasks"),
-    import("@/data/compliance"),
-    import("@/data/modules"),
-  ]);
-  for (const [position, name] of kanbanColumns.entries()) {
-    await storage.insertColumn(name);
+  if ((await storage.listColumns()).length === 0) {
+    const [{ kanbanColumns, tasks }, { controls }, { modules }] = await Promise.all([
+      import("@/data/tasks"),
+      import("@/data/compliance"),
+      import("@/data/modules"),
+    ]);
+    for (const name of kanbanColumns) await storage.insertColumn(name);
+    for (const t of tasks) await storage.insertTask(t);
+    for (const c of controls) await storage.insertControl(c);
+    for (const m of modules) await storage.insertModule(m);
   }
-  for (const t of tasks) await storage.insertTask(t);
-  for (const c of controls) await storage.insertControl(c);
-  for (const m of modules) await storage.insertModule(m);
+  await seedDocsIfEmpty(storage);
+}
+
+/** Popula os módulos genéricos (riscos, diário, engenharia, patente, wiki) na primeira execução. */
+async function seedDocsIfEmpty(storage: Storage): Promise<void> {
+  if ((await storage.listDocs()).length > 0) return;
+  const [{ risks }, { milestones, releases }, { stack, team }, { patentStages }, { wikiArticles }] =
+    await Promise.all([
+      import("@/data/risks"),
+      import("@/data/journal"),
+      import("@/data/team"),
+      import("@/data/patent"),
+      import("@/data/wiki"),
+    ]);
+  const now = new Date().toISOString();
+  let n = 0;
+  const put = async (kind: string, data: JsonObject) => {
+    n += 1;
+    await storage.upsertDoc({
+      id: `seed_${kind}_${n}`,
+      kind,
+      data,
+      createdAt: now,
+      updatedAt: now,
+    });
+  };
+  for (const r of risks) {
+    const { id: _id, ...rest } = r;
+    await put("risk", { ...rest });
+  }
+  for (const m of milestones) {
+    const { id: _id, ...rest } = m;
+    await put("milestone", { ...rest });
+  }
+  for (const r of releases) await put("release", { ...r });
+  for (const t of stack) await put("tech", { ...t });
+  for (const m of team) await put("member", { name: m.name, role: m.role, bio: m.bio });
+  for (const s of patentStages) {
+    const { id: _id, ...rest } = s;
+    await put("patent", { ...rest });
+  }
+  for (const a of wikiArticles) await put("wiki", { ...a });
 }
 
 let storagePromise: Promise<Storage> | undefined;
