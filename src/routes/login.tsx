@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { z } from "zod";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -14,15 +15,25 @@ import { qk, useSession } from "@/lib/api-hooks";
 
 function LoginPage() {
   const navigate = useNavigate();
+  const search = Route.useSearch();
   const queryClient = useQueryClient();
   const { data: session } = useSession();
 
-  const [mode, setMode] = useState<"login" | "signup">("login");
+  const [mode, setMode] = useState<"login" | "signup">(search.convite ? "signup" : "login");
+  const [code, setCode] = useState(search.convite ?? "");
   const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(search.email ?? "");
   const [password, setPassword] = useState("");
   const [jobTitle, setJobTitle] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (search.convite) {
+      setMode("signup");
+      setCode(search.convite);
+    }
+    if (search.email) setEmail(search.email);
+  }, [search.convite, search.email]);
 
   if (session?.user) {
     navigate({ to: "/" });
@@ -36,7 +47,15 @@ function LoginPage() {
       const res =
         mode === "login"
           ? await loginFn({ data: { email, password } })
-          : await registerFn({ data: { name, email, password, jobTitle: jobTitle || undefined } });
+          : await registerFn({
+              data: {
+                name,
+                email,
+                password,
+                jobTitle: jobTitle || undefined,
+                code: code.trim() || undefined,
+              },
+            });
 
       if (!res.ok) {
         toast.error(res.error);
@@ -94,8 +113,9 @@ function LoginPage() {
 
           {mode === "signup" && (
             <p className="mb-4 rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
-              A primeira conta criada no portal torna-se <strong>Administrador</strong>. As demais
-              começam como Desenvolvedor e podem ser promovidas depois.
+              O cadastro é feito <strong>por convite</strong>: informe o código secreto recebido do
+              administrador, válido apenas para o seu e-mail. A primeira conta do portal é criada sem
+              código e torna-se <strong>Administrador</strong>.
             </p>
           )}
 
@@ -142,6 +162,23 @@ function LoginPage() {
 
             {mode === "signup" && (
               <div className="space-y-1.5">
+                <Label htmlFor="code">Código do convite</Label>
+                <Input
+                  id="code"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value)}
+                  placeholder="Ex.: A7K2M-9PQ4R-..."
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Deixe em branco apenas se você está criando a primeira conta do portal.
+                </p>
+              </div>
+            )}
+
+            {mode === "signup" && (
+              <div className="space-y-1.5">
                 <Label htmlFor="jobTitle">Cargo (opcional)</Label>
                 <Input
                   id="jobTitle"
@@ -180,7 +217,13 @@ function LoginPage() {
   );
 }
 
+const searchSchema = z.object({
+  convite: z.string().trim().max(80).optional(),
+  email: z.string().trim().max(120).optional(),
+});
+
 export const Route = createFileRoute("/login")({
+  validateSearch: searchSchema,
   head: () => ({
     meta: [{ title: "Entrar — Portal de Governança" }, { name: "robots", content: "noindex" }],
   }),
