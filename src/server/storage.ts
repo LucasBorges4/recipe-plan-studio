@@ -474,6 +474,10 @@ export class SqliteStorage implements Storage {
     this.db.prepare("UPDATE tasks SET column_name = ? WHERE id = ?").run(column, id);
     return { ...task, column };
   }
+  async deleteTask(id: string) {
+    const info = this.db.prepare("DELETE FROM tasks WHERE id = ?").run(id);
+    return Number(info.changes) > 0;
+  }
 
   async listComments() {
     return this.many("SELECT * FROM comments ORDER BY at ASC, rowid ASC").map(
@@ -867,6 +871,11 @@ export class MemoryStorage implements Storage {
     if (!task) return null;
     task.column = column;
     return task;
+  }
+  async deleteTask(id: string) {
+    const before = this.tasks.length;
+    this.tasks = this.tasks.filter((t) => t.id !== id);
+    return this.tasks.length < before;
   }
 
   async listComments() {
