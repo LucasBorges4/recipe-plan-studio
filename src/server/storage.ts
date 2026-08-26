@@ -785,6 +785,8 @@ export class MemoryStorage implements Storage {
   private audit: AuditEntry[] = [];
   private modules: Module[] = [];
   private meta = new Map<string, string>();
+  private docs: DocRecord[] = [];
+  private invites: InviteRow[] = [];
 
   async countUsers() {
     return this.users.length;
