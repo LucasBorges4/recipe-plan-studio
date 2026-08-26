@@ -658,6 +658,104 @@ export class SqliteStorage implements Storage {
       )
       .run(key, value);
   }
+
+  /* --- registros genéricos de módulo --- */
+  async listDocs() {
+    return this.many("SELECT * FROM docs ORDER BY rowid ASC").map(rowToDoc);
+  }
+  async listDocsByKind(kind: string) {
+    return this.many("SELECT * FROM docs WHERE kind = ? ORDER BY rowid ASC", kind).map(rowToDoc);
+  }
+  async getDoc(id: string) {
+    const r = this.one("SELECT * FROM docs WHERE id = ?", id);
+    return r ? rowToDoc(r) : null;
+  }
+  async upsertDoc(doc: DocRecord) {
+    this.db
+      .prepare(
+        `INSERT INTO docs (id, kind, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at`,
+      )
+      .run(doc.id, doc.kind, JSON.stringify(doc.data), doc.createdAt, doc.updatedAt);
+  }
+  async deleteDoc(id: string) {
+    return Number(this.db.prepare("DELETE FROM docs WHERE id = ?").run(id).changes) > 0;
+  }
+
+  /* --- convites de cadastro --- */
+  async insertInvite(i: InviteRow) {
+    this.db
+      .prepare(
+        `INSERT INTO invites (code_hash, id, email, role, hint, created_by, created_by_name, created_at, expires_at, used_at, used_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        i.codeHash,
+        i.id,
+        i.email,
+        i.role,
+        i.hint,
+        i.createdBy,
+        i.createdByName,
+        i.createdAt,
+        i.expiresAt,
+        i.usedAt,
+        i.usedBy,
+      );
+  }
+  async listInvites() {
+    return this.many("SELECT * FROM invites ORDER BY created_at DESC").map(rowToInvite);
+  }
+  async getInviteByHash(codeHash: string) {
+    const r = this.one("SELECT * FROM invites WHERE code_hash = ?", codeHash);
+    return r ? rowToInvite(r) : null;
+  }
+  async markInviteUsed(codeHash: string, usedAt: string, usedBy: string) {
+    this.db
+      .prepare("UPDATE invites SET used_at = ?, used_by = ? WHERE code_hash = ?")
+      .run(usedAt, usedBy, codeHash);
+  }
+  async deleteInvite(id: string) {
+    return Number(this.db.prepare("DELETE FROM invites WHERE id = ?").run(id).changes) > 0;
+  }
+}
+
+function safeJson(v: SqlValue | undefined): Record<string, unknown> {
+  if (typeof v !== "string") return {};
+  try {
+    const parsed: unknown = JSON.parse(v);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+function rowToDoc(r: Record<string, SqlValue>): DocRecord {
+  return {
+    id: str(r["id"]),
+    kind: str(r["kind"]),
+    data: safeJson(r["data"]),
+    createdAt: str(r["created_at"]),
+    updatedAt: str(r["updated_at"]),
+  };
+}
+
+function rowToInvite(r: Record<string, SqlValue>): InviteRow {
+  return {
+    id: str(r["id"]),
+    codeHash: str(r["code_hash"]),
+    email: str(r["email"]),
+    role: str(r["role"]) as Role,
+    hint: str(r["hint"]),
+    createdBy: nul(r["created_by"]),
+    createdByName: str(r["created_by_name"]),
+    createdAt: str(r["created_at"]),
+    expiresAt: str(r["expires_at"]),
+    usedAt: nul(r["used_at"]),
+    usedBy: nul(r["used_by"]),
+  };
 }
 
 function safeTags(v: SqlValue | undefined): string[] {
