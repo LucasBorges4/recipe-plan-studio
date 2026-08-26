@@ -1,5 +1,5 @@
 import type { ComplianceControl, Module, Priority, Task } from "@/data/types";
-import type { AuditEntry, CommentRecord, EvidenceRecord } from "@/lib/records";
+import type { AuditEntry, CommentRecord, DocRecord, EvidenceRecord } from "@/lib/records";
 import type { Role } from "@/lib/rbac";
 
 /**
