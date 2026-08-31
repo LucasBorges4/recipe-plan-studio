@@ -12,4 +12,16 @@ export default defineConfig({
     // nitro/vite builds from this
     server: { entry: "server" },
   },
+  nitro: {
+    cloudflare: {
+      nodeCompat: true,
+      deployConfig: true,
+      // hash-wasm compiles Argon2 wasm at runtime via WebAssembly.compile().
+      // Cloudflare Workers blocks dynamic wasm compilation by default unless the
+      // `wasm_unsafe_eval_compatibility_modules` compatibility flag is enabled.
+      wrangler: {
+        compatibility_flags: ["wasm_unsafe_eval_compatibility_modules"],
+      },
+    },
+  } as never,
 });
