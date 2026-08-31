@@ -113,31 +113,42 @@ export const registerFn = createServerFn({ method: "POST" })
       }
 
       const count = await c.storage.countUsers();
-      let role = count === 0 ? "admin" : defaultRoleForNewUser;
+      const admins = (await c.storage.listUsers()).filter((u) => u.role === "admin");
+      const hasAdmin = admins.length > 0;
+      // Auto-recuperação: enquanto não houver nenhum administrador,
+      // o próximo cadastro torna-se admin.
+      let role = !hasAdmin ? "admin" : defaultRoleForNewUser;
       let inviteHash: string | null = null;
 
       if (count > 0) {
         const code = (data.code ?? "").trim();
         if (!code) {
-          c.registerFailure(key);
-          return { ok: false, error: "Cadastro apenas por convite. Informe o código secreto." };
+          if (hasAdmin) {
+            c.registerFailure(key);
+            return { ok: false, error: "Cadastro apenas por convite. Informe o código secreto." };
+          }
+          // Sem admin no sistema e sem código → auto-heal como admin
+        } else if (hasAdmin) {
+          // Quando já existe admin, o código deve ser um convite válido.
+          const hash = await sha256Hex(code);
+          const invite = await c.storage.getInviteByHash(hash);
+          if (!invite || invite.usedAt) {
+            c.registerFailure(key);
+            return { ok: false, error: "Código de convite inválido ou já utilizado." };
+          }
+          if (new Date(invite.expiresAt).getTime() < Date.now()) {
+            c.registerFailure(key);
+            return { ok: false, error: "Este convite expirou. Solicite um novo ao administrador." };
+          }
+          if (invite.email.toLowerCase() !== email) {
+            c.registerFailure(key);
+            return { ok: false, error: "Este convite foi emitido para outro e-mail." };
+          }
+          role = invite.role;
+          inviteHash = invite.codeHash;
         }
-        const hash = await sha256Hex(code);
-        const invite = await c.storage.getInviteByHash(hash);
-        if (!invite || invite.usedAt) {
-          c.registerFailure(key);
-          return { ok: false, error: "Código de convite inválido ou já utilizado." };
-        }
-        if (new Date(invite.expiresAt).getTime() < Date.now()) {
-          c.registerFailure(key);
-          return { ok: false, error: "Este convite expirou. Solicite um novo ao administrador." };
-        }
-        if (invite.email.toLowerCase() !== email) {
-          c.registerFailure(key);
-          return { ok: false, error: "Este convite foi emitido para outro e-mail." };
-        }
-        role = invite.role;
-        inviteHash = invite.codeHash;
+        // Quando não há admin, o código de cadastro já foi validado no bloco
+        // superior; ignora a checagem de convite para permitir auto-heal.
       }
       const salt = c.pw.generateSaltHex();
       const hash = await c.pw.hashPassword(data.password, c.pepper, salt);
@@ -771,6 +782,37 @@ export const setUserRoleFn = createServerFn({ method: "POST" })
           entityId: data.userId,
           before: roleLabel[target.role],
           after: roleLabel[data.role],
+        },
+      );
+      return { ok: true, data: null };
+    } catch (e) {
+      return { ok: false, error: errorMsg(e) };
+    }
+  });
+
+/**
+ * Auto-recuperação de admin: qualquer usuário autenticado pode se
+ * tornar administrador se nenhum admin existir no sistema.
+ * O servidor rejeita se já houver ao menos um admin.
+ */
+export const promoteSelfFn = createServerFn({ method: "POST" })
+  .handler(async (): Promise<ApiResult<null>> => {
+    try {
+      const c = await ctx();
+      const user = await c.auth.requireUser(c.storage);
+      const admins = (await c.storage.listUsers()).filter((u) => u.role === "admin");
+      if (admins.length > 0) {
+        return { ok: false, error: "Já existe um administrador no sistema." };
+      }
+      await c.storage.updateUser(user.id, { role: "admin" });
+      await c.logAudit(
+        c.storage,
+        { id: user.id, name: user.name, role: user.role },
+        {
+          action: "Auto-recuperação de admin",
+          entity: "usuário",
+          entityId: user.id,
+          after: "admin",
         },
       );
       return { ok: true, data: null };

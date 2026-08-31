@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { useQueryClient, useMutation } from "@tanstack/react-query";
-import { Settings, Trash2, Plus, ShieldAlert } from "lucide-react";
+import { Settings, Trash2, Plus, ShieldAlert, UserPlus } from "lucide-react";
 import { PageHeader } from "@/components/portal/PageHeader";
 import { NoticeBanner } from "@/components/portal/NoticeBanner";
 import { StatusBadge } from "@/components/portal/StatusBadge";
@@ -20,6 +20,7 @@ import {
   clearAllUsersFn,
   createUserWithRoleFn,
   seedDemoUsersFn,
+  promoteSelfFn,
 } from "@/lib/portal-api";
 import { roleProfiles } from "@/lib/rbac";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -170,6 +171,18 @@ function AdminPage() {
   });
 
   if (!isAdmin) {
+    const recoverM = useMutation({
+      mutationFn: () => promoteSelfFn(),
+      onSuccess: (r) => {
+        if (!r.ok) {
+          toast.error(r.error);
+        } else {
+          toast.success("Você agora é administrador! Recarregando…");
+          window.location.reload();
+        }
+      },
+      onError: (e) => toast.error(e instanceof Error ? e.message : "Falha na recuperação."),
+    });
     return (
       <>
         <PageHeader
@@ -183,6 +196,21 @@ function AdminPage() {
           <p className="mt-1 text-xs text-muted-foreground">
             Esta área é exclusiva para administradores.
           </p>
+          <div className="mt-6 space-y-3">
+            <p className="text-xs text-muted-foreground">
+              Nenhum administrador foi encontrado no sistema. O próximo cadastro
+              normalmente torna-se admin, mas você também pode se auto-recuperar
+              abaixo.
+            </p>
+            <button
+              onClick={() => recoverM.mutate()}
+              disabled={recoverM.isPending}
+              className="inline-flex items-center gap-1.5 rounded-md bg-brand px-4 py-2 text-sm font-medium text-brand-foreground disabled:opacity-50"
+            >
+              <UserPlus className="size-4" />
+              {recoverM.isPending ? "Promovendo…" : "Tornar-me administrador"}
+            </button>
+          </div>
         </div>
       </>
     );
