@@ -99,4 +99,35 @@ export interface PortalStatePayload {
   nextSteps: NextStepRecord[];
   legalDocs: LegalDocRecord[];
   auditCount: number;
+  docs: DocRecord[];
+}
+
+/**
+ * Registro genérico de módulo. Os módulos de riscos, diário de bordo,
+ * releases, stack, equipe, patente e wiki compartilham a mesma tabela:
+ * `kind` identifica o módulo e `data` guarda os campos validados por zod
+ * (src/lib/doc-schemas.ts) tanto no cliente quanto no servidor.
+ */
+export type JsonValue = string | number | boolean | null | JsonValue[] | { [k: string]: JsonValue };
+export type JsonObject = { [k: string]: JsonValue };
+
+export interface DocRecord {
+  id: string;
+  kind: string;
+  data: JsonObject;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Convite de cadastro exposto ao administrador (nunca inclui o código em claro). */
+export interface PublicInvite {
+  id: string;
+  email: string;
+  role: string;
+  hint: string;
+  createdByName: string;
+  createdAt: string;
+  expiresAt: string;
+  usedAt: string | null;
+  status: "Pendente" | "Utilizado" | "Expirado";
 }

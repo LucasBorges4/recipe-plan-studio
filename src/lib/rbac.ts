@@ -61,7 +61,9 @@ export type Permission =
   | "automation.read"
   | "automation.create"
   | "automation.share"
-  | "automation.admin";
+  | "automation.admin"
+  | "record.manage"
+  | "invite.manage";
 
 const matrix: Record<Role, Permission[]> = {
   admin: [
@@ -82,6 +84,8 @@ const matrix: Record<Role, Permission[]> = {
     "automation.create",
     "automation.share",
     "automation.admin",
+    "record.manage",
+    "invite.manage",
   ],
   diretor: [
     "task.approve",
@@ -94,6 +98,7 @@ const matrix: Record<Role, Permission[]> = {
     "automation.read",
     "automation.create",
     "automation.share",
+    "record.manage",
   ],
   gestor: [
     "task.create",
@@ -106,6 +111,7 @@ const matrix: Record<Role, Permission[]> = {
     "automation.read",
     "automation.create",
     "automation.share",
+    "record.manage",
   ],
   desenvolvedor: [
     "task.move",

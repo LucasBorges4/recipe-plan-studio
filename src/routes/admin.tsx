@@ -35,6 +35,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
+import { InvitesPanel } from "@/components/portal/InvitesPanel";
 
 export const Route = createFileRoute("/admin")({
   head: () => ({
@@ -212,6 +213,7 @@ function AdminPage() {
       <Tabs defaultValue="usuarios">
         <TabsList className="flex flex-wrap">
           <TabsTrigger value="usuarios">Usuários e papéis</TabsTrigger>
+          <TabsTrigger value="convites">Convites</TabsTrigger>
           <TabsTrigger value="modulos">Módulos</TabsTrigger>
           <TabsTrigger value="board">Colunas do board</TabsTrigger>
           <TabsTrigger value="docs">Documentos</TabsTrigger>
@@ -322,6 +324,10 @@ function AdminPage() {
               <li className="p-4 text-sm text-muted-foreground">Nenhum usuário cadastrado.</li>
             ) : null}
           </ul>
+        </TabsContent>
+
+        <TabsContent value="convites" className="mt-4">
+          <InvitesPanel />
         </TabsContent>
 
         <TabsContent value="modulos" className="mt-4">

@@ -3,7 +3,8 @@ import { z } from "zod";
 import { roleLabel, defaultRoleForNewUser, movePermission, can } from "@/lib/rbac";
 import { addMonthsBR, fmtBR } from "@/lib/portal-utils";
 import type { PublicUser } from "@/lib/rbac";
-import type { AuditEntry, PortalStatePayload } from "@/lib/records";
+import type { AuditEntry, JsonObject, PortalStatePayload, PublicInvite } from "@/lib/records";
+import { docKinds, docKindLabel, docSchemas } from "@/lib/doc-schemas";
 import type { Priority } from "@/data/types";
 
 /* ------------------------------------------------------------------ */
@@ -23,6 +24,13 @@ function errorMsg(e: unknown): string {
 /* ------------------------------------------------------------------ */
 
 const BR_DATE = /^\d{2}\/\d{2}\/\d{4}$/;
+
+async function sha256Hex(input: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(input));
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
 
 /* ------------------------------------------------------------------ */
 /* Acesso ao contexto server (import dinâmico, fora do bundle cliente) */
@@ -76,7 +84,7 @@ export const registerFn = createServerFn({ method: "POST" })
         jobTitle: z.string().trim().max(80, "Cargo muito longo").optional(),
         department: z.string().trim().max(80, "Departamento muito longo").optional(),
         bio: z.string().trim().max(300, "Bio muito longa").optional(),
-        code: z.string().trim().max(80).optional(),
+        code: z.string().trim().max(80, "Código inválido").optional(),
       })
       .strict(),
   )
@@ -105,7 +113,32 @@ export const registerFn = createServerFn({ method: "POST" })
       }
 
       const count = await c.storage.countUsers();
-      const role = count === 0 ? "admin" : defaultRoleForNewUser;
+      let role = count === 0 ? "admin" : defaultRoleForNewUser;
+      let inviteHash: string | null = null;
+
+      if (count > 0) {
+        const code = (data.code ?? "").trim();
+        if (!code) {
+          c.registerFailure(key);
+          return { ok: false, error: "Cadastro apenas por convite. Informe o código secreto." };
+        }
+        const hash = await sha256Hex(code);
+        const invite = await c.storage.getInviteByHash(hash);
+        if (!invite || invite.usedAt) {
+          c.registerFailure(key);
+          return { ok: false, error: "Código de convite inválido ou já utilizado." };
+        }
+        if (new Date(invite.expiresAt).getTime() < Date.now()) {
+          c.registerFailure(key);
+          return { ok: false, error: "Este convite expirou. Solicite um novo ao administrador." };
+        }
+        if (invite.email.toLowerCase() !== email) {
+          c.registerFailure(key);
+          return { ok: false, error: "Este convite foi emitido para outro e-mail." };
+        }
+        role = invite.role;
+        inviteHash = invite.codeHash;
+      }
       const salt = c.pw.generateSaltHex();
       const hash = await c.pw.hashPassword(data.password, c.pepper, salt);
 
@@ -123,6 +156,8 @@ export const registerFn = createServerFn({ method: "POST" })
         passwordSalt: salt,
         createdAt: now,
       });
+
+      if (inviteHash) await c.storage.markInviteUsed(inviteHash, now, userId);
 
       await c.auth.createSession(c.storage, userId);
       c.clearFailures(key);
@@ -257,6 +292,7 @@ export const getPortalStateFn = createServerFn({ method: "GET" }).handler(
       nextSteps,
       legalDocs,
       auditCount,
+      docs,
       info,
     ] = await Promise.all([
       storage.listTasks(),
@@ -274,6 +310,7 @@ export const getPortalStateFn = createServerFn({ method: "GET" }).handler(
       storage.listNextSteps(),
       storage.listLegalDocs(),
       storage.countAudit(),
+      storage.listDocs(),
       storage.getStorageInfo().catch(() => null),
     ]);
     return {
@@ -295,6 +332,7 @@ export const getPortalStateFn = createServerFn({ method: "GET" }).handler(
       nextSteps,
       legalDocs,
       auditCount,
+      docs,
     };
   },
 );
@@ -1888,3 +1926,202 @@ export const globalSearchFn = createServerFn({ method: "GET" })
       return { ok: false, error: errorMsg(e) };
     }
   });
+
+export const saveRecordFn = createServerFn({ method: "POST" })
+  .validator(
+    z
+      .object({
+        kind: z.enum(docKinds),
+        id: z.string().trim().max(80).optional(),
+        data: z.unknown(),
+      })
+      .strict(),
+  )
+  .handler(async ({ data }): Promise<ApiResult<null>> => {
+    try {
+      const c = await ctx();
+      const user = await c.auth.requirePermission(c.storage, "record.manage");
+
+      const parsed = docSchemas[data.kind].safeParse(data.data);
+      if (!parsed.success) {
+        const first = parsed.error.issues[0];
+        return { ok: false, error: first ? first.message : "Dados inválidos." };
+      }
+      const payload = parsed.data as JsonObject;
+      const label = docKindLabel[data.kind];
+      const now = new Date().toISOString();
+
+      const existing = data.id ? await c.storage.getDoc(data.id) : null;
+      if (data.id && !existing) return { ok: false, error: "Registro não encontrado." };
+      if (existing && existing.kind !== data.kind) {
+        return { ok: false, error: "Registro não encontrado." };
+      }
+
+      const id = existing?.id ?? c.newId(data.kind);
+      await c.storage.upsertDoc({
+        id,
+        kind: data.kind,
+        data: payload,
+        createdAt: existing?.createdAt ?? now,
+        updatedAt: now,
+      });
+
+      const title = String(payload["title"] ?? payload["name"] ?? payload["version"] ?? id);
+      await c.logAudit(
+        c.storage,
+        { id: user.id, name: user.name, role: user.role },
+        {
+          action: existing ? `${label} atualizado` : `${label} criado`,
+          entity: data.kind,
+          entityId: id,
+          ...(existing ? { before: JSON.stringify(existing.data) } : {}),
+          after: title,
+        },
+      );
+
+      return { ok: true, data: null };
+    } catch (e) {
+      return { ok: false, error: errorMsg(e) };
+    }
+  });
+
+export const deleteRecordFn = createServerFn({ method: "POST" })
+  .validator(z.object({ id: z.string().trim().min(1).max(80) }).strict())
+  .handler(async ({ data }): Promise<ApiResult<null>> => {
+    try {
+      const c = await ctx();
+      const user = await c.auth.requirePermission(c.storage, "record.manage");
+      const existing = await c.storage.getDoc(data.id);
+      if (!existing) return { ok: false, error: "Registro não encontrado." };
+
+      await c.storage.deleteDoc(data.id);
+      await c.logAudit(
+        c.storage,
+        { id: user.id, name: user.name, role: user.role },
+        {
+          action: "Registro excluído",
+          entity: existing.kind,
+          entityId: existing.id,
+          before: JSON.stringify(existing.data),
+        },
+      );
+      return { ok: true, data: null };
+    } catch (e) {
+      return { ok: false, error: errorMsg(e) };
+    }
+  });
+
+/* ------------------------------------------------------------------ */
+/* 13. CONVITES DE CADASTRO (link + código secreto)                   */
+/* ------------------------------------------------------------------ */
+
+export const createInviteFn = createServerFn({ method: "POST" })
+  .validator(
+    z
+      .object({
+        email: z.string().trim().email("E-mail inválido").max(120),
+        role: z.enum(["admin", "diretor", "gestor", "desenvolvedor", "auditor"]),
+        days: z.coerce.number().int().min(1).max(60).default(7),
+      })
+      .strict(),
+  )
+  .handler(async ({ data }): Promise<ApiResult<{ code: string; email: string }>> => {
+    try {
+      const c = await ctx();
+      const user = await c.auth.requirePermission(c.storage, "invite.manage");
+
+      const email = data.email.toLowerCase().trim();
+      if (await c.storage.getUserByEmail(email)) {
+        return { ok: false, error: "Já existe uma conta com este e-mail." };
+      }
+
+      // Código secreto de 160 bits em base32 legível, agrupado em blocos.
+      const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+      const bytes = new Uint8Array(20);
+      crypto.getRandomValues(bytes);
+      let raw = "";
+      for (const b of bytes) raw += alphabet[b % alphabet.length];
+      const code = (raw.match(/.{1,5}/g) ?? [raw]).join("-");
+
+      const now = new Date();
+      await c.storage.insertInvite({
+        id: c.newId("inv"),
+        codeHash: await sha256Hex(code),
+        email,
+        role: data.role,
+        hint: code.slice(0, 5),
+        createdBy: user.id,
+        createdByName: user.name,
+        createdAt: now.toISOString(),
+        expiresAt: new Date(now.getTime() + data.days * 24 * 60 * 60 * 1000).toISOString(),
+        usedAt: null,
+        usedBy: null,
+      });
+
+      await c.logAudit(
+        c.storage,
+        { id: user.id, name: user.name, role: user.role },
+        {
+          action: "Convite emitido",
+          entity: "convite",
+          entityId: email,
+          after: `${roleLabel[data.role]} · expira em ${data.days} dia(s)`,
+        },
+      );
+
+      return { ok: true, data: { code, email } };
+    } catch (e) {
+      return { ok: false, error: errorMsg(e) };
+    }
+  });
+
+export const listInvitesFn = createServerFn({ method: "GET" }).handler(
+  async (): Promise<ApiResult<PublicInvite[]>> => {
+    try {
+      const c = await ctx();
+      await c.auth.requirePermission(c.storage, "invite.manage");
+      const rows = await c.storage.listInvites();
+      const now = Date.now();
+      return {
+        ok: true,
+        data: rows.map((i) => ({
+          id: i.id,
+          email: i.email,
+          role: roleLabel[i.role],
+          hint: i.hint,
+          createdByName: i.createdByName,
+          createdAt: i.createdAt,
+          expiresAt: i.expiresAt,
+          usedAt: i.usedAt,
+          status: i.usedAt
+            ? ("Utilizado" as const)
+            : new Date(i.expiresAt).getTime() < now
+              ? ("Expirado" as const)
+              : ("Pendente" as const),
+        })),
+      };
+    } catch (e) {
+      return { ok: false, error: errorMsg(e) };
+    }
+  },
+);
+
+export const revokeInviteFn = createServerFn({ method: "POST" })
+  .validator(z.object({ id: z.string().trim().min(1).max(80) }).strict())
+  .handler(async ({ data }): Promise<ApiResult<null>> => {
+    try {
+      const c = await ctx();
+      const user = await c.auth.requirePermission(c.storage, "invite.manage");
+      const removed = await c.storage.deleteInvite(data.id);
+      if (!removed) return { ok: false, error: "Convite não encontrado." };
+      await c.logAudit(
+        c.storage,
+        { id: user.id, name: user.name, role: user.role },
+        { action: "Convite revogado", entity: "convite", entityId: data.id },
+      );
+      return { ok: true, data: null };
+    } catch (e) {
+      return { ok: false, error: errorMsg(e) };
+    }
+  });
+

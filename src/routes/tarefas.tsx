@@ -83,6 +83,7 @@ function TarefasPage() {
   const [view, setView] = useState<"board" | "list">("board");
   const [detailId, setDetailId] = useState<string | null>(null);
   const [dragging, setDragging] = useState<string | null>(null);
+  const [dragOverCol, setDragOverCol] = useState<string | null>(null);
   const [commentDraft, setCommentDraft] = useState("");
   const [creating, setCreating] = useState(false);
   const [newTitle, setNewTitle] = useState("");
@@ -179,13 +180,20 @@ function TarefasPage() {
     return (
       <article
         draggable
-        onDragStart={() => setDragging(t.id)}
-        onDragEnd={() => setDragging(null)}
+        onDragStart={(e) => {
+          e.dataTransfer.effectAllowed = "move";
+          e.dataTransfer.setData("text/plain", t.id);
+          setDragging(t.id);
+        }}
+        onDragEnd={() => {
+          setDragging(null);
+          setDragOverCol(null);
+        }}
         onClick={() => setDetailId(t.id)}
         className={cn(
-          "cursor-pointer rounded-lg border border-border border-l-4 bg-card p-3 shadow-sm transition-shadow hover:shadow-md",
+          "cursor-grab rounded-lg border border-border border-l-4 bg-card p-3 shadow-sm transition-all select-none hover:shadow-md active:cursor-grabbing",
           priorityBar[t.priority],
-          dragging === t.id && "opacity-50",
+          dragging === t.id && "rotate-1 scale-[0.98] opacity-60 shadow-lg",
         )}
       >
         <div className="flex items-start justify-between gap-2">
@@ -336,6 +344,17 @@ function TarefasPage() {
         </button>
       </div>
 
+      {items.length === 0 ? (
+        <div className="mb-6 flex flex-col items-center gap-2 rounded-xl border border-dashed border-border bg-card/60 py-12 text-center">
+          <Inbox className="size-6 text-muted-foreground" />
+          <p className="text-sm font-medium text-foreground">Nenhuma tarefa cadastrada ainda</p>
+          <p className="max-w-sm text-xs text-muted-foreground">
+            Crie a primeira tarefa em "Nova Tarefa". Depois arraste o cartão entre as colunas para
+            registrar o andamento.
+          </p>
+        </div>
+      ) : null}
+
       {view === "board" ? (
         <div className="flex gap-4 overflow-x-auto pb-4">
           {columns.map((col) => {
@@ -343,12 +362,30 @@ function TarefasPage() {
             return (
               <section
                 key={col}
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={() => {
-                  if (dragging) move(dragging, col);
-                  setDragging(null);
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = "move";
+                  if (dragOverCol !== col) setDragOverCol(col);
                 }}
-                className="flex w-72 shrink-0 flex-col rounded-xl bg-card/60 p-3"
+                onDragLeave={(e) => {
+                  if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+                    setDragOverCol((c) => (c === col ? null : c));
+                  }
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  const id = e.dataTransfer.getData("text/plain") || dragging;
+                  const task = id ? items.find((t) => t.id === id) : null;
+                  if (id && task && task.column !== col) move(id, col);
+                  setDragging(null);
+                  setDragOverCol(null);
+                }}
+                className={cn(
+                  "flex w-72 shrink-0 flex-col rounded-xl border-2 border-transparent bg-card/60 p-3 transition-colors",
+                  dragOverCol === col && dragging
+                    ? "border-brand border-dashed bg-brand-soft/40"
+                    : "",
+                )}
               >
                 <header className="mb-3 flex items-center justify-between border-t-2 border-brand pt-2">
                   <span className="text-sm font-semibold text-foreground">{col}</span>
@@ -364,7 +401,7 @@ function TarefasPage() {
                   {colTasks.length === 0 ? (
                     <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-border py-10 text-xs text-muted-foreground">
                       <Inbox className="size-5" />
-                      Nenhuma tarefa aqui
+                      {dragging ? "Solte aqui para mover" : "Arraste uma tarefa para cá"}
                     </div>
                   ) : null}
                 </div>

@@ -74,10 +74,18 @@ export interface Risk {
   mitigation: string;
 }
 
+export interface TeamMember {
+  name: string;
+  role: string;
+  bio: string;
+  links: { label: string; href: string }[];
+}
+
 export interface TechItem {
   name: string;
   category: string;
   description: string;
+  icon?: string;
 }
 
 export interface PatentStage {
