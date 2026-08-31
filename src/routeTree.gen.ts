@@ -12,12 +12,14 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as AuditoriaRouteImport } from './routes/auditoria'
+import { Route as AutomacoesRouteImport } from './routes/automacoes'
 import { Route as ComplianceRouteImport } from './routes/compliance'
 import { Route as DiarioRouteImport } from './routes/diario'
 import { Route as EngenhariaRouteImport } from './routes/engenharia'
 import { Route as LgpdRouteImport } from './routes/lgpd'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as PatenteRouteImport } from './routes/patente'
+import { Route as PerfilRouteImport } from './routes/perfil'
 import { Route as RiscosRouteImport } from './routes/riscos'
 import { Route as TarefasRouteImport } from './routes/tarefas'
 import { Route as TermosRouteImport } from './routes/termos'
@@ -38,6 +40,11 @@ const AdminRoute = AdminRouteImport.update({
 const AuditoriaRoute = AuditoriaRouteImport.update({
   id: '/auditoria',
   path: '/auditoria',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AutomacoesRoute = AutomacoesRouteImport.update({
+  id: '/automacoes',
+  path: '/automacoes',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ComplianceRoute = ComplianceRouteImport.update({
@@ -68,6 +75,11 @@ const LoginRoute = LoginRouteImport.update({
 const PatenteRoute = PatenteRouteImport.update({
   id: '/patente',
   path: '/patente',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PerfilRoute = PerfilRouteImport.update({
+  id: '/perfil',
+  path: '/perfil',
   getParentRoute: () => rootRouteImport,
 } as any)
 const RiscosRoute = RiscosRouteImport.update({
@@ -105,12 +117,14 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/auditoria': typeof AuditoriaRoute
+  '/automacoes': typeof AutomacoesRoute
   '/compliance': typeof ComplianceRoute
   '/diario': typeof DiarioRoute
   '/engenharia': typeof EngenhariaRoute
   '/lgpd': typeof LgpdRoute
   '/login': typeof LoginRoute
   '/patente': typeof PatenteRoute
+  '/perfil': typeof PerfilRoute
   '/riscos': typeof RiscosRoute
   '/tarefas': typeof TarefasRoute
   '/termos': typeof TermosRoute
@@ -122,12 +136,14 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/auditoria': typeof AuditoriaRoute
+  '/automacoes': typeof AutomacoesRoute
   '/compliance': typeof ComplianceRoute
   '/diario': typeof DiarioRoute
   '/engenharia': typeof EngenhariaRoute
   '/lgpd': typeof LgpdRoute
   '/login': typeof LoginRoute
   '/patente': typeof PatenteRoute
+  '/perfil': typeof PerfilRoute
   '/riscos': typeof RiscosRoute
   '/tarefas': typeof TarefasRoute
   '/termos': typeof TermosRoute
@@ -139,12 +155,14 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/auditoria': typeof AuditoriaRoute
+  '/automacoes': typeof AutomacoesRoute
   '/compliance': typeof ComplianceRoute
   '/diario': typeof DiarioRoute
   '/engenharia': typeof EngenhariaRoute
   '/lgpd': typeof LgpdRoute
   '/login': typeof LoginRoute
   '/patente': typeof PatenteRoute
+  '/perfil': typeof PerfilRoute
   '/riscos': typeof RiscosRoute
   '/tarefas': typeof TarefasRoute
   '/termos': typeof TermosRoute
@@ -158,12 +176,14 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/auditoria'
+    | '/automacoes'
     | '/compliance'
     | '/diario'
     | '/engenharia'
     | '/lgpd'
     | '/login'
     | '/patente'
+    | '/perfil'
     | '/riscos'
     | '/tarefas'
     | '/termos'
@@ -175,12 +195,14 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/auditoria'
+    | '/automacoes'
     | '/compliance'
     | '/diario'
     | '/engenharia'
     | '/lgpd'
     | '/login'
     | '/patente'
+    | '/perfil'
     | '/riscos'
     | '/tarefas'
     | '/termos'
@@ -191,12 +213,14 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/auditoria'
+    | '/automacoes'
     | '/compliance'
     | '/diario'
     | '/engenharia'
     | '/lgpd'
     | '/login'
     | '/patente'
+    | '/perfil'
     | '/riscos'
     | '/tarefas'
     | '/termos'
@@ -209,12 +233,14 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRoute: typeof AdminRoute
   AuditoriaRoute: typeof AuditoriaRoute
+  AutomacoesRoute: typeof AutomacoesRoute
   ComplianceRoute: typeof ComplianceRoute
   DiarioRoute: typeof DiarioRoute
   EngenhariaRoute: typeof EngenhariaRoute
   LgpdRoute: typeof LgpdRoute
   LoginRoute: typeof LoginRoute
   PatenteRoute: typeof PatenteRoute
+  PerfilRoute: typeof PerfilRoute
   RiscosRoute: typeof RiscosRoute
   TarefasRoute: typeof TarefasRoute
   TermosRoute: typeof TermosRoute
@@ -242,6 +268,13 @@ declare module '@tanstack/react-router' {
       path: '/auditoria'
       fullPath: '/auditoria'
       preLoaderRoute: typeof AuditoriaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/automacoes': {
+      id: '/automacoes'
+      path: '/automacoes'
+      fullPath: '/automacoes'
+      preLoaderRoute: typeof AutomacoesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/compliance': {
@@ -284,6 +317,13 @@ declare module '@tanstack/react-router' {
       path: '/patente'
       fullPath: '/patente'
       preLoaderRoute: typeof PatenteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/perfil': {
+      id: '/perfil'
+      path: '/perfil'
+      fullPath: '/perfil'
+      preLoaderRoute: typeof PerfilRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/riscos': {
@@ -347,12 +387,14 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRoute,
   AuditoriaRoute: AuditoriaRoute,
+  AutomacoesRoute: AutomacoesRoute,
   ComplianceRoute: ComplianceRoute,
   DiarioRoute: DiarioRoute,
   EngenhariaRoute: EngenhariaRoute,
   LgpdRoute: LgpdRoute,
   LoginRoute: LoginRoute,
   PatenteRoute: PatenteRoute,
+  PerfilRoute: PerfilRoute,
   RiscosRoute: RiscosRoute,
   TarefasRoute: TarefasRoute,
   TermosRoute: TermosRoute,

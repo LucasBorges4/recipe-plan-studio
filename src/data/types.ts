@@ -1,3 +1,5 @@
+import type { Role } from "@/lib/rbac";
+
 export type StatusTone = "success" | "info" | "warning" | "neutral" | "danger" | "brand";
 
 export type Priority = "Alta" | "Média" | "Baixa";
@@ -43,6 +45,7 @@ export interface ComplianceControl {
   control: string;
   norm: "LGPD" | "ISO 27001" | "SOX";
   owner: string;
+  role: Role;
   status: string;
   tone: StatusTone;
   lastReview: string;
@@ -65,16 +68,10 @@ export interface Risk {
   title: string;
   category: string;
   owner: string;
+  role: Role;
   probability: 1 | 2 | 3 | 4 | 5;
   impact: 1 | 2 | 3 | 4 | 5;
   mitigation: string;
-}
-
-export interface TeamMember {
-  name: string;
-  role: string;
-  bio: string;
-  links: { label: string; href: string }[];
 }
 
 export interface TechItem {

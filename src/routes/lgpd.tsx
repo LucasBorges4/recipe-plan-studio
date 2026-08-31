@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { LegalDocPage } from "@/components/portal/LegalDocPage";
-import { lgpdDoc } from "@/data/legal";
+import { usePortalData } from "@/lib/api-hooks";
+import { formatBR } from "@/lib/doc-schemas";
 
 export const Route = createFileRoute("/lgpd")({
   head: () => ({
@@ -18,5 +19,13 @@ export const Route = createFileRoute("/lgpd")({
       },
     ],
   }),
-  component: () => <LegalDocPage doc={lgpdDoc} />,
+  component: LgpdPage,
 });
+
+function LgpdPage() {
+  const { data: state, isLoading } = usePortalData();
+  const doc = state?.legalDocs?.find((d) => d.slug === "lgpd");
+  if (isLoading) return <div className="animate-pulse rounded-xl border border-border bg-card p-6 h-64" />;
+  if (!doc) return <p className="rounded-xl border border-dashed border-border bg-card p-6 text-center text-sm text-muted-foreground">Documento não encontrado. Crie em Administração.</p>;
+  return <LegalDocPage doc={{ title: doc.title, subtitle: doc.subtitle, updatedAt: formatBR(doc.publishedAt), version: doc.version, intro: doc.intro, clauses: doc.clauses }} />;
+}

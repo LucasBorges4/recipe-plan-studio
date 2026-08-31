@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   BadgeCheck,
   CircleCheck,
@@ -8,12 +9,16 @@ import {
   User,
   Calendar,
 } from "lucide-react";
+import { toast } from "sonner";
 import { PageHeader } from "@/components/portal/PageHeader";
 import { NoticeBanner } from "@/components/portal/NoticeBanner";
 import { StatusBadge } from "@/components/portal/StatusBadge";
 import { ProgressBar } from "@/components/portal/ProgressBar";
-import { patentStages } from "@/data/patent";
-import type { StatusTone } from "@/data/types";
+import { patentStages as seedPatent } from "@/data/patent";
+import type { PatentStage, StatusTone } from "@/data/types";
+import { can } from "@/lib/rbac";
+import { usePortalData, useSession, qk } from "@/lib/api-hooks";
+import { updatePatentStageFn } from "@/lib/portal-api";
 
 export const Route = createFileRoute("/patente")({
   head: () => ({
@@ -42,8 +47,23 @@ const config: Record<string, { tone: StatusTone; icon: typeof CircleCheck; class
 };
 
 function PatentePage() {
+  const qc = useQueryClient();
+  const { data: state } = usePortalData();
+  const { data: session } = useSession();
+  const patentStages = state?.patentStages ?? seedPatent;
+  const mayManage = !!session?.user && can(session.user.role, "patent.manage");
   const done = patentStages.filter((s) => s.status === "Concluído").length;
   const pct = (done / patentStages.length) * 100;
+
+  const updateM = useMutation({
+    mutationFn: (v: { id: string; status: PatentStage["status"] }) =>
+      updatePatentStageFn({ data: v }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.portal });
+      toast.success("Etapa atualizada.");
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Falha ao atualizar etapa."),
+  });
 
   return (
     <>
@@ -85,7 +105,27 @@ function PatentePage() {
                     </span>
                   </p>
                 </div>
-                <StatusBadge tone={c.tone}>{s.status}</StatusBadge>
+                <span className="flex items-center gap-2">
+                  <StatusBadge tone={c.tone}>{s.status}</StatusBadge>
+                  {mayManage ? (
+                    <select
+                      value={s.status}
+                      onChange={(e) =>
+                        updateM.mutate({
+                          id: s.id,
+                          status: e.target.value as PatentStage["status"],
+                        })
+                      }
+                      className="rounded-md border border-input bg-card px-2 py-1 text-xs"
+                      aria-label={`Status de ${s.title}`}
+                    >
+                      <option>Concluído</option>
+                      <option>Em Andamento</option>
+                      <option>Pendente</option>
+                      <option>Aguardando</option>
+                    </select>
+                  ) : null}
+                </span>
               </div>
             </li>
           );

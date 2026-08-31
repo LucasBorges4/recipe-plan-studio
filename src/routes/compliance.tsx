@@ -1,15 +1,16 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useQueryClient, useMutation } from "@tanstack/react-query";
-import { ShieldCheck, Paperclip, AlertTriangle, Check, X, CalendarCheck } from "lucide-react";
+import { ShieldCheck, Paperclip, AlertTriangle, Check, X, CalendarCheck, Plus, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/portal/PageHeader";
 import { StatusBadge } from "@/components/portal/StatusBadge";
 import { ProgressBar } from "@/components/portal/ProgressBar";
 import { toast } from "sonner";
-import { can } from "@/lib/rbac";
+import { can, roleLabel, roles } from "@/lib/rbac";
+import type { Role } from "@/lib/rbac";
 import { computeStatus, formatDateTime } from "@/lib/portal-utils";
 import { usePortalData, useSession, qk } from "@/lib/api-hooks";
-import { attachEvidenceFn, reviewEvidenceFn, reviewControlFn } from "@/lib/portal-api";
+import { attachEvidenceFn, reviewEvidenceFn, reviewControlFn, createControlFn, deleteControlFn } from "@/lib/portal-api";
 
 export const Route = createFileRoute("/compliance")({
   head: () => ({
@@ -45,6 +46,12 @@ function CompliancePage() {
 
   const [norm, setNorm] = useState<(typeof norms)[number]>("Todas");
   const [status, setStatus] = useState<(typeof statuses)[number]>("Todos");
+  const [roleFilter, setRoleFilter] = useState<Role | "Todas">("Todas");
+  const [newControl, setNewControl] = useState("");
+  const [newNorm, setNewNorm] = useState<"LGPD" | "ISO 27001" | "SOX">("LGPD");
+  const [newOwner, setNewOwner] = useState("");
+  const [newRole, setNewRole] = useState<Role>("gestor");
+  const [showForm, setShowForm] = useState(false);
 
   const attachM = useMutation({
     mutationFn: (v: { controlId: string; fileName: string }) => attachEvidenceFn({ data: v }),
@@ -65,6 +72,27 @@ function CompliancePage() {
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Falha ao registrar revisão."),
   });
+  const isSuperior = !!user && (user.role === "admin" || user.role === "diretor");
+  const canCreateControl = !!user && can(user.role, "admin.manage");
+  const createCtrlM = useMutation({
+    mutationFn: (v: { control: string; norm: "LGPD" | "ISO 27001" | "SOX"; owner: string; role: Role }) => createControlFn({ data: v }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.portal });
+      toast.success("Controle criado.");
+      setNewControl("");
+      setNewOwner("");
+      setShowForm(false);
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Falha ao criar controle."),
+  });
+  const deleteCtrlM = useMutation({
+    mutationFn: (v: { id: string }) => deleteControlFn({ data: v }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.portal });
+      toast.success("Controle removido.");
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Falha ao remover."),
+  });
 
   const computed = useMemo(
     () => controls.map((c) => ({ control: c, ...computeStatus(c) })),
@@ -74,12 +102,18 @@ function CompliancePage() {
   const list = computed.filter(
     (row) =>
       (norm === "Todas" || row.control.norm === norm) &&
-      (status === "Todos" || row.status === status),
+      (status === "Todos" || row.status === status) &&
+      (roleFilter === "Todas" || row.control.role === roleFilter),
   );
 
   const conform = computed.filter((r) => r.status === "Conforme").length;
   const overdue = computed.filter((r) => r.status === "Vencido").length;
   const pending = evidences.filter((e) => e.status === "Em revisão").length;
+  const byRole = useMemo(() => {
+    const m = new Map<Role, number>();
+    for (const r of computed) m.set(r.control.role, (m.get(r.control.role) ?? 0) + 1);
+    return Array.from(m.entries());
+  }, [computed]);
 
   function handleAttach(controlId: string, controlName: string) {
     if (!may("evidence.attach")) {
@@ -128,6 +162,72 @@ function CompliancePage() {
         </div>
       </div>
 
+      {byRole.length ? (
+        <div className="mb-4 flex flex-wrap gap-2">
+          {byRole.map(([role, count]) => (
+            <span key={role} className="rounded-full border border-border bg-card px-3 py-1 text-xs text-muted-foreground">
+              {roleLabel[role]}: <span className="font-semibold text-foreground">{count}</span>
+            </span>
+          ))}
+          {!isSuperior && user ? (
+            <span className="rounded-full bg-brand/10 px-3 py-1 text-xs text-brand">Sua visão: {roleLabel[user.role]}</span>
+          ) : null}
+        </div>
+      ) : null}
+      {canCreateControl ? (
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => setShowForm((v) => !v)}
+            className="flex items-center gap-1 rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-brand-foreground"
+          >
+            <Plus className="size-3" /> Novo controle
+          </button>
+          <span className="text-xs text-muted-foreground">Cada controle é vinculado à role responsável.</span>
+        </div>
+      ) : null}
+      {showForm ? (
+        <div className="mb-4 grid gap-2 rounded-xl border border-border bg-card p-4 sm:grid-cols-3">
+          <input
+            value={newControl}
+            onChange={(e) => setNewControl(e.target.value)}
+            placeholder="Nome do controle"
+            className="rounded-md border border-input bg-card px-3 py-2 text-xs sm:col-span-2"
+          />
+          <select
+            value={newNorm}
+            onChange={(e) => setNewNorm(e.target.value as typeof newNorm)}
+            className="rounded-md border border-input bg-card px-3 py-2 text-xs"
+          >
+            <option>LGPD</option>
+            <option>ISO 27001</option>
+            <option>SOX</option>
+          </select>
+          <input
+            value={newOwner}
+            onChange={(e) => setNewOwner(e.target.value)}
+            placeholder="Responsável"
+            className="rounded-md border border-input bg-card px-3 py-2 text-xs"
+          />
+          <select
+            value={newRole}
+            onChange={(e) => setNewRole(e.target.value as Role)}
+            className="rounded-md border border-input bg-card px-3 py-2 text-xs"
+          >
+            {roles.map((r) => (
+              <option key={r} value={r}>
+                {roleLabel[r]}
+              </option>
+            ))}
+          </select>
+          <button
+            disabled={createCtrlM.isPending || !newControl.trim() || !newOwner.trim()}
+            onClick={() => createCtrlM.mutate({ control: newControl.trim(), norm: newNorm, owner: newOwner.trim(), role: newRole })}
+            className="rounded-md bg-brand px-3 py-2 text-xs font-medium text-brand-foreground disabled:opacity-50 sm:col-span-3"
+          >
+            {createCtrlM.isPending ? "Salvando..." : "Salvar controle"}
+          </button>
+        </div>
+      ) : null}
       <div className="mb-4 flex flex-wrap gap-3">
         <select
           value={norm}
@@ -149,6 +249,19 @@ function CompliancePage() {
             <option key={s}>{s}</option>
           ))}
         </select>
+        <select
+          value={roleFilter}
+          onChange={(e) => setRoleFilter(e.target.value as Role | "Todas")}
+          className="rounded-md border border-input bg-card px-3 py-2 text-sm text-foreground"
+          aria-label="Filtrar por papel"
+        >
+          <option>Todas</option>
+          {roles.map((r) => (
+            <option key={r} value={r}>
+              {roleLabel[r]}
+            </option>
+          ))}
+        </select>
       </div>
 
       <ul className="space-y-3">
@@ -164,6 +277,7 @@ function CompliancePage() {
                   <div className="flex flex-wrap items-center gap-2">
                     <h2 className="text-sm font-semibold text-foreground">{c.control}</h2>
                     <StatusBadge tone="neutral">{c.norm}</StatusBadge>
+                    <StatusBadge tone="brand">{roleLabel[c.role] ?? c.role}</StatusBadge>
                     {st === "Vencido" ? (
                       <span className="flex items-center gap-1 text-xs text-danger">
                         <AlertTriangle className="size-3" /> Revisão vencida há{" "}
@@ -171,7 +285,7 @@ function CompliancePage() {
                       </span>
                     ) : null}
                   </div>
-                  <p className="mt-1 text-xs text-muted-foreground">Responsável: {c.owner}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Responsável: {c.owner} · Papel: {roleLabel[c.role] ?? c.role}</p>
                   <p className="mt-1 text-xs text-muted-foreground">
                     Última revisão: {c.lastReview} · Próxima revisão: {c.nextReview}
                     {daysLeft !== null && daysLeft >= 0 ? ` · faltam ${daysLeft} dias` : ""}
@@ -191,6 +305,15 @@ function CompliancePage() {
                       className="flex items-center gap-1 rounded-md border border-input px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
                     >
                       <CalendarCheck className="size-3" /> Registrar revisão
+                    </button>
+                  ) : null}
+                  {canCreateControl ? (
+                    <button
+                      aria-label="Remover controle"
+                      onClick={() => deleteCtrlM.mutate({ id: c.id })}
+                      className="text-muted-foreground hover:text-danger"
+                    >
+                      <Trash2 className="size-3.5" />
                     </button>
                   ) : null}
                 </div>

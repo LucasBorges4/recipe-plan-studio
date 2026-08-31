@@ -1,0 +1,30 @@
+services:
+  n8n-recipe:
+    image: n8nio/n8n:latest
+    container_name: n8n-recipe
+    restart: unless-stopped
+    ports:
+      - "5679:5678"
+    environment:
+      N8N_SECURE_COOKIE: "false"
+      GENERIC_TIMEZONE: America/Sao_Paulo
+      TZ: America/Sao_Paulo
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:-change-me-32chars-please}
+      N8N_PUBLIC_URL: ${N8N_PUBLIC_URL:-https://163-176-45-217.sslip.io}
+      N8N_API_KEY: ${N8N_API_KEY:-}
+      WEBHOOK_URL: ${N8N_PUBLIC_URL:-https://163-176-45-217.sslip.io}
+    volumes:
+      - n8n_recipe_data:/home/node/.n8n
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:5678/healthz || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # n8n legado (opcional, já existente na porta 5678)
+  # n8n:
+  #   image: n8nio/n8n
+  #   ports: ["5678:5678"]
+
+volumes:
+  n8n_recipe_data:

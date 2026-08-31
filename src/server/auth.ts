@@ -38,11 +38,21 @@ function randomToken(): string {
 }
 
 export function publicUser(u: UserRow): PublicUser {
-  return { id: u.id, name: u.name, email: u.email, role: u.role, jobTitle: u.jobTitle };
+  return {
+    id: u.id,
+    name: u.name,
+    email: u.email,
+    role: u.role,
+    jobTitle: u.jobTitle,
+    department: u.department,
+    bio: u.bio,
+  };
 }
 
 /** Cria a sessão no banco e grava o cookie httpOnly na resposta em curso. */
 export async function createSession(storage: Storage, userId: string): Promise<void> {
+  await storage.deleteSessionsForUser(userId);
+  await storage.purgeExpiredSessions(new Date().toISOString());
   const token = randomToken();
   const now = Date.now();
   await storage.insertSession({

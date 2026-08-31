@@ -17,7 +17,11 @@ import {
   removeModuleFn,
   addColumnFn,
   deleteColumnFn,
+  clearAllUsersFn,
+  createUserWithRoleFn,
+  seedDemoUsersFn,
 } from "@/lib/portal-api";
+import { roleProfiles } from "@/lib/rbac";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   AlertDialog,
@@ -137,6 +141,32 @@ function AdminPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: qk.portal }),
     onError: (e) => toast.error(e instanceof Error ? e.message : "Falha ao remover coluna."),
   });
+  const [nuName, setNuName] = useState("");
+  const [nuEmail, setNuEmail] = useState("");
+  const [nuPass, setNuPass] = useState("");
+  const [nuRole, setNuRole] = useState<Role>("desenvolvedor");
+  const createUserM = useMutation({
+    mutationFn: (v: { name: string; email: string; password: string; role: Role }) =>
+      createUserWithRoleFn({ data: v }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.users });
+      toast.success("Usuário criado com role.");
+      setNuName("");
+      setNuEmail("");
+      setNuPass("");
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Falha ao criar usuário."),
+  });
+  const seedM = useMutation({
+    mutationFn: () => seedDemoUsersFn(),
+    onSuccess: (r) => {
+      if (!r.ok) toast.error(r.error);
+      else {
+        toast.success(`${r.data.created} usuário(s) semeados.`);
+        qc.invalidateQueries({ queryKey: qk.users });
+      }
+    },
+  });
 
   if (!isAdmin) {
     return (
@@ -180,21 +210,87 @@ function AdminPage() {
       </div>
 
       <Tabs defaultValue="usuarios">
-        <TabsList>
+        <TabsList className="flex flex-wrap">
           <TabsTrigger value="usuarios">Usuários e papéis</TabsTrigger>
           <TabsTrigger value="modulos">Módulos</TabsTrigger>
           <TabsTrigger value="board">Colunas do board</TabsTrigger>
           <TabsTrigger value="docs">Documentos</TabsTrigger>
+          <TabsTrigger value="perfis">Perfis & funções</TabsTrigger>
+          <TabsTrigger value="perigo">Perigo</TabsTrigger>
         </TabsList>
 
         <TabsContent value="usuarios" className="mt-4">
+          <div className="mb-4 rounded-xl border border-border bg-card p-4">
+            <h3 className="text-xs font-semibold text-foreground">Cadastro limpo por role</h3>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Crie 1 usuário para cada papel. Primeiro acesso pode usar o seed de 5 contas demo.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <input
+                value={nuName}
+                onChange={(e) => setNuName(e.target.value)}
+                placeholder="Nome"
+                className="flex-1 rounded-md border border-input bg-card px-3 py-2 text-xs"
+              />
+              <input
+                value={nuEmail}
+                onChange={(e) => setNuEmail(e.target.value)}
+                placeholder="email@grupogeos.com.br"
+                className="flex-1 rounded-md border border-input bg-card px-3 py-2 text-xs"
+              />
+              <input
+                value={nuPass}
+                onChange={(e) => setNuPass(e.target.value)}
+                placeholder="Senha (≥8)"
+                type="password"
+                className="flex-1 rounded-md border border-input bg-card px-3 py-2 text-xs"
+              />
+              <select
+                value={nuRole}
+                onChange={(e) => setNuRole(e.target.value as Role)}
+                className="rounded-md border border-input bg-card px-3 py-2 text-xs"
+              >
+                {roles.map((r) => (
+                  <option key={r} value={r}>
+                    {roleLabel[r]}
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={() =>
+                  createUserM.mutate({
+                    name: nuName.trim(),
+                    email: nuEmail.trim(),
+                    password: nuPass,
+                    role: nuRole,
+                  })
+                }
+                disabled={
+                  createUserM.isPending || !nuName.trim() || !nuEmail.trim() || nuPass.length < 8
+                }
+                className="rounded-md bg-brand px-4 py-2 text-xs font-medium text-brand-foreground disabled:opacity-50"
+              >
+                Criar
+              </button>
+              <button
+                onClick={() => seedM.mutate()}
+                disabled={seedM.isPending}
+                className="rounded-md border border-input px-3 py-2 text-xs"
+              >
+                {seedM.isPending ? "Semeando..." : "Seed 5 roles"}
+              </button>
+            </div>
+          </div>
           <ul className="divide-y divide-border rounded-xl border border-border bg-card">
             {users.map((u) => (
               <li key={u.id} className="flex flex-wrap items-center gap-3 p-4">
                 <Initials name={u.name} className="size-8 text-xs" />
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium text-foreground">{u.name}</p>
-                  <p className="text-xs text-muted-foreground">{u.email}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {u.email} {u.jobTitle ? `· ${u.jobTitle}` : ""}{" "}
+                    {u.department ? `· ${u.department}` : ""}
+                  </p>
                 </div>
                 <select
                   value={u.role}
@@ -311,6 +407,72 @@ function AdminPage() {
               </li>
             ))}
           </ul>
+        </TabsContent>
+
+        <TabsContent value="perfis" className="mt-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            {Object.values(roleProfiles).map((p) => (
+              <div key={p.role} className="rounded-xl border border-border bg-card p-5">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-semibold text-foreground">{p.label}</p>
+                  <StatusBadge tone="brand">{p.position}</StatusBadge>
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">{p.department}</p>
+                <ul className="mt-3 space-y-1 text-xs text-muted-foreground">
+                  {p.functions.map((f) => (
+                    <li key={f}>• {f}</li>
+                  ))}
+                </ul>
+                <p className="mt-3 text-[11px] text-muted-foreground">
+                  Permissões: {p.permissions.join(", ")}
+                </p>
+              </div>
+            ))}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="perigo" className="mt-4">
+          <div className="rounded-xl border border-danger/30 bg-danger/5 p-5">
+            <h3 className="text-sm font-semibold text-danger">Zona de perigo</h3>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Apaga <strong>todos</strong> os usuários e sessões. O próximo cadastro torna-se admin.
+              Use para zerar a base após testes.
+            </p>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <button className="mt-3 rounded-md bg-danger px-4 py-2 text-xs font-medium text-white hover:bg-danger/90">
+                  Apagar todos os usuários
+                </button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Apagar tudo?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Isso remove permanentemente {users.length} usuário(s) e todas as sessões. Não há
+                    desfazer. Digite APAGAR_TUDO para confirmar no backend.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={async () => {
+                      const res = await clearAllUsersFn({ data: { confirm: "APAGAR_TUDO" } });
+                      if (!res.ok) toast.error(res.error);
+                      else {
+                        toast.success(
+                          `${res.data.deleted} usuário(s) apagados. Faça novo cadastro.`,
+                        );
+                        qc.invalidateQueries({ queryKey: qk.users });
+                        qc.invalidateQueries({ queryKey: qk.session });
+                      }
+                    }}
+                  >
+                    Confirmar
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
         </TabsContent>
       </Tabs>
     </>

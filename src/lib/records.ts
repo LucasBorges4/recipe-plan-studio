@@ -1,4 +1,14 @@
-import type { ComplianceControl, Module, Task } from "@/data/types";
+import type {
+  ComplianceControl,
+  Milestone,
+  Module,
+  PatentStage,
+  Release,
+  Risk,
+  Task,
+  TechItem,
+  WikiArticle,
+} from "@/data/types";
 import type { AuditableRole } from "@/lib/rbac";
 
 /**
@@ -46,14 +56,47 @@ export interface CommentRecord {
   body: string;
 }
 
+export interface NextStepRecord {
+  id: string;
+  title: string;
+  due: string;
+  status: "pendente" | "em_andamento" | "concluido";
+  position: number;
+  createdAt: string;
+}
+
+export interface LegalDocRecord {
+  id: string;
+  slug: string;
+  title: string;
+  subtitle: string;
+  version: string;
+  intro: string;
+  clauses: { title: string; body: string }[];
+  publishedAt: string;
+  createdAt: string;
+  updatedAt: string;
+  createdById: string | null;
+}
+
 /** Estado consultável pelo cliente em uma única chamada. */
 export interface PortalStatePayload {
   persistent: boolean;
+  storagePath?: string | undefined;
+  storageInitError?: string | null | undefined;
   tasks: Task[];
   columns: string[];
   controls: ComplianceControl[];
   comments: CommentRecord[];
   evidences: EvidenceRecord[];
   modules: Module[];
+  risks: Risk[];
+  wiki: WikiArticle[];
+  milestones: Milestone[];
+  releases: Release[];
+  patentStages: PatentStage[];
+  techStack: TechItem[];
+  nextSteps: NextStepRecord[];
+  legalDocs: LegalDocRecord[];
   auditCount: number;
 }

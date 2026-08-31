@@ -4,9 +4,8 @@ import { PageHeader } from "@/components/portal/PageHeader";
 import { NoticeBanner } from "@/components/portal/NoticeBanner";
 import { StatusBadge } from "@/components/portal/StatusBadge";
 import { ProgressBar } from "@/components/portal/ProgressBar";
-import { modules as seedModules, nextSteps } from "@/data/modules";
-import { parseBR } from "@/lib/portal-utils";
 import { usePortalData } from "@/lib/api-hooks";
+import { formatBR } from "@/lib/doc-schemas";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -65,13 +64,14 @@ function Index() {
   const { data: state } = usePortalData();
   const tasks = state?.tasks ?? [];
   const auditCount = state?.auditCount ?? 0;
-  const mods = state?.modules ?? seedModules;
+  const mods = state?.modules ?? [];
+  const nextSteps = state?.nextSteps ?? [];
 
   const done = mods.reduce((s, m) => s + m.done, 0);
   const total = mods.reduce((s, m) => s + m.total, 0);
   const pct = total ? (done / total) * 100 : 0;
 
-  const today = new Date();
+  const todayIso = new Date().toISOString().slice(0, 10);
   const kpis = [
     {
       label: "Concluídas",
@@ -91,8 +91,8 @@ function Index() {
     {
       label: "Atrasadas",
       value: tasks.filter((t) => {
-        const d = t.due ? parseBR(t.due) : null;
-        return !!d && d < today && t.column !== "Concluído";
+        const iso = t.due ? t.due.split("/").reverse().join("-") : null;
+        return !!iso && iso < todayIso && t.column !== "Concluído";
       }).length,
       tone: "text-danger",
     },
@@ -149,54 +149,63 @@ function Index() {
             <StatusBadge tone="brand">{mods.length} módulos</StatusBadge>
           </div>
 
-          <ul className="mt-4 divide-y divide-border">
-            {mods.map((m) => {
-              const mp = m.total ? (m.done / m.total) * 100 : 0;
-              return (
-                <li key={m.id}>
-                  <Link
-                    to="/tarefas"
-                    className="flex flex-wrap items-center gap-3 rounded-lg px-2 py-3 transition-colors hover:bg-surface"
-                  >
-                    <span className="flex min-w-0 flex-1 flex-col gap-1">
-                      <span className="flex flex-wrap items-center gap-2">
-                        <span className="truncate text-sm font-medium text-foreground">
-                          {m.name}
+          {mods.length === 0 ? (
+            <p className="mt-6 rounded-lg border border-dashed border-border bg-surface p-6 text-center text-sm text-muted-foreground">
+              Nenhum módulo cadastrado. Crie em <Link to="/admin" className="text-brand">Administração → Módulos</Link>.
+            </p>
+          ) : (
+            <ul className="mt-4 divide-y divide-border">
+              {mods.map((m) => {
+                const mp = m.total ? (m.done / m.total) * 100 : 0;
+                return (
+                  <li key={m.id}>
+                    <Link
+                      to="/tarefas"
+                      className="flex flex-wrap items-center gap-3 rounded-lg px-2 py-3 transition-colors hover:bg-surface"
+                    >
+                      <span className="flex min-w-0 flex-1 flex-col gap-1">
+                        <span className="flex flex-wrap items-center gap-2">
+                          <span className="truncate text-sm font-medium text-foreground">{m.name}</span>
+                          <StatusBadge tone={m.tone}>{m.status}</StatusBadge>
                         </span>
-                        <StatusBadge tone={m.tone}>{m.status}</StatusBadge>
+                        <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <Calendar className="size-3" /> {m.date}
+                        </span>
                       </span>
-                      <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                        <Calendar className="size-3" /> {m.date}
+                      <span className="flex w-40 items-center gap-2">
+                        <span className="w-8 text-right text-xs font-medium text-foreground">
+                          {m.done}/{m.total}
+                        </span>
+                        <ProgressBar value={mp} className="flex-1" />
+                        <ArrowUpRight className="size-3.5 text-muted-foreground" />
                       </span>
-                    </span>
-                    <span className="flex w-40 items-center gap-2">
-                      <span className="w-8 text-right text-xs font-medium text-foreground">
-                        {m.done}/{m.total}
-                      </span>
-                      <ProgressBar value={mp} className="flex-1" />
-                      <ArrowUpRight className="size-3.5 text-muted-foreground" />
-                    </span>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </section>
       </div>
 
       <section className="mt-6 rounded-xl border border-border bg-card p-6">
         <h2 className="text-sm font-semibold text-foreground">Próximos Passos</h2>
-        <ul className="mt-4 grid gap-4 md:grid-cols-3">
-          {nextSteps.map((s) => (
-            <li key={s.title} className="rounded-lg border border-border bg-surface p-4">
-              <p className="text-sm font-medium text-foreground">{s.title}</p>
-              <p className="mt-1 text-xs text-muted-foreground">{s.detail}</p>
-              <p className="mt-3 flex items-center gap-1 text-xs text-brand">
-                <Calendar className="size-3" /> {s.due}
-              </p>
-            </li>
-          ))}
-        </ul>
+        {nextSteps.length === 0 ? (
+          <p className="mt-4 rounded-lg border border-dashed border-border bg-surface p-6 text-center text-sm text-muted-foreground">
+            Nenhum próximo passo cadastrado. Crie em <Link to="/admin" className="text-brand">Administração</Link>.
+          </p>
+        ) : (
+          <ul className="mt-4 grid gap-4 md:grid-cols-3">
+            {nextSteps.map((s) => (
+              <li key={s.id} className="rounded-lg border border-border bg-surface p-4">
+                <p className="text-sm font-medium text-foreground">{s.title}</p>
+                <p className="mt-3 flex items-center gap-1 text-xs text-brand">
+                  <Calendar className="size-3" /> {formatBR(s.due)} · {s.status}
+                </p>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
     </>
   );

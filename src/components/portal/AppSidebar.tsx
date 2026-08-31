@@ -7,12 +7,14 @@ import {
   Library,
   AlertTriangle,
   Users,
+  User,
   FileText,
   Lock,
   BadgeCheck,
   Settings,
   PanelLeft,
   ScrollText,
+  Bot,
   X,
 } from "lucide-react";
 import { useState } from "react";
@@ -27,11 +29,13 @@ import { logoutFn } from "@/lib/portal-api";
 const mainNav = [
   { to: "/", label: "Painel Executivo", icon: LayoutDashboard },
   { to: "/tarefas", label: "Tarefas", icon: KanbanSquare },
+  { to: "/automacoes", label: "Automações", icon: Bot },
   { to: "/diario", label: "Diário de Bordo", icon: BookOpen },
   { to: "/compliance", label: "Compliance", icon: ShieldCheck },
   { to: "/wiki", label: "Wiki", icon: Library },
   { to: "/riscos", label: "Mapa de Riscos", icon: AlertTriangle },
   { to: "/engenharia", label: "Engenharia e Equipe", icon: Users },
+  { to: "/perfil", label: "Meu Perfil", icon: User },
 ] as const;
 
 const legalNav = [
@@ -76,9 +80,9 @@ function SessionBox() {
   return (
     <div className="border-t border-sidebar-border px-4 py-3">
       <p className="text-[11px] tracking-wider text-sidebar-foreground/45">SESSÃO ATUAL</p>
-      <p className="mt-1 truncate text-sm font-medium text-sidebar-primary-foreground">
+      <Link to="/perfil" className="mt-1 block truncate text-sm font-medium text-sidebar-primary-foreground hover:underline">
         {user.name}
-      </p>
+      </Link>
       <p className="text-[11px] text-sidebar-foreground/60">
         {user.jobTitle ? `${user.jobTitle} · ` : ""}
         {roleLabel[user.role]}

@@ -47,6 +47,14 @@ autenticação real (substitui o antigo estado em `localStorage`).
 - **API**: server functions (`@tanstack/react-start`) em `src/lib/portal-api.ts`
   consumidas via hooks em `src/lib/api-hooks.ts`.
 
-Configuração em `.env.example`. Em produção no Lovable (runtime edge), defina
-`DATABASE_PATH` para um volume persistente ou troque a implementação de
-`Storage` (`src/server/storage.ts`) por Postgres/Lovable Cloud.
+Configuração em `.env.example`. Em produção defina `DATABASE_PATH` para volume persistente ou troque `Storage` por Postgres.
+
+## Operação (produto final)
+
+- **Variáveis**: `DATABASE_PATH=.data/portal.db`, `AUTH_PEPPER` (openssl rand -base64 32), `REGISTRATION_CODE` (convite), `STORAGE_REQUIRE_PERSISTENT=1` para falhar explícito se disco não gravável, `N8N_URL`/`N8N_PUBLIC_URL`/`N8N_API_KEY`.
+- **Persistência**: `getStorageInfoFn`/`getPortalStateFn.persistent` expõe modo (persistente/volátil, caminho, initError). Com `STORAGE_REQUIRE_PERSISTENT=1` o servidor retorna 500 com aviso em vez de degradar silenciosamente para memória.
+- **Backup**: `exportDatabaseFn` (admin) baixa JSON completo; `importDatabaseFn` restaura. `last_backup_at` em `meta`. Automático via `storage.exportDatabase()`/`importDatabase()`.
+- **Checklist publicação (Admin)**: banco persistente ✅, primeiro admin criado ✅, convites configurados ✅, documentos legais com versão vigente (slug termos/lgpd) ✅, módulos cadastrados (vazio por padrão) ✅, próximos passos no banco ✅, patente 7 etapas no banco ✅.
+- **Promover admin**: `admin@…` → Administração → Usuários → trocar role, ou seed `seedDemoUsersFn`.
+- **Nenhuma tela lê `src/data` em runtime** — tudo via `getPortalStateFn` (`tasks, columns, controls, modules, risks, wiki, milestones, releases, patentStages, techStack, nextSteps, legalDocs`). `src/data` só semente inicial.
+- **Datas ISO**: `nextSteps.due`, `legalDocs.publishedAt`, `milestones/releases` gravados `YYYY-MM-DD`, exibidos `formatBR`, ordenação cronológica, validação Zod `isoDateSchema`, `isFutureISO`.

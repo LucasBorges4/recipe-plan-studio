@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { meFn, getPortalStateFn, listAuditFn, listUsersFn, taskHistoryFn } from "@/lib/portal-api";
+import { listPublicUsersFn, meFn, getPortalStateFn, listAuditFn, listUsersFn, taskHistoryFn } from "@/lib/portal-api";
 import type { PublicUser } from "@/lib/rbac";
 import type { AuditEntry, PortalStatePayload } from "@/lib/records";
 
@@ -45,6 +45,14 @@ export function useAdminUsers(enabled: boolean) {
     queryKey: qk.users,
     queryFn: () => listUsersFn(),
     enabled,
+  });
+}
+
+export function usePublicUsers() {
+  return useQuery({
+    queryKey: ["public-users"] as const,
+    queryFn: () => listPublicUsersFn(),
+    staleTime: 60_000,
   });
 }
 

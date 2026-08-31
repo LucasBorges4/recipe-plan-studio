@@ -22,6 +22,7 @@ function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [jobTitle, setJobTitle] = useState("");
+  const [code, setCode] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   if (session?.user) {
@@ -36,7 +37,15 @@ function LoginPage() {
       const res =
         mode === "login"
           ? await loginFn({ data: { email, password } })
-          : await registerFn({ data: { name, email, password, jobTitle: jobTitle || undefined } });
+          : await registerFn({
+              data: {
+                name,
+                email,
+                password,
+                jobTitle: jobTitle || undefined,
+                code: code || undefined,
+              },
+            });
 
       if (!res.ok) {
         toast.error(res.error);
@@ -149,6 +158,22 @@ function LoginPage() {
                   onChange={(e) => setJobTitle(e.target.value)}
                   placeholder="Ex.: Gestor de Compliance"
                 />
+              </div>
+            )}
+
+            {mode === "signup" && (
+              <div className="space-y-1.5">
+                <Label htmlFor="code">Código de cadastro *</Label>
+                <Input
+                  id="code"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value)}
+                  placeholder="Informe o código fornecido pelo admin"
+                  required
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Sem o código o cadastro é bloqueado quando REGISTRATION_CODE está configurado.
+                </p>
               </div>
             )}
 

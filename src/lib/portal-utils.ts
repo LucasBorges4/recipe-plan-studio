@@ -32,6 +32,20 @@ export function computeStatus(
   return { status: "Conforme", tone: "success", daysLeft };
 }
 
+export function severityTone(score: number) {
+  if (score >= 15) return "danger" as const;
+  if (score >= 9) return "warning" as const;
+  if (score >= 4) return "info" as const;
+  return "success" as const;
+}
+
+export function severityLabel(score: number) {
+  if (score >= 15) return "Crítica";
+  if (score >= 9) return "Alta";
+  if (score >= 4) return "Moderada";
+  return "Baixa";
+}
+
 export function formatDateTime(iso: string) {
   const d = new Date(iso);
   return d.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });

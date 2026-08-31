@@ -2,42 +2,25 @@ import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { Library, ArrowLeft, ArrowRight } from "lucide-react";
 import { PageHeader } from "@/components/portal/PageHeader";
 import { StatusBadge } from "@/components/portal/StatusBadge";
-import { wikiArticles } from "@/data/wiki";
+import { usePortalData } from "@/lib/api-hooks";
 
 export const Route = createFileRoute("/wiki/$slug")({
-  loader: ({ params }) => {
-    const index = wikiArticles.findIndex((a) => a.slug === params.slug);
-    if (index === -1) throw notFound();
-    return {
-      article: wikiArticles[index]!,
-      prev: index > 0 ? wikiArticles[index - 1]! : null,
-      next: index < wikiArticles.length - 1 ? wikiArticles[index + 1]! : null,
-    };
-  },
-  head: ({ loaderData }) => {
-    if (!loaderData) {
-      return {
-        meta: [
-          { title: "Artigo indisponível — Wiki Grupo Geos" },
-          { name: "robots", content: "noindex" },
-        ],
-      };
-    }
-    const { article } = loaderData;
-    return {
-      meta: [
-        { title: `${article.title} — Wiki Grupo Geos` },
-        { name: "description", content: article.summary },
-        { property: "og:title", content: `${article.title} — Wiki Grupo Geos` },
-        { property: "og:description", content: article.summary },
-      ],
-    };
-  },
+  head: () => ({
+    meta: [{ title: "Wiki — Grupo Geos" }],
+  }),
   component: WikiArticlePage,
 });
 
 function WikiArticlePage() {
-  const { article, prev, next } = Route.useLoaderData();
+  const { slug } = Route.useParams();
+  const { data: state, isLoading } = usePortalData();
+  if (isLoading) return <div className="animate-pulse rounded-xl border border-border bg-card p-6 h-64" />;
+  const wikiArticles = state?.wiki ?? [];
+  const index = wikiArticles.findIndex((a) => a.slug === slug);
+  if (index === -1) throw notFound();
+  const article = wikiArticles[index]!;
+  const prev = index > 0 ? wikiArticles[index - 1]! : null;
+  const next = index < wikiArticles.length - 1 ? wikiArticles[index + 1]! : null;
 
   return (
     <>
