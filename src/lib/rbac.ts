@@ -29,6 +29,74 @@ export interface RoleProfile {
   permissions: Permission[];
 }
 
+/** Função associada a uma role, com chave máquina e descrição exibida. */
+export interface RoleFunction {
+  key: string;
+  description: string;
+}
+
+/** Mapeamento de cada role para suas funções — fonte de verdade para
+ *  sincronização com o banco (tabela `role_functions`). */
+export const roleFunctionsData: Record<Role, RoleFunction[]> = {
+  admin: [
+    { key: "users.manage", description: "Gerenciar usuários, papéis e permissões do sistema" },
+    { key: "modules.configure", description: "Configurar módulos, colunas do board e documentos legais" },
+    { key: "compliance.approve", description: "Aprovar evidências de compliance e tarefas críticas" },
+    { key: "audit.read", description: "Acessar trilha de auditoria completa do sistema" },
+    { key: "automations.manage", description: "Gerenciar automações e integrações (n8n)" },
+    { key: "wiki.maintain", description: "Configurar e manter a Wiki corporativa" },
+    { key: "patent.stages", description: "Aprovar e gerenciar etapas de patentes" },
+    { key: "security.policy", description: "Definir políticas de segurança e acesso" },
+    { key: "backup.manage", description: "Gerenciar backup e restauração do banco de dados" },
+  ],
+  diretor: [
+    { key: "tasks.approve", description: "Aprovar tarefas concluídas pelo time" },
+    { key: "evidence.review", description: "Revisar e aprovar/rejeitar evidências de compliance" },
+    { key: "risks.manage", description: "Gerenciar mapa de riscos e planos de mitigação" },
+    { key: "patent.track", description: "Acompanhar etapas de patente junto ao INPI" },
+    { key: "audit.read", description: "Consultar trilha de auditoria" },
+    { key: "modules.prioritize", description: "Definir escopo e prioridades de módulos" },
+    { key: "architecture.approve", description: "Aprovar alterações estratégicas de arquitetura" },
+    { key: "metrics.review", description: "Revisar indicadores de aderência e vencimentos" },
+  ],
+  gestor: [
+    { key: "tasks.manage", description: "Criar e mover tarefas no board Kanban" },
+    { key: "evidence.attach", description: "Anexar evidências de compliance" },
+    { key: "wiki.write", description: "Escrever e organizar artigos na Wiki corporativa" },
+    { key: "journal.manage", description: "Gerenciar diário de entregas e marcos" },
+    { key: "risks.manage", description: "Gerenciar riscos operacionais" },
+    { key: "automations.create", description: "Criar e compartilhar automações" },
+    { key: "squad.coordinate", description: "Coordenar atividades do squad" },
+    { key: "modules.track", description: "Acompanhar progresso de módulos" },
+    { key: "deadlines.manage", description: "Definir e revisar prazos de entregas" },
+  ],
+  desenvolvedor: [
+    { key: "tasks.move", description: "Mover tarefas no board de desenvolvimento" },
+    { key: "tasks.comment", description: "Comentar e discutir tarefas com o time" },
+    { key: "evidence.attach", description: "Anexar evidências técnicas de conformidade" },
+    { key: "wiki.write", description: "Escrever documentação na Wiki" },
+    { key: "automations.create", description: "Criar automações de produtividade" },
+    { key: "modules.implement", description: "Implementar funcionalidades dos módulos" },
+    { key: "code.review", description: "Realizar code reviews e testes" },
+    { key: "blockers.report", description: "Reportar bloqueios e dependências" },
+  ],
+  auditor: [
+    { key: "audit.read", description: "Consultar trilha de auditoria completa" },
+    { key: "compliance.validate", description: "Validar conformidade com LGPD, ISO 27001 e SOX" },
+    { key: "evidence.review", description: "Revisar e validar evidências de compliance" },
+    { key: "risks.monitor", description: "Monitorar riscos e controles de conformidade" },
+    { key: "reports.generate", description: "Gerar relatórios de auditoria para a diretoria" },
+    { key: "segregation.check", description: "Verificar segregação de funções em processos financeiros" },
+    { key: "reviews.track", description: "Acompanhar revisões vencidas e pendências" },
+    { key: "data.integrity", description: "Validar integridade dos dados e trilhas de acesso" },
+  ],
+};
+
+/** Retorna as funções de uma role a partir dos dados de função. */
+export function getRoleFunctions(role: Role): RoleFunction[] {
+  return roleFunctionsData[role];
+}
+
 export const roles: Role[] = ["admin", "diretor", "gestor", "desenvolvedor", "auditor"];
 
 export const roleLabel: Record<Role, string> = {
@@ -134,17 +202,7 @@ export const roleProfiles: Record<Role, RoleProfile> = {
     label: "Administrador",
     position: "Administrador do Portal",
     department: "Governança & TI",
-    functions: [
-      "Gerenciar usuários, papéis e permissões do sistema",
-      "Configurar módulos, colunas do board e documentos legais",
-      "Aprovar evidências de compliance e tarefas críticas",
-      "Acessar trilha de auditoria completa do sistema",
-      "Gerenciar automações e integrações (n8n)",
-      "Configurar e manter a Wiki corporativa",
-      "Aprovar e gerenciar etapas de patentes",
-      "Definir políticas de segurança e acesso",
-      "Gerenciar backup e restauração do banco de dados",
-    ],
+    functions: roleFunctionsData.admin.map((f) => f.description),
     permissions: matrix.admin,
   },
   diretor: {
@@ -152,16 +210,7 @@ export const roleProfiles: Record<Role, RoleProfile> = {
     label: "Diretor",
     position: "Diretoria Executiva",
     department: "Diretoria",
-    functions: [
-      "Aprovar tarefas concluídas pelo time",
-      "Revisar e aprovar/rejeitar evidências de compliance",
-      "Gerenciar mapa de riscos e planos de mitigação",
-      "Acompanhar etapas de patente junto ao INPI",
-      "Consultar trilha de auditoria",
-      "Definir escopo e prioridades de módulos",
-      "Aprovar alterações estratégicas de arquitetura",
-      "Revisar indicadores de aderência e vencimentos",
-    ],
+    functions: roleFunctionsData.diretor.map((f) => f.description),
     permissions: matrix.diretor,
   },
   gestor: {
@@ -169,17 +218,7 @@ export const roleProfiles: Record<Role, RoleProfile> = {
     label: "Gestor",
     position: "Gestor de Área",
     department: "Operações / Produto",
-    functions: [
-      "Criar e mover tarefas no board Kanban",
-      "Anexar evidências de compliance",
-      "Escrever e organizar artigos na Wiki corporativa",
-      "Gerenciar diário de entregas e marcos",
-      "Gerenciar riscos operacionais",
-      "Criar e compartilhar automações",
-      "Coordenar atividades do squad",
-      "Acompanhar progresso de módulos",
-      "Definir e revisar prazos de entregas",
-    ],
+    functions: roleFunctionsData.gestor.map((f) => f.description),
     permissions: matrix.gestor,
   },
   desenvolvedor: {
@@ -187,16 +226,7 @@ export const roleProfiles: Record<Role, RoleProfile> = {
     label: "Desenvolvedor",
     position: "Engenharia",
     department: "Tecnologia",
-    functions: [
-      "Mover tarefas no board de desenvolvimento",
-      "Comentar e discutir tarefas com o time",
-      "Anexar evidências técnicas de conformidade",
-      "Escrever documentação na Wiki",
-      "Criar automações de produtividade",
-      "Implementar funcionalidades dos módulos",
-      "Realizar code reviews e testes",
-      "Reportar bloqueios e dependências",
-    ],
+    functions: roleFunctionsData.desenvolvedor.map((f) => f.description),
     permissions: matrix.desenvolvedor,
   },
   auditor: {
@@ -204,16 +234,7 @@ export const roleProfiles: Record<Role, RoleProfile> = {
     label: "Auditor",
     position: "Auditoria & Compliance",
     department: "Risco & Compliance",
-    functions: [
-      "Consultar trilha de auditoria completa",
-      "Validar conformidade com LGPD, ISO 27001 e SOX",
-      "Revisar e validar evidências de compliance",
-      "Monitorar riscos e controles de conformidade",
-      "Gerar relatórios de auditoria para a diretoria",
-      "Verificar segregação de funções em processos financeiros",
-      "Acompanhar revisões vencidas e pendências",
-      "Validar integridade dos dados e trilhas de acesso",
-    ],
+    functions: roleFunctionsData.auditor.map((f) => f.description),
     permissions: matrix.auditor,
   },
 };

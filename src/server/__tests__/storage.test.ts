@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { SqliteStorage, MemoryStorage, type Storage, type UserRow } from "@/server/storage";
+import { SqliteStorage, MemoryStorage, type Storage, type UserRow, type RoleFunctionRow } from "@/server/storage";
+import { type Role } from "@/lib/rbac";
 import type { Task, ComplianceControl, Module } from "@/data/types";
 import type { EvidenceRecord, AuditEntry, CommentRecord } from "@/lib/records";
 
@@ -197,5 +198,45 @@ describe.each(factories())("$name: auditoria", ({ make }) => {
     expect(await storage.countAudit()).toBeGreaterThanOrEqual(1);
     const all = await storage.listAudit();
     expect(all.some((a) => a.id === "aud1" && a.after === "feito")).toBe(true);
+  });
+});
+
+describe.each(factories())("$name: role_functions", ({ make }) => {
+  it("sync, list por role e list all", async () => {
+    const storage = await make();
+    const functions = [
+      { key: "tasks.move", description: "Mover tarefas" },
+      { key: "tasks.comment", description: "Comentar tarefas" },
+    ];
+    await storage.syncRoleFunctions("desenvolvedor", functions);
+    const byRole = await storage.listRoleFunctions("desenvolvedor");
+    expect(byRole).toHaveLength(2);
+    expect(byRole.map((f) => f.functionKey).sort()).toEqual(["tasks.comment", "tasks.move"]);
+    const all = await storage.listAllRoleFunctions();
+    expect(all).toHaveLength(2);
+    expect(all[0]?.role).toBe("desenvolvedor");
+  });
+
+  it("deleteRoleFunctions remove todas as funções de uma role", async () => {
+    const storage = await make();
+    await storage.syncRoleFunctions("admin", [{ key: "users.manage", description: "Gerenciar usuários" }]);
+    expect(await storage.listRoleFunctions("admin")).toHaveLength(1);
+    await storage.deleteRoleFunctions("admin");
+    expect(await storage.listRoleFunctions("admin")).toHaveLength(0);
+  });
+
+  it("listRoleFunctions retorna vazio para role sem funções", async () => {
+    const storage = await make();
+    expect(await storage.listRoleFunctions("auditor")).toEqual([]);
+  });
+
+  it("syncRoleFunctions substitui funções existentes da role", async () => {
+    const storage = await make();
+    await storage.syncRoleFunctions("gestor", [{ key: "tasks.manage", description: "Gerenciar tarefas" }]);
+    expect(await storage.listRoleFunctions("gestor")).toHaveLength(1);
+    await storage.syncRoleFunctions("gestor", [{ key: "new.key", description: "Nova função" }]);
+    const all = await storage.listAllRoleFunctions();
+    expect(all.filter((f) => f.role === "gestor")).toHaveLength(1);
+    expect(all.find((f) => f.functionKey === "new.key")?.description).toBe("Nova função");
   });
 });

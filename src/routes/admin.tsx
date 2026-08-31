@@ -9,7 +9,7 @@ import { Initials } from "@/components/portal/ProgressBar";
 import { termsDoc, lgpdDoc } from "@/data/legal";
 import { roles, roleLabel } from "@/lib/rbac";
 import type { Role } from "@/lib/rbac";
-import { useAdminUsers, usePortalData, useSession, qk } from "@/lib/api-hooks";
+import { useAdminUsers, usePortalData, useSession, useRoleFunctions, qk } from "@/lib/api-hooks";
 import {
   setUserRoleFn,
   deleteUserFn,
@@ -89,6 +89,47 @@ function DeleteButton({ label, onConfirm }: { label: string; onConfirm: () => vo
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
+  );
+}
+
+/** Seção "Perfis" — funções vindas do banco (fonte de verdade);
+ *  usa roleProfiles apenas para position/department/permissions. */
+function PerfisSection() {
+  const { data: rf, isLoading } = useRoleFunctions();
+  const funcsByRole = new Map<Role, string[]>();
+  (rf?.ok ? rf.data : []).forEach((item) => {
+    const cur = funcsByRole.get(item.role as Role) ?? [];
+    cur.push(item.description);
+    funcsByRole.set(item.role as Role, cur);
+  });
+
+  return (
+    <div className="grid gap-4 md:grid-cols-2">
+      {Object.values(roleProfiles).map((p) => {
+        const fns = funcsByRole.get(p.role) ?? roleProfiles[p.role].functions ?? [];
+        return (
+          <div key={p.role} className="rounded-xl border border-border bg-card p-5">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold text-foreground">{p.label}</p>
+              <StatusBadge tone="brand">{p.position}</StatusBadge>
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">{p.department}</p>
+            {isLoading ? (
+              <p className="mt-3 text-xs text-muted-foreground">Carregando funções…</p>
+            ) : (
+              <ul className="mt-3 space-y-1 text-xs text-muted-foreground">
+                {fns.map((f) => (
+                  <li key={f}>• {f}</li>
+                ))}
+              </ul>
+            )}
+            <p className="mt-3 text-[11px] text-muted-foreground">
+              Permissões: {p.permissions.join(", ")}
+            </p>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
@@ -444,25 +485,7 @@ function AdminPage() {
         </TabsContent>
 
         <TabsContent value="perfis" className="mt-4">
-          <div className="grid gap-4 md:grid-cols-2">
-            {Object.values(roleProfiles).map((p) => (
-              <div key={p.role} className="rounded-xl border border-border bg-card p-5">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-semibold text-foreground">{p.label}</p>
-                  <StatusBadge tone="brand">{p.position}</StatusBadge>
-                </div>
-                <p className="mt-1 text-xs text-muted-foreground">{p.department}</p>
-                <ul className="mt-3 space-y-1 text-xs text-muted-foreground">
-                  {p.functions.map((f) => (
-                    <li key={f}>• {f}</li>
-                  ))}
-                </ul>
-                <p className="mt-3 text-[11px] text-muted-foreground">
-                  Permissões: {p.permissions.join(", ")}
-                </p>
-              </div>
-            ))}
-          </div>
+          <PerfisSection />
         </TabsContent>
 
         <TabsContent value="perigo" className="mt-4">

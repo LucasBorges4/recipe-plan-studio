@@ -1,5 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
-import { listPublicUsersFn, meFn, getPortalStateFn, listAuditFn, listUsersFn, taskHistoryFn } from "@/lib/portal-api";
+import {
+  listPublicUsersFn,
+  meFn,
+  getPortalStateFn,
+  listAuditFn,
+  listUsersFn,
+  taskHistoryFn,
+  listRoleFunctionsFn,
+} from "@/lib/portal-api";
 import type { PublicUser } from "@/lib/rbac";
 import type { AuditEntry, PortalStatePayload } from "@/lib/records";
 
@@ -9,6 +17,7 @@ export const qk = {
   portal: ["portal"] as const,
   audit: ["audit"] as const,
   users: ["users"] as const,
+  roleFunctions: ["roleFunctions"] as const,
 };
 
 export interface SessionInfo {
@@ -61,6 +70,14 @@ export function useTaskHistory(taskId: string | null) {
     queryKey: ["task-history", taskId],
     queryFn: () => taskHistoryFn({ data: { taskId: taskId! } }),
     enabled: !!taskId,
+  });
+}
+
+export function useRoleFunctions() {
+  return useQuery({
+    queryKey: qk.roleFunctions,
+    queryFn: () => listRoleFunctionsFn(),
+    staleTime: 60_000,
   });
 }
 

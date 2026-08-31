@@ -748,6 +748,26 @@ export const listPublicUsersFn = createServerFn({ method: "GET" }).handler(
   },
 );
 
+export const listRoleFunctionsFn = createServerFn({ method: "GET" }).handler(
+  async (): Promise<ApiResult<Array<{ role: string; functionKey: string; description: string }>>> => {
+    try {
+      const { getStorage } = await import("@/server/storage");
+      const storage = await getStorage();
+      const rows = await storage.listAllRoleFunctions();
+      return {
+        ok: true,
+        data: rows.map((r) => ({
+          role: r.role,
+          functionKey: r.functionKey,
+          description: r.description,
+        })),
+      };
+    } catch (e) {
+      return { ok: false, error: errorMsg(e) };
+    }
+  },
+);
+
 export const setUserRoleFn = createServerFn({ method: "POST" })
   .validator(
     z

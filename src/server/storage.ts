@@ -17,7 +17,7 @@ import type {
   EvidenceRecord,
   JsonObject,
 } from "@/lib/records";
-import type { Role } from "@/lib/rbac";
+import type { Role, RoleFunction } from "@/lib/rbac";
 
 /**
  * Camada de persistência do portal.
@@ -77,6 +77,10 @@ export interface Storage {
   ): Promise<void>;
   deleteUser(id: string): Promise<void>;
   clearAllUsers(): Promise<number>;
+  listRoleFunctions(role: Role): Promise<RoleFunctionRow[]>;
+  listAllRoleFunctions(): Promise<RoleFunctionRow[]>;
+  syncRoleFunctions(role: Role, functions: Array<{ key: string; description: string }>): Promise<void>;
+  deleteRoleFunctions(role: Role): Promise<void>;
 
   getSessionByTokenHash(tokenHash: string): Promise<SessionRow | null>;
   insertSession(session: SessionRow): Promise<void>;
@@ -288,6 +292,12 @@ export interface InviteRow {
   expiresAt: string;
   usedAt: string | null;
   usedBy: string | null;
+}
+
+export interface RoleFunctionRow {
+  role: Role;
+  functionKey: string;
+  description: string;
 }
 
 /* ------------------------------------------------------------------ */
@@ -509,6 +519,13 @@ CREATE TABLE IF NOT EXISTS invites (
   used_at TEXT,
   used_by TEXT
 );
+CREATE TABLE IF NOT EXISTS role_functions (
+  role TEXT NOT NULL,
+  function_key TEXT NOT NULL,
+  description TEXT NOT NULL,
+  PRIMARY KEY (role, function_key)
+);
+CREATE INDEX IF NOT EXISTS role_functions_role_idx ON role_functions(role);
 `;
 
 const str = (v: SqlValue | undefined, fallback = ""): string =>
@@ -551,17 +568,29 @@ export class SqliteStorage implements Storage {
           void 0;
         }
       }
-      for (const sql of [
-        "ALTER TABLE controls ADD COLUMN role TEXT NOT NULL DEFAULT 'gestor'",
-        "ALTER TABLE risks ADD COLUMN role TEXT NOT NULL DEFAULT 'gestor'",
-      ]) {
-        try {
-          db.exec(sql);
-        } catch {
-          void 0;
-        }
-      }
-      return new SqliteStorage(db);
+       for (const sql of [
+         "ALTER TABLE controls ADD COLUMN role TEXT NOT NULL DEFAULT 'gestor'",
+         "ALTER TABLE risks ADD COLUMN role TEXT NOT NULL DEFAULT 'gestor'",
+       ]) {
+         try {
+           db.exec(sql);
+         } catch {
+           void 0;
+         }
+       }
+       try {
+         db.exec(
+           "CREATE TABLE IF NOT EXISTS role_functions (" +
+             "role TEXT NOT NULL, function_key TEXT NOT NULL, " +
+             "description TEXT NOT NULL, PRIMARY KEY (role, function_key))",
+         );
+         db.exec(
+           "CREATE INDEX IF NOT EXISTS role_functions_role_idx ON role_functions(role)",
+         );
+       } catch {
+         void 0;
+       }
+       return new SqliteStorage(db);
     } catch {
       void 0;
       return null;
@@ -591,6 +620,40 @@ export class SqliteStorage implements Storage {
   }
   async listUsers() {
     return this.many("SELECT * FROM users ORDER BY created_at ASC, id ASC").map(rowToUser);
+  }
+  async listRoleFunctions(role: Role): Promise<RoleFunctionRow[]> {
+    return this.many(
+      "SELECT role, function_key AS functionKey, description FROM role_functions WHERE role = ? ORDER BY function_key",
+      role,
+    ).map((r) => ({
+      role: r["role"] as Role,
+      functionKey: r["functionKey"] as string,
+      description: r["description"] as string,
+    }));
+  }
+  async listAllRoleFunctions(): Promise<RoleFunctionRow[]> {
+    return this.many(
+      "SELECT role, function_key AS functionKey, description FROM role_functions ORDER BY role, function_key",
+    ).map((r) => ({
+      role: r["role"] as Role,
+      functionKey: r["functionKey"] as string,
+      description: r["description"] as string,
+    }));
+  }
+  async syncRoleFunctions(
+    role: Role,
+    functions: Array<{ key: string; description: string }>,
+  ): Promise<void> {
+    this.db.prepare("DELETE FROM role_functions WHERE role = ?").run(role);
+    const ins = this.db.prepare(
+      "INSERT INTO role_functions (role, function_key, description) VALUES (?, ?, ?)",
+    );
+    for (const f of functions) {
+      ins.run(role, f.key, f.description);
+    }
+  }
+  async deleteRoleFunctions(role: Role): Promise<void> {
+    this.db.prepare("DELETE FROM role_functions WHERE role = ?").run(role);
   }
   async insertUser(u: UserRow) {
     this.db
@@ -1757,6 +1820,7 @@ export class MemoryStorage implements Storage {
   private meta = new Map<string, string>();
   private docs: DocRecord[] = [];
   private invites: InviteRow[] = [];
+  private roleFunctions: RoleFunctionRow[] = [];
 
   async countUsers() {
     return this.users.length;
@@ -1770,6 +1834,24 @@ export class MemoryStorage implements Storage {
   }
   async listUsers() {
     return [...this.users];
+  }
+  async listRoleFunctions(role: Role): Promise<RoleFunctionRow[]> {
+    return this.roleFunctions.filter((f) => f.role === role);
+  }
+  async listAllRoleFunctions(): Promise<RoleFunctionRow[]> {
+    return [...this.roleFunctions];
+  }
+  async syncRoleFunctions(
+    role: Role,
+    functions: Array<{ key: string; description: string }>,
+  ): Promise<void> {
+    this.roleFunctions = this.roleFunctions.filter((f) => f.role !== role);
+    for (const f of functions) {
+      this.roleFunctions.push({ role, functionKey: f.key, description: f.description });
+    }
+  }
+  async deleteRoleFunctions(role: Role): Promise<void> {
+    this.roleFunctions = this.roleFunctions.filter((f) => f.role !== role);
   }
   async insertUser(u: UserRow) {
     this.users.push(u);
@@ -2287,6 +2369,12 @@ async function seedIfEmpty(storage: Storage): Promise<void> {
         updatedAt: now,
         createdById: null,
       });
+    }
+  }
+  if ((await storage.listAllRoleFunctions()).length === 0) {
+    const { roleFunctionsData } = await import("@/lib/rbac");
+    for (const role of Object.keys(roleFunctionsData) as Role[]) {
+      await storage.syncRoleFunctions(role, roleFunctionsData[role].map((f) => ({ key: f.key, description: f.description })));
     }
   }
   await seedDocsIfEmpty(storage);
