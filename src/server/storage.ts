@@ -552,12 +552,22 @@ export class SqliteStorage implements Storage {
 
   private constructor(private db: SqlDatabase) {}
 
+  /** Último erro real ocorrido em `open` (usado para diagnóstico na interface). */
+  static lastOpenError: string | null = null;
+
   static async open(path: string): Promise<SqliteStorage | null> {
     try {
+      if (path !== ":memory:") {
+        const { mkdirSync } = await import("node:fs");
+        const nodePath = await import("node:path");
+        const dir = nodePath.dirname(path);
+        if (dir && dir !== ".") mkdirSync(dir, { recursive: true });
+      }
       const mod = (await import("node:sqlite")) as unknown as {
         DatabaseSync: new (path: string, opts?: object) => SqlDatabase;
       };
       const db = new mod.DatabaseSync(path);
+
       db.exec("PRAGMA journal_mode = WAL;");
       db.exec("PRAGMA foreign_keys = ON;");
       db.exec(SCHEMA);
