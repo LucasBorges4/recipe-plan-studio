@@ -2490,8 +2490,17 @@ export function isStoragePersistent(): boolean {
 
 function resolveDatabasePath(): string {
   const fromEnv =
-    typeof process !== "undefined" && process.env ? process.env["DATABASE_PATH"] : undefined;
-  return fromEnv && fromEnv.trim().length > 0 ? fromEnv.trim() : ".data/portal.db";
+    typeof process !== "undefined" && process.env
+      ? (process.env["DATABASE_PATH"] ?? "").trim()
+      : "";
+  if (fromEnv && fromEnv.trim().length > 0) {
+    const trimmed = fromEnv.trim();
+    if (trimmed.startsWith("/")) return trimmed;
+    const root = new URL("../../", import.meta.url).pathname;
+    return root + trimmed;
+  }
+  const root = new URL("../../", import.meta.url).pathname;
+  return root + ".data/portal.db";
 }
 
 export function isRequirePersistent(): boolean {
@@ -2523,15 +2532,20 @@ export function getStorage(): Promise<Storage> {
 
 async function initStorage(): Promise<Storage> {
   const path = resolveDatabasePath();
+  console.info(`[portal] Caminho do banco: ${path}`);
   const requirePersistent = isRequirePersistent();
   if (path !== ":memory:") {
-    const fileDb = await SqliteStorage.open(path);
-    if (fileDb) {
-      await seedIfEmpty(fileDb);
-      activePersistent = true;
-      storageInitError = null;
-      console.info(`[portal] SQLite persistente em ${path}`);
-      return fileDb;
+    try {
+      const fileDb = await SqliteStorage.open(path);
+      if (fileDb) {
+        await seedIfEmpty(fileDb);
+        activePersistent = true;
+        storageInitError = null;
+        console.info(`[portal] SQLite persistente em ${path}`);
+        return fileDb;
+      }
+    } catch (e) {
+      console.error(`[portal] Falha ao abrir SQLite em ${path}:`, e);
     }
     if (requirePersistent) {
       storageInitError = `STORAGE_REQUIRE_PERSISTENT=1 mas não foi possível abrir SQLite em ${path}. Verifique DATABASE_PATH e permissões de disco.`;
