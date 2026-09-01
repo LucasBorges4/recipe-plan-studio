@@ -18,9 +18,6 @@ import type {
   JsonObject,
 } from "@/lib/records";
 import type { Role, RoleFunction } from "@/lib/rbac";
-import { mkdirSync, writeFileSync, unlinkSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 
 /**
  * Camada de persistência do portal.
@@ -587,12 +584,22 @@ export class SqliteStorage implements Storage {
 
   private constructor(private db: SqlDatabase) {}
 
+  /** Último erro real ocorrido em `open` (usado para diagnóstico na interface). */
+  static lastOpenError: string | null = null;
+
   static async open(path: string): Promise<SqliteStorage | null> {
     try {
+      if (path !== ":memory:") {
+        const { mkdirSync } = await import("node:fs");
+        const nodePath = await import("node:path");
+        const dir = nodePath.dirname(path);
+        if (dir && dir !== ".") mkdirSync(dir, { recursive: true });
+      }
       const mod = (await import("node:sqlite")) as unknown as {
         DatabaseSync: new (path: string, opts?: object) => SqlDatabase;
       };
       const db = new mod.DatabaseSync(path);
+
       db.exec("PRAGMA journal_mode = WAL;");
       db.exec("PRAGMA foreign_keys = ON;");
       db.exec(SCHEMA);
@@ -635,9 +642,12 @@ export class SqliteStorage implements Storage {
       } catch {
         void 0;
       }
+      SqliteStorage.lastOpenError = null;
       return new SqliteStorage(db);
-    } catch {
-      void 0;
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      SqliteStorage.lastOpenError = message;
+      console.error(`[portal] Falha ao abrir SQLite em ${path}: ${message}`);
       return null;
     }
   }
@@ -2615,45 +2625,44 @@ export function isStoragePersistent(): boolean {
   return activePersistent;
 }
 
-/** Verifica se um diretório é gravável criando (e apagando) um arquivo-sonda. */
-function dirIsWritable(dir: string): boolean {
-  try {
-    mkdirSync(dir, { recursive: true });
-    const probe = join(dir, `.probe_${Date.now()}_${Math.random().toString(36).slice(2)}`);
-    writeFileSync(probe, "x");
-    unlinkSync(probe);
-    return true;
-  } catch {
-    return false;
-  }
+/** Torna o caminho absoluto sem usar `import.meta.url` (inválido no runtime edge). */
+function toAbsolute(p: string): string {
+  if (p === ":memory:" || p.startsWith("/")) return p;
+  const cwd = typeof process !== "undefined" && process.cwd ? process.cwd() : "";
+  return cwd ? `${cwd.replace(/\/$/, "")}/${p.replace(/^\.\//, "")}` : p;
 }
 
-let resolvedDbPath: string | null = null;
 function resolveDatabasePath(): string {
-  if (resolvedDbPath) return resolvedDbPath;
   const fromEnv =
     typeof process !== "undefined" && process.env
       ? (process.env["DATABASE_PATH"] ?? "").trim()
       : "";
-  const root = new URL("../../", import.meta.url).pathname;
-  if (fromEnv) {
-    resolvedDbPath = fromEnv.startsWith("/") ? fromEnv : root + fromEnv;
-    return resolvedDbPath;
+  // Nunca use `import.meta.url` aqui: no runtime edge (workerd) ele pode não ser
+  // uma URL válida e `new URL(...)` lança "Invalid URL string.", derrubando o SSR.
+  if (fromEnv.length > 0) return toAbsolute(fromEnv);
+  return activeDatabasePath ?? toAbsolute(".data/portal.db");
+}
+
+/** Caminho realmente aberto pelo storage (preenchido em `initStorage`). */
+let activeDatabasePath: string | null = null;
+
+export function getActiveDatabasePath(): string | null {
+  return activeDatabasePath;
+}
+
+/** Candidatos persistentes, em ordem de preferência. */
+function candidateDatabasePaths(): string[] {
+  const fromEnv =
+    typeof process !== "undefined" && process.env
+      ? (process.env["DATABASE_PATH"] ?? "").trim()
+      : "";
+  const list: string[] = [];
+  if (fromEnv.length > 0) list.push(toAbsolute(fromEnv));
+  if (fromEnv !== ":memory:") {
+    list.push(toAbsolute(".data/portal.db"));
+    list.push("/tmp/portal.db");
   }
-  // Prefere .data junto ao app quando gravável (dev local); senão usa um
-  // diretório efêmero e gravável (ex.: /tmp do Node/Workers), evitando
-  // tentativas contra o bundle (read-only) em runtimes de borda.
-  const dataDir = root + ".data";
-  if (dirIsWritable(dataDir)) {
-    resolvedDbPath = dataDir + "/portal.db";
-    return resolvedDbPath;
-  }
-  try {
-    resolvedDbPath = join(tmpdir(), "portal.db");
-  } catch {
-    resolvedDbPath = dataDir + "/portal.db";
-  }
-  return resolvedDbPath;
+  return list.filter((p, i) => p !== ":memory:" && list.indexOf(p) === i);
 }
 
 export function isRequirePersistent(): boolean {
@@ -2671,26 +2680,6 @@ export function getStorageInitError(): string | null {
   return storageInitError;
 }
 
-/** Detecta se `node:sqlite` está disponível neste runtime. */
-async function sqliteCapable(): Promise<boolean> {
-  try {
-    const mod = (await import("node:sqlite")) as unknown as { DatabaseSync?: unknown };
-    return typeof mod.DatabaseSync === "function";
-  } catch {
-    return false;
-  }
-}
-
-/** Nome legível do runtime, usado nas mensagens de diagnóstico. */
-function runtimeLabel(): string {
-  const g = globalThis as { workerd?: unknown; WebSocketPair?: unknown };
-  if (typeof g.WebSocketPair === "function" || typeof g.workerd === "object")
-    return "Cloudflare Workers";
-  if (typeof process !== "undefined" && process.versions?.node)
-    return `Node ${process.versions.node}`;
-  return "runtime";
-}
-
 /**
  * Retorna o storage do processo:
  * 1. SQLite em arquivo (persistente) quando DATABASE_PATH abre com sucesso;
@@ -2705,51 +2694,49 @@ export function getStorage(): Promise<Storage> {
 
 async function initStorage(): Promise<Storage> {
   const requirePersistent = isRequirePersistent();
-  const runtime = runtimeLabel();
-  if (await sqliteCapable()) {
-    const path = resolveDatabasePath();
-    console.info(`[portal] Caminho do banco: ${path}`);
-    if (path !== ":memory:") {
-      try {
-        const fileDb = await SqliteStorage.open(path);
-        if (fileDb) {
-          await seedIfEmpty(fileDb);
-          activePersistent = true;
-          storageInitError = null;
-          console.info(`[portal] SQLite persistente em ${path}`);
-          return fileDb;
-        }
-      } catch (e) {
-        console.error(`[portal] Falha ao abrir SQLite em ${path}:`, e);
-      }
-      if (requirePersistent) {
-        storageInitError = `STORAGE_REQUIRE_PERSISTENT=1 mas não foi possível abrir SQLite em ${path}. Verifique DATABASE_PATH e permissões de disco.`;
-        console.error(`[portal] ${storageInitError}`);
-        throw new Error(storageInitError);
-      }
-      console.warn(`[portal] Falha ao abrir SQLite em ${path}, caindo para memória.`);
-    } else if (requirePersistent) {
-      storageInitError = `STORAGE_REQUIRE_PERSISTENT=1 mas DATABASE_PATH=:memory:. Configure um caminho persistente.`;
-      console.error(`[portal] ${storageInitError}`);
-      throw new Error(storageInitError);
+  const candidates = candidateDatabasePaths();
+  const failures: string[] = [];
+
+  for (const candidate of candidates) {
+    console.info(`[portal] Tentando SQLite em ${candidate}`);
+    const fileDb = await SqliteStorage.open(candidate);
+    if (fileDb) {
+      await seedIfEmpty(fileDb);
+      activePersistent = true;
+      activeDatabasePath = candidate;
+      storageInitError = null;
+      console.info(`[portal] SQLite persistente em ${candidate}`);
+      return fileDb;
     }
-    const memorySqlite = await SqliteStorage.open(":memory:");
-    if (memorySqlite) {
-      await seedIfEmpty(memorySqlite);
-      activePersistent = false;
-      storageInitError =
-        "Falha ao abrir SQLite em arquivo; usando armazenamento em memória (volátil).";
-      console.warn(`[portal] ${storageInitError}`);
-      return memorySqlite;
-    }
-  } else {
-    storageInitError = `node:sqlite indisponível neste runtime (${runtime}): armazenamento em memória (não persistente).`;
+    failures.push(`${candidate}: ${SqliteStorage.lastOpenError ?? "erro desconhecido"}`);
+  }
+
+  const cause =
+    failures.length > 0
+      ? failures.join(" | ")
+      : "DATABASE_PATH=:memory: (nenhum caminho persistente configurado)";
+
+  if (requirePersistent) {
+    storageInitError = `STORAGE_REQUIRE_PERSISTENT=1 e nenhum caminho persistente pôde ser aberto — ${cause}`;
+    console.error(`[portal] ${storageInitError}`);
+    throw new Error(storageInitError);
+  }
+
+  const memorySqlite = await SqliteStorage.open(":memory:");
+  if (memorySqlite) {
+    await seedIfEmpty(memorySqlite);
+    activePersistent = false;
+    activeDatabasePath = ":memory:";
+    storageInitError = `Armazenamento em memória (volátil): os dados serão perdidos a cada reinício. Causa: ${cause}. Configure DATABASE_PATH para um caminho gravável.`;
     console.warn(`[portal] ${storageInitError}`);
   }
+
   const fallback = new MemoryStorage();
   await seedIfEmpty(fallback);
   activePersistent = false;
-  if (!storageInitError) storageInitError = "Armazenamento em memória (não persistente).";
+  activeDatabasePath = ":memory:";
+  storageInitError = `node:sqlite indisponível neste runtime: armazenamento em memória (não persistente). Detalhe: ${cause}`;
   console.warn(`[portal] ${storageInitError}`);
+
   return fallback;
 }
