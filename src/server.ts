@@ -51,8 +51,10 @@ export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     try {
       const handler = await getServerEntry();
-      const d1 = (env as { DB?: D1DatabaseLike }).DB;
-      if (d1) setD1Binding(d1);
+      if (env) {
+        const d1 = (env as { DB?: D1DatabaseLike }).DB;
+        if (d1) setD1Binding(d1);
+      }
       const response = await handler.fetch(request, env, ctx);
       return await normalizeCatastrophicSsrResponse(response);
     } catch (error) {
