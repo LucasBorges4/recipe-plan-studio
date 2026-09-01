@@ -1996,38 +1996,15 @@ interface D1PreparedLike {
   run(): Promise<{ meta?: { changes?: number; last_row_id?: number } }>;
 }
 
-interface D1DatabaseLike {
+export interface D1DatabaseLike {
   exec(sql: string): Promise<unknown>;
   prepare(sql: string): D1PreparedLike;
 }
 
-/** Resgata o binding D1 do runtime edge (Workers/Nitro) quando configurado. */
+/** Resgata o binding D1 do runtime edge (Workers/Nitro) quando injetado via `setD1Binding`. */
 function resolveD1Binding(): { db: D1DatabaseLike; name: string } | null {
-  const flag =
-    typeof process !== "undefined" && process.env
-      ? (process.env["STORAGE_D1"] ?? "").trim().toLowerCase()
-      : "";
-  if (flag !== "1" && flag !== "true" && flag !== "yes") return null;
-  const name =
-    typeof process !== "undefined" && process.env
-      ? (process.env["D1_BINDING_NAME"] ?? "DB").trim()
-      : "DB";
-  const candidates: unknown[] = [
-    (globalThis as Record<string, unknown>)[name],
-    typeof process !== "undefined" ? (process.env as Record<string, unknown>)[name] : undefined,
-  ];
-  for (const candidate of candidates) {
-    if (
-      candidate &&
-      typeof candidate === "object" &&
-      typeof (candidate as D1DatabaseLike).prepare === "function" &&
-      typeof (candidate as D1DatabaseLike).exec === "function"
-    ) {
-      return { db: candidate as D1DatabaseLike, name };
-    }
-  }
-  SqliteBackend.lastOpenError = `binding "${name}" não encontrado (STORAGE_D1=1 exige um binding D1 no runtime)`;
-  return null;
+  if (!d1Binding) return null;
+  return { db: d1Binding, name: d1BindingName };
 }
 
 function safeJsonObject(v: SqlValue | undefined): JsonObject {
@@ -2832,6 +2809,24 @@ export function isStoragePersistent(): boolean {
   return activePersistent;
 }
 
+/** Binding D1 injetado pelo runtime por-request (via `setD1Binding`), ou `null`. */
+let d1Binding: D1DatabaseLike | undefined;
+/** Nome da binding D1 injetada (para exibição em caminhos/diagnóstico). */
+let d1BindingName = "DB";
+
+/** Injeta o binding D1 do runtime edge para que `initStorage()` o utilize.
+ *  Chamado pelo handler `fetch` antes de qualquer servidor fn roda.
+ *  `name` é o nome declaro da binding (ex.: "DB"). */
+export function setD1Binding(binding: D1DatabaseLike, name?: string) {
+  d1Binding = binding;
+  d1BindingName = name ?? "DB";
+}
+
+/** Retorna o binding D1 injetado, ou `null` se nenhum estiver configurado. */
+export function getD1Binding(): D1DatabaseLike | undefined {
+  return d1Binding;
+}
+
 /** Torna o caminho absoluto sem usar `import.meta.url` (inválido no runtime edge). */
 function toAbsolute(p: string): string {
   if (p === ":memory:" || p.startsWith("/")) return p;
@@ -2890,11 +2885,21 @@ export function getStorageInitError(): string | null {
 /**
  * Retorna o storage do processo:
  * 1. SQLite em arquivo (persistente) quando DATABASE_PATH abre com sucesso;
- * 2. SQLite em memória quando há node:sqlite mas não FS gravável;
- * 3. Driver JS em memória como último recurso.
+ * 2. D1 (binding D1 injetado) quando disponível;
+ * 3. SQLite em memória quando há node:sqlite mas não FS gravável;
+ * 4. Driver JS em memória como último recurso.
  * Tarefas, marcos e releases começam vazios: são cadastrados pelos usuários.
+ *
+ * Se um binding D1 for injetado APÓS a primeira inicialização (modo memória),
+ * esta função re-inicializa com o D1 na próxima chamada.
  */
-export function getStorage(): Promise<Storage> {
+export async function getStorage(): Promise<Storage> {
+  const prev = storagePromise ? await storagePromise : undefined;
+  if (prev && activeDatabasePath !== ":memory:") return prev;
+  if (prev && activeDatabasePath === ":memory:" && resolveD1Binding()) {
+    storagePromise = initStorage();
+    return storagePromise;
+  }
   storagePromise ??= initStorage();
   return storagePromise;
 }
