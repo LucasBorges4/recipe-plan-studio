@@ -21,7 +21,7 @@ import { StatusBadge } from "@/components/portal/StatusBadge";
 import { Initials } from "@/components/portal/ProgressBar";
 import type { Priority, Task } from "@/data/types";
 import { cn } from "@/lib/utils";
-import { can } from "@/lib/rbac";
+import { userCan } from "@/lib/rbac";
 import { formatDateTime } from "@/lib/portal-utils";
 import { usePortalData, useSession, useTaskHistory, qk } from "@/lib/api-hooks";
 import { moveTaskFn, createTaskFn, addColumnFn, addCommentFn } from "@/lib/portal-api";
@@ -74,7 +74,7 @@ function TarefasPage() {
   const comments = state?.comments ?? [];
 
   const user = session?.user ?? null;
-  const may = (p: Parameters<typeof can>[1]) => !!user && can(user.role, p);
+  const may = (p: Parameters<typeof userCan>[1]) => !!user && userCan(user, p);
 
   const [query, setQuery] = useState("");
   const [priority, setPriority] = useState("Todas");

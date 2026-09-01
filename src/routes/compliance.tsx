@@ -1,16 +1,31 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useQueryClient, useMutation } from "@tanstack/react-query";
-import { ShieldCheck, Paperclip, AlertTriangle, Check, X, CalendarCheck, Plus, Trash2 } from "lucide-react";
+import {
+  ShieldCheck,
+  Paperclip,
+  AlertTriangle,
+  Check,
+  X,
+  CalendarCheck,
+  Plus,
+  Trash2,
+} from "lucide-react";
 import { PageHeader } from "@/components/portal/PageHeader";
 import { StatusBadge } from "@/components/portal/StatusBadge";
 import { ProgressBar } from "@/components/portal/ProgressBar";
 import { toast } from "sonner";
-import { can, roleLabel, roles } from "@/lib/rbac";
+import { userCan, roleLabel, roles } from "@/lib/rbac";
 import type { Role } from "@/lib/rbac";
 import { computeStatus, formatDateTime } from "@/lib/portal-utils";
 import { usePortalData, useSession, qk } from "@/lib/api-hooks";
-import { attachEvidenceFn, reviewEvidenceFn, reviewControlFn, createControlFn, deleteControlFn } from "@/lib/portal-api";
+import {
+  attachEvidenceFn,
+  reviewEvidenceFn,
+  reviewControlFn,
+  createControlFn,
+  deleteControlFn,
+} from "@/lib/portal-api";
 
 export const Route = createFileRoute("/compliance")({
   head: () => ({
@@ -42,7 +57,7 @@ function CompliancePage() {
   const controls = state?.controls ?? [];
   const evidences = state?.evidences ?? [];
   const user = session?.user ?? null;
-  const may = (p: Parameters<typeof can>[1]) => !!user && can(user.role, p);
+  const may = (p: Parameters<typeof userCan>[1]) => !!user && userCan(user, p);
 
   const [norm, setNorm] = useState<(typeof norms)[number]>("Todas");
   const [status, setStatus] = useState<(typeof statuses)[number]>("Todos");
@@ -73,9 +88,14 @@ function CompliancePage() {
     onError: (e) => toast.error(e instanceof Error ? e.message : "Falha ao registrar revisão."),
   });
   const isSuperior = !!user && (user.role === "admin" || user.role === "diretor");
-  const canCreateControl = !!user && can(user.role, "admin.manage");
+  const canCreateControl = !!user && userCan(user, "admin.manage");
   const createCtrlM = useMutation({
-    mutationFn: (v: { control: string; norm: "LGPD" | "ISO 27001" | "SOX"; owner: string; role: Role }) => createControlFn({ data: v }),
+    mutationFn: (v: {
+      control: string;
+      norm: "LGPD" | "ISO 27001" | "SOX";
+      owner: string;
+      role: Role;
+    }) => createControlFn({ data: v }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: qk.portal });
       toast.success("Controle criado.");
@@ -165,12 +185,17 @@ function CompliancePage() {
       {byRole.length ? (
         <div className="mb-4 flex flex-wrap gap-2">
           {byRole.map(([role, count]) => (
-            <span key={role} className="rounded-full border border-border bg-card px-3 py-1 text-xs text-muted-foreground">
+            <span
+              key={role}
+              className="rounded-full border border-border bg-card px-3 py-1 text-xs text-muted-foreground"
+            >
               {roleLabel[role]}: <span className="font-semibold text-foreground">{count}</span>
             </span>
           ))}
           {!isSuperior && user ? (
-            <span className="rounded-full bg-brand/10 px-3 py-1 text-xs text-brand">Sua visão: {roleLabel[user.role]}</span>
+            <span className="rounded-full bg-brand/10 px-3 py-1 text-xs text-brand">
+              Sua visão: {roleLabel[user.role]}
+            </span>
           ) : null}
         </div>
       ) : null}
@@ -182,7 +207,9 @@ function CompliancePage() {
           >
             <Plus className="size-3" /> Novo controle
           </button>
-          <span className="text-xs text-muted-foreground">Cada controle é vinculado à role responsável.</span>
+          <span className="text-xs text-muted-foreground">
+            Cada controle é vinculado à role responsável.
+          </span>
         </div>
       ) : null}
       {showForm ? (
@@ -221,7 +248,14 @@ function CompliancePage() {
           </select>
           <button
             disabled={createCtrlM.isPending || !newControl.trim() || !newOwner.trim()}
-            onClick={() => createCtrlM.mutate({ control: newControl.trim(), norm: newNorm, owner: newOwner.trim(), role: newRole })}
+            onClick={() =>
+              createCtrlM.mutate({
+                control: newControl.trim(),
+                norm: newNorm,
+                owner: newOwner.trim(),
+                role: newRole,
+              })
+            }
             className="rounded-md bg-brand px-3 py-2 text-xs font-medium text-brand-foreground disabled:opacity-50 sm:col-span-3"
           >
             {createCtrlM.isPending ? "Salvando..." : "Salvar controle"}
@@ -285,7 +319,9 @@ function CompliancePage() {
                       </span>
                     ) : null}
                   </div>
-                  <p className="mt-1 text-xs text-muted-foreground">Responsável: {c.owner} · Papel: {roleLabel[c.role] ?? c.role}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Responsável: {c.owner} · Papel: {roleLabel[c.role] ?? c.role}
+                  </p>
                   <p className="mt-1 text-xs text-muted-foreground">
                     Última revisão: {c.lastReview} · Próxima revisão: {c.nextReview}
                     {daysLeft !== null && daysLeft >= 0 ? ` · faltam ${daysLeft} dias` : ""}

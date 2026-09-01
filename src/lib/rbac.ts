@@ -18,6 +18,8 @@ export interface PublicUser {
   jobTitle: string | null;
   department: string | null;
   bio: string | null;
+  /** Funções concedidas individualmente pelo admin (além das da role). */
+  functions: string[];
 }
 
 export interface RoleProfile {
@@ -40,8 +42,14 @@ export interface RoleFunction {
 export const roleFunctionsData: Record<Role, RoleFunction[]> = {
   admin: [
     { key: "users.manage", description: "Gerenciar usuários, papéis e permissões do sistema" },
-    { key: "modules.configure", description: "Configurar módulos, colunas do board e documentos legais" },
-    { key: "compliance.approve", description: "Aprovar evidências de compliance e tarefas críticas" },
+    {
+      key: "modules.configure",
+      description: "Configurar módulos, colunas do board e documentos legais",
+    },
+    {
+      key: "compliance.approve",
+      description: "Aprovar evidências de compliance e tarefas críticas",
+    },
     { key: "audit.read", description: "Acessar trilha de auditoria completa do sistema" },
     { key: "automations.manage", description: "Gerenciar automações e integrações (n8n)" },
     { key: "wiki.maintain", description: "Configurar e manter a Wiki corporativa" },
@@ -86,7 +94,10 @@ export const roleFunctionsData: Record<Role, RoleFunction[]> = {
     { key: "evidence.review", description: "Revisar e validar evidências de compliance" },
     { key: "risks.monitor", description: "Monitorar riscos e controles de conformidade" },
     { key: "reports.generate", description: "Gerar relatórios de auditoria para a diretoria" },
-    { key: "segregation.check", description: "Verificar segregação de funções em processos financeiros" },
+    {
+      key: "segregation.check",
+      description: "Verificar segregação de funções em processos financeiros",
+    },
     { key: "reviews.track", description: "Acompanhar revisões vencidas e pendências" },
     { key: "data.integrity", description: "Validar integridade dos dados e trilhas de acesso" },
   ],
@@ -247,6 +258,74 @@ export const roleProfiles: Record<Role, RoleProfile> = {
  */
 export function movePermission(targetColumn: string): Permission {
   return targetColumn === "Concluído" ? "task.approve" : "task.move";
+}
+
+/**
+ * Mapeamento de cada função do catálogo para as permissões que ela concede.
+ * O admin atribui funções por usuário; a permissão efetiva do usuário é a
+ * união (role + funções concedidas). Listas vazias: função informativa/orgânica,
+ * sem permissão técnica direta.
+ */
+export const FUNCTION_PERMISSIONS: Record<string, Permission[]> = {
+  "users.manage": ["admin.manage"],
+  "modules.configure": ["record.manage"],
+  "compliance.approve": ["evidence.review"],
+  "audit.read": ["audit.read"],
+  "automations.manage": [
+    "automation.read",
+    "automation.create",
+    "automation.share",
+    "automation.admin",
+  ],
+  "wiki.maintain": ["wiki.write", "wiki.delete"],
+  "patent.stages": ["patent.manage"],
+  "security.policy": ["admin.manage"],
+  "backup.manage": ["admin.manage"],
+  "tasks.approve": ["task.approve"],
+  "evidence.review": ["evidence.review"],
+  "risks.manage": ["risk.manage"],
+  "patent.track": ["patent.manage"],
+  "modules.prioritize": ["record.manage"],
+  "architecture.approve": [],
+  "metrics.review": [],
+  "tasks.manage": ["task.create", "task.move", "task.comment"],
+  "evidence.attach": ["evidence.attach"],
+  "wiki.write": ["wiki.write"],
+  "journal.manage": ["journal.manage"],
+  "automations.create": ["automation.create"],
+  "squad.coordinate": [],
+  "modules.track": ["record.manage"],
+  "deadlines.manage": [],
+  "tasks.move": ["task.move"],
+  "tasks.comment": ["task.comment"],
+  "modules.implement": [],
+  "code.review": [],
+  "blockers.report": [],
+  "compliance.validate": ["evidence.review", "audit.read"],
+  "risks.monitor": ["risk.manage", "audit.read"],
+  "reports.generate": ["audit.read"],
+  "segregation.check": ["audit.read"],
+  "reviews.track": ["audit.read"],
+  "data.integrity": ["audit.read"],
+};
+
+/** Permissões desbloqueadas por um conjunto de funções concedidas. */
+export function permissionsForFunctions(functions: string[]): Permission[] {
+  return Array.from(new Set((functions ?? []).flatMap((f) => FUNCTION_PERMISSIONS[f] ?? [])));
+}
+
+/**
+ * Verifica se um usuário tem permissão, considerando as funções que lhe foram
+ * concedidas individualmente (aditivas à role). Aceita também apenas a role
+ * (em testes utilitários que não dispõem do usuário).
+ */
+export function userCan(
+  user: { role: Role; functions?: string[] } | Role,
+  permission: Permission,
+): boolean {
+  const role = typeof user === "string" ? user : user.role;
+  const granted = typeof user === "string" ? [] : (user.functions ?? []);
+  return can(role, permission) || permissionsForFunctions(granted).includes(permission);
 }
 
 export function isAdminRole(role: Role) {

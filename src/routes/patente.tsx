@@ -15,7 +15,7 @@ import { NoticeBanner } from "@/components/portal/NoticeBanner";
 import { StatusBadge } from "@/components/portal/StatusBadge";
 import { ProgressBar } from "@/components/portal/ProgressBar";
 import type { PatentStage, StatusTone } from "@/data/types";
-import { can } from "@/lib/rbac";
+import { userCan } from "@/lib/rbac";
 import { usePortalData, useSession, qk } from "@/lib/api-hooks";
 import { updatePatentStageFn } from "@/lib/portal-api";
 import { formatBR } from "@/lib/doc-schemas";
@@ -51,7 +51,7 @@ function PatentePage() {
   const { data: state } = usePortalData();
   const { data: session } = useSession();
   const patentStages = state?.patentStages ?? [];
-  const mayManage = !!session?.user && can(session.user.role, "patent.manage");
+  const mayManage = !!session?.user && userCan(session.user, "patent.manage");
   const done = patentStages.filter((s) => s.status === "Concluído").length;
   const pct = (done / patentStages.length) * 100;
 

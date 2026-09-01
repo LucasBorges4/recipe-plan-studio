@@ -1,6 +1,6 @@
 import { getCookie, setCookie, deleteCookie, getRequestHeader } from "@tanstack/react-start/server";
 import type { PublicUser } from "@/lib/rbac";
-import { can, type Permission } from "@/lib/rbac";
+import { userCan, type Permission } from "@/lib/rbac";
 import type { Storage, UserRow } from "./storage";
 
 /**
@@ -37,7 +37,7 @@ function randomToken(): string {
   return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
-export function publicUser(u: UserRow): PublicUser {
+export function publicUser(u: UserRow, functions: readonly string[] = []): PublicUser {
   return {
     id: u.id,
     name: u.name,
@@ -46,7 +46,17 @@ export function publicUser(u: UserRow): PublicUser {
     jobTitle: u.jobTitle,
     department: u.department,
     bio: u.bio,
+    functions: [...functions],
   };
+}
+
+/** Versão assíncrona: carrega as funções concedidas do usuário. */
+export async function publicUserWithFunctions(storage: Storage, row: UserRow): Promise<PublicUser> {
+  const rows = row.id ? await storage.listUserFunctions(row.id) : [];
+  return publicUser(
+    row,
+    rows.map((r) => r.functionKey),
+  );
 }
 
 /** Cria a sessão no banco e grava o cookie httpOnly na resposta em curso. */
@@ -116,8 +126,10 @@ export async function requirePermission(
   permission: Permission,
 ): Promise<UserRow> {
   const user = await requireUser(storage);
-  if (!can(user.role, permission)) {
-    throw new AuthError("Seu papel não tem permissão para esta ação.", 403);
+  const granted = await storage.listUserFunctions(user.id);
+  const functions = granted.map((g) => g.functionKey);
+  if (!userCan({ role: user.role, functions }, permission)) {
+    throw new AuthError("Seu papel ou funções não permitem esta ação.", 403);
   }
   return user;
 }

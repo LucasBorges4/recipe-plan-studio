@@ -84,6 +84,7 @@ export interface PortalStatePayload {
   persistent: boolean;
   storagePath?: string | undefined;
   storageInitError?: string | null | undefined;
+  lastBackupAt?: string | null | undefined;
   tasks: Task[];
   columns: string[];
   controls: ComplianceControl[];

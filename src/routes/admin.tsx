@@ -1,14 +1,32 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useQueryClient, useMutation } from "@tanstack/react-query";
-import { Settings, Trash2, Plus, ShieldAlert, UserPlus } from "lucide-react";
+import {
+  Settings,
+  Trash2,
+  Plus,
+  ShieldAlert,
+  UserPlus,
+  BadgeCheck,
+  Check,
+  X,
+  Download,
+  Upload,
+} from "lucide-react";
 import { PageHeader } from "@/components/portal/PageHeader";
 import { NoticeBanner } from "@/components/portal/NoticeBanner";
 import { StatusBadge } from "@/components/portal/StatusBadge";
 import { Initials } from "@/components/portal/ProgressBar";
-import { useAdminUsers, usePortalData, useRoleFunctions, useSession, qk, useInvites } from "@/lib/api-hooks";
-import { roles, roleLabel } from "@/lib/rbac";
-import type { Role } from "@/lib/rbac";
+import {
+  useAdminUsers,
+  usePortalData,
+  useRoleFunctions,
+  useSession,
+  qk,
+  useInvites,
+} from "@/lib/api-hooks";
+import { roles, roleLabel, roleFunctionsData } from "@/lib/rbac";
+import type { Role, PublicUser } from "@/lib/rbac";
 import {
   setUserRoleFn,
   deleteUserFn,
@@ -20,6 +38,10 @@ import {
   createUserWithRoleFn,
   seedDemoUsersFn,
   promoteSelfFn,
+  grantUserFunctionFn,
+  revokeUserFunctionFn,
+  exportBackupFn,
+  importBackupFn,
 } from "@/lib/portal-api";
 import { roleProfiles } from "@/lib/rbac";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -34,6 +56,13 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { InvitesPanel } from "@/components/portal/InvitesPanel";
 
@@ -91,6 +120,124 @@ function DeleteButton({ label, onConfirm }: { label: string; onConfirm: () => vo
   );
 }
 
+/** Catálogo plano de funções concedíveis (fonte: rbac), agrupadas por perfil. */
+const functionCatalog: Array<{ key: string; description: string; role: Role }> = Object.entries(
+  roleFunctionsData,
+).flatMap(([r, fns]) =>
+  fns.map((f) => ({ key: f.key, description: f.description, role: r as Role })),
+);
+
+/** Controle do admin: concede/revoga funções individuais de um usuário. */
+function UserFunctionsDialog({
+  user,
+  open,
+  onClose,
+}: {
+  user: PublicUser;
+  open: boolean;
+  onClose: () => void;
+}) {
+  const qc = useQueryClient();
+  const granted = new Set(user.functions ?? []);
+  const [pendingKey, setPendingKey] = useState<string | null>(null);
+
+  const toggleM = useMutation({
+    mutationFn: async (v: { functionKey: string; grant: boolean }) => {
+      setPendingKey(v.functionKey);
+      const res = v.grant
+        ? await grantUserFunctionFn({ data: { userId: user.id, functionKey: v.functionKey } })
+        : await revokeUserFunctionFn({ data: { userId: user.id, functionKey: v.functionKey } });
+      return { res, ...v };
+    },
+    onSuccess: ({ res, grant }) => {
+      if (!res.ok) toast.error(res.error);
+      else {
+        toast.success(grant ? "Função concedida." : "Função revogada.");
+        qc.invalidateQueries({ queryKey: qk.users });
+        qc.invalidateQueries({ queryKey: qk.session });
+      }
+    },
+    onSettled: () => setPendingKey(null),
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Falha ao alterar função."),
+  });
+
+  const groups = roles
+    .map((role) => ({
+      role,
+      items: functionCatalog.filter((f) => f.role === role),
+    }))
+    .filter((g) => g.items.length > 0);
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Funções de {user.name}</DialogTitle>
+          <DialogDescription>
+            Conceda ao usuário funções além do papel base ({roleLabel[user.role]}). As funções
+            desbloqueiam permissões correspondentes; o papel continua sendo a base de acesso.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          {groups.map((g) => (
+            <section key={g.role}>
+              <p className="mb-2 text-xs font-semibold text-foreground">{roleLabel[g.role]}</p>
+              <ul className="space-y-1.5">
+                {g.items.map((f) => {
+                  const isGranted = granted.has(f.key);
+                  const pending = pendingKey === f.key;
+                  return (
+                    <li
+                      key={f.key}
+                      className={`flex items-start justify-between gap-3 rounded-lg border px-3 py-2 text-sm ${
+                        isGranted ? "border-brand/40 bg-brand-soft/30" : "border-border"
+                      }`}
+                    >
+                      <div>
+                        <p className="text-xs font-medium text-foreground">{f.description}</p>
+                        <p className="mt-0.5 font-mono text-[10px] text-muted-foreground">
+                          {f.key}
+                        </p>
+                      </div>
+                      <button
+                        disabled={pending}
+                        onClick={() => toggleM.mutate({ functionKey: f.key, grant: !isGranted })}
+                        aria-pressed={isGranted}
+                        className={`flex shrink-0 items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium disabled:opacity-50 ${
+                          isGranted
+                            ? "bg-brand text-brand-foreground"
+                            : "border border-input text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        {pending ? (
+                          "…"
+                        ) : isGranted ? (
+                          <>
+                            <Check className="size-3" /> Concedida
+                          </>
+                        ) : (
+                          <>
+                            <X className="size-3" /> Conceder
+                          </>
+                        )}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          ))}
+          {granted.size > 0 ? (
+            <p className="text-xs text-muted-foreground">
+              {granted.size} função(ões) concedida(s) além do papel base.
+            </p>
+          ) : null}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 /** Seção "Perfis" — funções vindas do banco (fonte de verdade);
  *  usa roleProfiles apenas para position/department/permissions. */
 function PerfisSection() {
@@ -132,6 +279,159 @@ function PerfisSection() {
   );
 }
 
+function downloadJson(filename: string, data: unknown) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+/** Backup/restauração manual — permite preservar dados mesmo em runtimes sem
+ *  armazenamento persistente (ex.: edge), baixando/restaurando um JSON do dump. */
+function BackupSection() {
+  const qc = useQueryClient();
+  const { data: state } = usePortalData();
+  const lastBackup = state?.lastBackupAt;
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [draft, setDraft] = useState<{ name: string; payload: unknown } | null>(null);
+
+  const backupM = useMutation({
+    mutationFn: () => exportBackupFn(),
+    onSuccess: (r) => {
+      if (!r.ok) {
+        toast.error(r.error);
+        return;
+      }
+      const stamp = r.data.summary.exportedAt.replace(/[:T.]/g, "-").slice(0, 15);
+      downloadJson(`portal-backup-${stamp}.json`, r.data.dump);
+      qc.invalidateQueries({ queryKey: qk.portal });
+      toast.success(`Backup baixado (${r.data.summary.sizeKb} kB).`);
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Falha ao exportar backup."),
+  });
+
+  const restoreM = useMutation({
+    mutationFn: (v: { payload: unknown }) =>
+      importBackupFn({ data: { confirm: "RESTAURAR", payload: v.payload } }),
+    onSuccess: (r) => {
+      if (!r.ok) {
+        toast.error(r.error);
+        return;
+      }
+      setDraft(null);
+      qc.invalidateQueries({ queryKey: qk.portal });
+      qc.invalidateQueries({ queryKey: qk.users });
+      qc.invalidateQueries({ queryKey: qk.session });
+      toast.success("Backup restaurado com sucesso.");
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Falha ao restaurar backup."),
+  });
+
+  const onFile: React.ChangeEventHandler<HTMLInputElement> = (ev) => {
+    const file = ev.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed: unknown = JSON.parse(String(reader.result));
+        const obj = parsed as Record<string, unknown>;
+        if (
+          !parsed ||
+          typeof parsed !== "object" ||
+          Array.isArray(parsed) ||
+          !("exportedAt" in obj) ||
+          !("users" in obj)
+        ) {
+          toast.error("O arquivo não parece um backup do portal.");
+          return;
+        }
+        setDraft({ name: file.name, payload: parsed });
+        toast.success("Arquivo carregado — confirme a restauração abaixo.");
+      } catch {
+        toast.error("Arquivo não é um JSON válido.");
+      }
+    };
+    reader.readAsText(file);
+    ev.target.value = "";
+  };
+
+  return (
+    <div className="mt-4 rounded-xl border border-border bg-card p-5">
+      <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+        <Download className="size-4" /> Backup e restauração
+      </h3>
+      <p className="mt-1 max-w-2xl text-xs text-muted-foreground">
+        Faça download do estado completo (JSON) e restaure depois de um novo deploy. Útil quando o
+        ambiente não oferece armazenamento persistente.
+      </p>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <button
+          onClick={() => backupM.mutate()}
+          disabled={backupM.isPending}
+          className="inline-flex items-center gap-1.5 rounded-md bg-brand px-3 py-2 text-xs font-medium text-brand-foreground disabled:opacity-50"
+        >
+          <Download className="size-3.5" />
+          {backupM.isPending ? "Gerando…" : "Baixar backup"}
+        </button>
+        <button
+          onClick={() => fileRef.current?.click()}
+          disabled={restoreM.isPending}
+          className="inline-flex items-center gap-1.5 rounded-md border border-input px-3 py-2 text-xs text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+        >
+          <Upload className="size-3.5" />
+          {restoreM.isPending ? "Restaurando…" : "Restaurar backup"}
+        </button>
+        <input
+          ref={fileRef}
+          type="file"
+          accept="application/json,.json"
+          className="hidden"
+          onChange={onFile}
+        />
+        {lastBackup ? (
+          <span className="text-xs text-muted-foreground">
+            Último backup:{" "}
+            <span className="font-mono">{lastBackup.replace("T", " ").slice(0, 19)}</span>
+          </span>
+        ) : null}
+      </div>
+      {draft ? (
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <button className="mt-4 inline-flex items-center gap-1.5 rounded-md border border-warning/30 bg-warning-soft px-3 py-2 text-xs font-medium text-warning">
+              <Upload className="size-3.5" />
+              Restaurar {draft.name}
+            </button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Restaurar backup?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Isso substitui <strong>todos</strong> os dados atuais pelos do arquivo{" "}
+                <span className="font-mono">{draft.name}</span>. A operação não pode ser revertida.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => restoreM.mutate({ payload: draft.payload })}
+                disabled={restoreM.isPending}
+              >
+                {restoreM.isPending ? "Restaurando…" : "Confirmar restauração"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      ) : null}
+    </div>
+  );
+}
+
 function AdminPage() {
   const qc = useQueryClient();
   const { data: session } = useSession();
@@ -148,6 +448,7 @@ function AdminPage() {
 
   const [newCol, setNewCol] = useState("");
   const [newMod, setNewMod] = useState("");
+  const [functionTarget, setFunctionTarget] = useState<PublicUser | null>(null);
 
   const setRoleM = useMutation({
     mutationFn: (v: { userId: string; role: Role }) => setUserRoleFn({ data: v }),
@@ -211,20 +512,20 @@ function AdminPage() {
       }
     },
   });
+  const recoverM = useMutation({
+    mutationFn: () => promoteSelfFn(),
+    onSuccess: (r) => {
+      if (!r.ok) {
+        toast.error(r.error);
+      } else {
+        toast.success("Você agora é administrador! Recarregando…");
+        window.location.reload();
+      }
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Falha na recuperação."),
+  });
 
   if (!isAdmin) {
-    const recoverM = useMutation({
-      mutationFn: () => promoteSelfFn(),
-      onSuccess: (r) => {
-        if (!r.ok) {
-          toast.error(r.error);
-        } else {
-          toast.success("Você agora é administrador! Recarregando…");
-          window.location.reload();
-        }
-      },
-      onError: (e) => toast.error(e instanceof Error ? e.message : "Falha na recuperação."),
-    });
     return (
       <>
         <PageHeader
@@ -240,9 +541,8 @@ function AdminPage() {
           </p>
           <div className="mt-6 space-y-3">
             <p className="text-xs text-muted-foreground">
-              Nenhum administrador foi encontrado no sistema. O próximo cadastro
-              normalmente torna-se admin, mas você também pode se auto-recuperar
-              abaixo.
+              Nenhum administrador foi encontrado no sistema. O próximo cadastro normalmente
+              torna-se admin, mas você também pode se auto-recuperar abaixo.
             </p>
             <button
               onClick={() => recoverM.mutate()}
@@ -289,9 +589,9 @@ function AdminPage() {
           <TabsTrigger value="modulos">Módulos</TabsTrigger>
           <TabsTrigger value="board">Colunas do board</TabsTrigger>
           <TabsTrigger value="docs">Documentos</TabsTrigger>
-           <TabsTrigger value="perfis">Perfis & funções</TabsTrigger>
-           <TabsTrigger value="validacao">Validação</TabsTrigger>
-           <TabsTrigger value="perigo">Perigo</TabsTrigger>
+          <TabsTrigger value="perfis">Perfis & funções</TabsTrigger>
+          <TabsTrigger value="validacao">Validação</TabsTrigger>
+          <TabsTrigger value="perigo">Perigo</TabsTrigger>
         </TabsList>
 
         <TabsContent value="usuarios" className="mt-4">
@@ -381,6 +681,18 @@ function AdminPage() {
                   ))}
                 </select>
                 <StatusBadge tone={roleTone[u.role]}>{roleLabel[u.role]}</StatusBadge>
+                <button
+                  onClick={() => setFunctionTarget(u)}
+                  className="flex items-center gap-1.5 rounded-md border border-input px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  <BadgeCheck className="size-4" />
+                  Funções
+                  {u.functions?.length ? (
+                    <span className="rounded-full bg-brand px-1.5 text-[10px] font-semibold text-brand-foreground">
+                      {u.functions.length}
+                    </span>
+                  ) : null}
+                </button>
                 <DeleteButton
                   label={u.name}
                   onConfirm={() => {
@@ -397,6 +709,13 @@ function AdminPage() {
               <li className="p-4 text-sm text-muted-foreground">Nenhum usuário cadastrado.</li>
             ) : null}
           </ul>
+          {functionTarget ? (
+            <UserFunctionsDialog
+              user={functionTarget}
+              open={!!functionTarget}
+              onClose={() => setFunctionTarget(null)}
+            />
+          ) : null}
         </TabsContent>
 
         <TabsContent value="convites" className="mt-4">
@@ -559,28 +878,43 @@ function AdminPage() {
                 <div>
                   <p className="text-sm font-medium text-foreground">Administrador criado</p>
                   <p className="text-xs text-muted-foreground">
-                    {(users as Array<{ role: string }>).filter((u) => u.role === "admin").length} admin(s) encontrado(s)
+                    {(users as Array<{ role: string }>).filter((u) => u.role === "admin").length}{" "}
+                    admin(s) encontrado(s)
                   </p>
                 </div>
-                <StatusBadge tone={(users as Array<{ role: string }>).some((u) => u.role === "admin") ? "success" : "danger"}>
-                  {(users as Array<{ role: string }>).some((u) => u.role === "admin") ? "OK" : "Faltando"}
+                <StatusBadge
+                  tone={
+                    (users as Array<{ role: string }>).some((u) => u.role === "admin")
+                      ? "success"
+                      : "danger"
+                  }
+                >
+                  {(users as Array<{ role: string }>).some((u) => u.role === "admin")
+                    ? "OK"
+                    : "Faltando"}
                 </StatusBadge>
               </li>
               <li className="flex items-center justify-between rounded-lg border border-border bg-surface px-4 py-3">
                 <div>
                   <p className="text-sm font-medium text-foreground">Documentos publicados</p>
                   <p className="text-xs text-muted-foreground">
-                    {state?.legalDocs?.filter((d) => d.slug === "termos" || d.slug === "lgpd").length ?? 0} de 2
+                    {state?.legalDocs?.filter((d) => d.slug === "termos" || d.slug === "lgpd")
+                      .length ?? 0}{" "}
+                    de 2
                   </p>
                 </div>
                 <StatusBadge
                   tone={
-                    (state?.legalDocs?.filter((d) => d.slug === "termos" || d.slug === "lgpd").length ?? 0) >= 2
+                    (state?.legalDocs?.filter((d) => d.slug === "termos" || d.slug === "lgpd")
+                      .length ?? 0) >= 2
                       ? "success"
                       : "warning"
                   }
                 >
-                  {(state?.legalDocs?.filter((d) => d.slug === "termos" || d.slug === "lgpd").length ?? 0) >= 2 ? "OK" : "Incompleto"}
+                  {(state?.legalDocs?.filter((d) => d.slug === "termos" || d.slug === "lgpd")
+                    .length ?? 0) >= 2
+                    ? "OK"
+                    : "Incompleto"}
                 </StatusBadge>
               </li>
               <li className="flex items-center justify-between rounded-lg border border-border bg-surface px-4 py-3">
@@ -590,12 +924,15 @@ function AdminPage() {
                     {invites.filter((i) => i.status === "Pendente").length} pendente(s)
                   </p>
                 </div>
-                <StatusBadge tone={invites.some((i) => i.status === "Pendente") ? "success" : "neutral"}>
+                <StatusBadge
+                  tone={invites.some((i) => i.status === "Pendente") ? "success" : "neutral"}
+                >
                   {invites.some((i) => i.status === "Pendente") ? "OK" : "Sem convites"}
                 </StatusBadge>
               </li>
             </ul>
           </div>
+          <BackupSection />
         </TabsContent>
       </Tabs>
     </>

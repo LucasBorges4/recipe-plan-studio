@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { PageHeader } from "@/components/portal/PageHeader";
 import { StatusBadge } from "@/components/portal/StatusBadge";
 import type { StatusTone } from "@/data/types";
-import { can } from "@/lib/rbac";
+import { userCan } from "@/lib/rbac";
 import { usePortalData, useSession, qk } from "@/lib/api-hooks";
 import { createMilestoneFn, deleteMilestoneFn, deleteReleaseFn } from "@/lib/portal-api";
 import { cn } from "@/lib/utils";
@@ -44,7 +44,7 @@ function DiarioPage() {
   const { data: session } = useSession();
   const milestones = state?.milestones ?? [];
   const releases = state?.releases ?? [];
-  const mayManage = !!session?.user && can(session.user.role, "journal.manage");
+  const mayManage = !!session?.user && userCan(session.user, "journal.manage");
   const isEmptyMilestones = milestones.length === 0;
   const isEmptyReleases = releases.length === 0;
   const [filter, setFilter] = useState<(typeof filters)[number]>("Todos");

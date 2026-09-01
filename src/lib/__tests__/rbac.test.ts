@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { can, movePermission, roleLabel, defaultRoleForNewUser } from "@/lib/rbac";
+import {
+  can,
+  movePermission,
+  roleLabel,
+  defaultRoleForNewUser,
+  userCan,
+  permissionsForFunctions,
+} from "@/lib/rbac";
 import type { Role, Permission } from "@/lib/rbac";
 
 describe("can (matriz RBAC)", () => {
@@ -83,5 +90,44 @@ describe("movePermission (regra de aprovação)", () => {
 
   it("admin sempre pode concluir", () => {
     expect(can("admin", movePermission("Concluído"))).toBe(true);
+  });
+});
+
+describe("userCan (role + funções concedidas)", () => {
+  it("aceita apenas a role (string)", () => {
+    expect(userCan("gestor", "task.create")).toBe(true);
+    expect(userCan("gestor", "task.approve")).toBe(false);
+    expect(userCan("diretor", "task.approve")).toBe(true);
+  });
+
+  it("função concedida desbloqueia permissão além da role", () => {
+    const user = { role: "gestor" as Role, functions: ["tasks.approve"] };
+    expect(userCan(user, "task.approve")).toBe(true);
+    expect(userCan(user, "task.create")).toBe(true);
+  });
+
+  it("sem função concedida, permissão continua bloqueada", () => {
+    const user = { role: "desenvolvedor" as Role, functions: [] };
+    expect(userCan(user, "task.approve")).toBe(false);
+    expect(userCan(user, "admin.manage")).toBe(false);
+  });
+
+  it("função admins.manage concede admin.manage", () => {
+    const user = { role: "auditor" as Role, functions: ["security.policy"] };
+    expect(userCan(user, "admin.manage")).toBe(true);
+    const others = { role: "auditor" as Role, functions: ["audit.read"] };
+    expect(userCan(others, "admin.manage")).toBe(false);
+  });
+
+  it("função automations.manage concede todo o pacote de automação", () => {
+    const user = { role: "desenvolvedor" as Role, functions: ["automations.manage"] };
+    expect(userCan(user, "automation.admin")).toBe(true);
+    expect(userCan(user, "automation.share")).toBe(true);
+  });
+
+  it("permissionsForFunctions mapeia funções e ignora chaves desconhecidas", () => {
+    expect(permissionsForFunctions(["tasks.approve", "nada.here"])).toContain("task.approve");
+    expect(permissionsForFunctions(["nada.here"])).toEqual([]);
+    expect(permissionsForFunctions(["architecture.approve"])).toEqual([]);
   });
 });

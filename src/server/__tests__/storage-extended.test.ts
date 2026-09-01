@@ -156,3 +156,90 @@ describe.each(factories())("$name: patent", ({ make }) => {
     expect((await s.listPatentStages()).length).toBe(1);
   });
 });
+
+describe.each(factories())("$name: funções por usuário (user_functions)", ({ make }) => {
+  async function user(s: Storage, id = "uF1") {
+    await s.insertUser({
+      id,
+      name: "Fulano",
+      email: `${id}@x.com`,
+      role: "gestor",
+      jobTitle: null,
+      department: null,
+      bio: null,
+      passwordHash: "h",
+      passwordSalt: "s",
+      createdAt: new Date().toISOString(),
+    });
+    return id;
+  }
+
+  it("concede, lista e revoga funções de um usuário", async () => {
+    const s = await make();
+    const uid = await user(s);
+    expect(await s.grantUserFunction(uid, "tasks.approve", "Aprovar tarefas", "admin1")).toBe(true);
+    expect(await s.grantUserFunction(uid, "risk.manage", "Gerenciar riscos", "admin1")).toBe(true);
+
+    const list = (await s.listUserFunctions(uid)).sort((a, b) =>
+      a.functionKey.localeCompare(b.functionKey),
+    );
+    expect(list.map((f) => f.functionKey)).toEqual(["risk.manage", "tasks.approve"]);
+    expect(list[0]!.description).toBe("Gerenciar riscos");
+    expect(list[0]!.grantedBy).toBe("admin1");
+    expect(list[0]!.grantedAt).toBeTruthy();
+
+    expect(await s.revokeUserFunction(uid, "risk.manage")).toBe(true);
+    expect(await s.revokeUserFunction(uid, "risk.manage")).toBe(false);
+    expect(await s.listUserFunctions(uid)).toHaveLength(1);
+  });
+
+  it("concessão duplicada é idempotente (retorna false)", async () => {
+    const s = await make();
+    const uid = await user(s);
+    expect(await s.grantUserFunction(uid, "tasks.approve", "Aprovar", null)).toBe(true);
+    expect(await s.grantUserFunction(uid, "tasks.approve", "Aprovar", null)).toBe(false);
+    expect(await s.listUserFunctions(uid)).toHaveLength(1);
+  });
+
+  it("deleteUser remove as funções do usuário (cascade)", async () => {
+    const s = await make();
+    const uid = await user(s);
+    const uid2 = await user(s, "uF2");
+    await s.grantUserFunction(uid, "tasks.approve", "Aprovar", null);
+    await s.grantUserFunction(uid2, "risks.manage", "Riscos", null);
+    await s.deleteUser(uid);
+    expect(await s.listUserFunctions(uid)).toHaveLength(0);
+    expect(await s.listUserFunctions(uid2)).toHaveLength(1);
+  });
+
+  it("funções de usuários diferentes não se misturam", async () => {
+    const s = await make();
+    await user(s, "uF3");
+    await user(s, "uF4");
+    await s.grantUserFunction("uF3", "tasks.approve", "Aprovar", null);
+    expect(await s.listUserFunctions("uF4")).toHaveLength(0);
+  });
+
+  it("sobrevive a exportDatabase/importDatabase", async () => {
+    const s = await make();
+    const uid = await user(s);
+    await s.grantUserFunction(uid, "tasks.approve", "Aprovar", "admin1");
+    const dump = await s.exportDatabase();
+    expect(dump.userFunctions).toHaveLength(1);
+    expect(dump.userFunctions[0]!.functionKey).toBe("tasks.approve");
+
+    const s2 = await make();
+    await s2.importDatabase(dump);
+    const got = await s2.listUserFunctions(uid);
+    expect(got).toHaveLength(1);
+    expect(got[0]!.grantedBy).toBe("admin1");
+  });
+
+  it("clearAllUsers remove as funções junto com os usuários (cascade)", async () => {
+    const s = await make();
+    const uid = await user(s);
+    await s.grantUserFunction(uid, "tasks.approve", "Aprovar", null);
+    expect(await s.clearAllUsers()).toBe(1);
+    expect(await s.listUserFunctions(uid)).toHaveLength(0);
+  });
+});

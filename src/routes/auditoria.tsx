@@ -3,7 +3,7 @@ import { useState } from "react";
 import { ScrollText, ShieldAlert, Download } from "lucide-react";
 import { PageHeader } from "@/components/portal/PageHeader";
 import { StatusBadge } from "@/components/portal/StatusBadge";
-import { can, auditableRoleLabel, roleLabel } from "@/lib/rbac";
+import { userCan, auditableRoleLabel, roleLabel } from "@/lib/rbac";
 import { formatDateTime } from "@/lib/portal-utils";
 import { useAuditList, useSession } from "@/lib/api-hooks";
 
@@ -29,7 +29,7 @@ export const Route = createFileRoute("/auditoria")({
 function AuditoriaPage() {
   const { data: session } = useSession();
   const user = session?.user ?? null;
-  const allowed = !!user && can(user.role, "audit.read");
+  const allowed = !!user && userCan(user, "audit.read");
   const { data: res } = useAuditList(allowed);
   const audit = res?.ok ? res.data : [];
 

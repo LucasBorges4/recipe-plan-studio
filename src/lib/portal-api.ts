@@ -1,8 +1,9 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { roleLabel, defaultRoleForNewUser, movePermission, can } from "@/lib/rbac";
+import { roleLabel, defaultRoleForNewUser, movePermission, userCan } from "@/lib/rbac";
 import { addMonthsBR, fmtBR } from "@/lib/portal-utils";
 import type { PublicUser } from "@/lib/rbac";
+import type { DatabaseDump } from "@/server/storage";
 import type { AuditEntry, JsonObject, PortalStatePayload, PublicInvite } from "@/lib/records";
 import { docKinds, docKindLabel, docSchemas } from "@/lib/doc-schemas";
 import type { Priority } from "@/data/types";
@@ -237,7 +238,7 @@ export const loginFn = createServerFn({ method: "POST" })
       c.clearFailures(key);
 
       const row = await c.storage.getUserById(user.id);
-      return { ok: true, data: c.auth.publicUser(row!) };
+      return { ok: true, data: await c.auth.publicUserWithFunctions(c.storage, row!) };
     } catch (e) {
       return { ok: false, error: errorMsg(e) };
     }
@@ -273,7 +274,7 @@ export const meFn = createServerFn({ method: "GET" }).handler(
     const storage = await getStorage();
     const row = await auth.getCurrentUser(storage);
     return {
-      user: row ? auth.publicUser(row) : null,
+      user: row ? await auth.publicUserWithFunctions(storage, row) : null,
       persistent: isStoragePersistent(),
     };
   },
@@ -285,7 +286,8 @@ export const meFn = createServerFn({ method: "GET" }).handler(
 
 export const getPortalStateFn = createServerFn({ method: "GET" }).handler(
   async (): Promise<PortalStatePayload> => {
-    const { getStorage, isStoragePersistent, getStorageInitError } = await import("@/server/storage");
+    const { getStorage, isStoragePersistent, getStorageInitError } =
+      await import("@/server/storage");
     const storage = await getStorage();
     const [
       tasks,
@@ -328,6 +330,7 @@ export const getPortalStateFn = createServerFn({ method: "GET" }).handler(
       persistent: isStoragePersistent(),
       storagePath: info?.path ?? undefined,
       storageInitError: getStorageInitError(),
+      lastBackupAt: info?.lastBackupAt ?? undefined,
       tasks,
       columns,
       controls,
@@ -726,7 +729,7 @@ export const listUsersFn = createServerFn({ method: "GET" }).handler(
       const users = await c.storage.listUsers();
       return {
         ok: true,
-        data: users.map((u) => c.auth.publicUser(u)),
+        data: await Promise.all(users.map((u) => c.auth.publicUserWithFunctions(c.storage, u))),
       };
     } catch (e) {
       return { ok: false, error: errorMsg(e) };
@@ -741,7 +744,7 @@ export const listPublicUsersFn = createServerFn({ method: "GET" }).handler(
       const { publicUser } = await import("@/server/auth");
       const storage = await getStorage();
       const users = await storage.listUsers();
-      return { ok: true, data: users.map(publicUser) };
+      return { ok: true, data: users.map((u) => publicUser(u)) };
     } catch (e) {
       return { ok: false, error: errorMsg(e) };
     }
@@ -749,7 +752,9 @@ export const listPublicUsersFn = createServerFn({ method: "GET" }).handler(
 );
 
 export const listRoleFunctionsFn = createServerFn({ method: "GET" }).handler(
-  async (): Promise<ApiResult<Array<{ role: string; functionKey: string; description: string }>>> => {
+  async (): Promise<
+    ApiResult<Array<{ role: string; functionKey: string; description: string }>>
+  > => {
     try {
       const { getStorage } = await import("@/server/storage");
       const storage = await getStorage();
@@ -810,13 +815,99 @@ export const setUserRoleFn = createServerFn({ method: "POST" })
     }
   });
 
+/* ------------------------------------------------------------------ */
+/* 10b. FUNÇÕES POR USUÁRIO (admin concede funções individuais)        */
+/* ------------------------------------------------------------------ */
+
+/** Catálogo de funções concedíveis, na ordem dos perfis (fonte: rbac). */
+export const grantUserFunctionFn = createServerFn({ method: "POST" })
+  .validator(
+    z
+      .object({
+        userId: z.string().min(1),
+        functionKey: z.string().trim().min(2).max(60),
+      })
+      .strict(),
+  )
+  .handler(async ({ data }): Promise<ApiResult<null>> => {
+    try {
+      const c = await ctx();
+      const actor = await c.auth.requirePermission(c.storage, "admin.manage");
+      const target = await c.storage.getUserById(data.userId);
+      if (!target) return { ok: false, error: "Usuário não encontrado." };
+
+      const { roleFunctionsData } = await import("@/lib/rbac");
+      const func = Object.values(roleFunctionsData)
+        .flat()
+        .find((f) => f.key === data.functionKey);
+      if (!func) return { ok: false, error: "Função desconhecida." };
+
+      const granted = await c.storage.grantUserFunction(
+        data.userId,
+        func.key,
+        func.description,
+        actor.id,
+      );
+      if (!granted) return { ok: false, error: "Função já concedida a este usuário." };
+
+      await c.logAudit(
+        c.storage,
+        { id: actor.id, name: actor.name, role: actor.role },
+        {
+          action: "Função concedida",
+          entity: "usuário",
+          entityId: data.userId,
+          after: `${target.name} (${data.functionKey})`,
+        },
+      );
+      return { ok: true, data: null };
+    } catch (e) {
+      return { ok: false, error: errorMsg(e) };
+    }
+  });
+
+export const revokeUserFunctionFn = createServerFn({ method: "POST" })
+  .validator(
+    z
+      .object({
+        userId: z.string().min(1),
+        functionKey: z.string().trim().min(2).max(60),
+      })
+      .strict(),
+  )
+  .handler(async ({ data }): Promise<ApiResult<null>> => {
+    try {
+      const c = await ctx();
+      const actor = await c.auth.requirePermission(c.storage, "admin.manage");
+      const target = await c.storage.getUserById(data.userId);
+      if (!target) return { ok: false, error: "Usuário não encontrado." };
+
+      const revoked = await c.storage.revokeUserFunction(data.userId, data.functionKey);
+      if (!revoked) return { ok: false, error: "Esta função não está concedida." };
+
+      await c.logAudit(
+        c.storage,
+        { id: actor.id, name: actor.name, role: actor.role },
+        {
+          action: "Função revogada",
+          entity: "usuário",
+          entityId: data.userId,
+          after: `${target.name} (${data.functionKey})`,
+        },
+      );
+      return { ok: true, data: null };
+    } catch (e) {
+      return { ok: false, error: errorMsg(e) };
+    }
+  });
+
 /**
  * Auto-recuperação de admin: qualquer usuário autenticado pode se
  * tornar administrador se nenhum admin existir no sistema.
  * O servidor rejeita se já houver ao menos um admin.
  */
-export const promoteSelfFn = createServerFn({ method: "POST" })
-  .handler(async (): Promise<ApiResult<null>> => {
+export const promoteSelfFn = createServerFn({ method: "POST" }).handler(
+  async (): Promise<ApiResult<null>> => {
     try {
       const c = await ctx();
       const user = await c.auth.requireUser(c.storage);
@@ -839,7 +930,8 @@ export const promoteSelfFn = createServerFn({ method: "POST" })
     } catch (e) {
       return { ok: false, error: errorMsg(e) };
     }
-  });
+  },
+);
 
 export const deleteUserFn = createServerFn({ method: "POST" })
   .validator(z.object({ userId: z.string().min(1) }).strict())
@@ -966,7 +1058,9 @@ export const createRiskFn = createServerFn({ method: "POST" })
         return { ok: false, error: "Seu papel só permite criar riscos para sua própria role." };
       }
       const id = c.newId("rsk");
-      await c.storage.insertRisk({ id, ...data, role } as Parameters<typeof c.storage.insertRisk>[0]);
+      await c.storage.insertRisk({ id, ...data, role } as Parameters<
+        typeof c.storage.insertRisk
+      >[0]);
       await c.logAudit(
         c.storage,
         { id: user.id, name: user.name, role: user.role },
@@ -997,7 +1091,12 @@ export const updateRiskFn = createServerFn({ method: "POST" })
     try {
       const c = await ctx();
       const user = await c.auth.requirePermission(c.storage, "risk.manage");
-      if (data.role && data.role !== user.role && user.role !== "admin" && user.role !== "diretor") {
+      if (
+        data.role &&
+        data.role !== user.role &&
+        user.role !== "admin" &&
+        user.role !== "diretor"
+      ) {
         return { ok: false, error: "Seu papel só permite atribuir riscos à sua própria role." };
       }
       const { id, ...rest } = data;
@@ -1313,7 +1412,7 @@ export const clearAllUsersFn = createServerFn({ method: "POST" })
       if (count === 0) return { ok: true, data: { deleted: 0 } };
       const me = await c.auth.getCurrentUser(c.storage);
       if (me) {
-        if (!can(me.role, "admin.manage"))
+        if (!userCan(await c.auth.publicUserWithFunctions(c.storage, me), "admin.manage"))
           return { ok: false, error: "Apenas administrador pode apagar todos os usuários." };
       } else if (count > 0) {
         const admins = (await c.storage.listUsers()).filter((u) => u.role === "admin");
@@ -1331,6 +1430,122 @@ export const clearAllUsersFn = createServerFn({ method: "POST" })
         reason: "Limpeza solicitada via /admin",
       });
       return { ok: true, data: { deleted } };
+    } catch (e) {
+      return { ok: false, error: errorMsg(e) };
+    }
+  });
+
+/* ------------------------------------------------------------------ */
+/* Backup / restauração — admin.manage                                 */
+/* ------------------------------------------------------------------ */
+
+export type BackupSummary = {
+  exportedAt: string;
+  sizeKb: number;
+  counts: Record<string, number>;
+};
+
+function backupCounts(dump: DatabaseDump): Record<string, number> {
+  const counts: Record<string, number> = {
+    usuarios: dump.users.length,
+    sessoes: dump.sessions.length,
+    tarefas: dump.tasks.length,
+    controles: dump.controls.length,
+    evidencias: dump.evidences.length,
+    riscos: dump.risks.length,
+    wiki: dump.wiki.length,
+    modulos: dump.modules.length,
+    marcos: dump.milestones.length,
+    releases: dump.releases.length,
+    patentes: dump.patentStages.length,
+    tecnologias: dump.techStack.length,
+    "proximos-passos": dump.nextSteps.length,
+    "documentos-legais": dump.legalDocs.length,
+    auditoria: dump.audit.length,
+    "funcoes-concedidas": dump.userFunctions.length,
+  };
+  return counts;
+}
+
+function isDatabaseDump(payload: unknown): payload is DatabaseDump {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return false;
+  const d = payload as Record<string, unknown>;
+  return (
+    typeof d["exportedAt"] === "string" &&
+    Array.isArray(d["users"]) &&
+    Array.isArray(d["sessions"]) &&
+    Array.isArray(d["columns"]) &&
+    Array.isArray(d["tasks"]) &&
+    Array.isArray(d["comments"]) &&
+    Array.isArray(d["controls"]) &&
+    Array.isArray(d["evidences"]) &&
+    Array.isArray(d["audit"]) &&
+    Array.isArray(d["modules"]) &&
+    Array.isArray(d["risks"]) &&
+    Array.isArray(d["wiki"]) &&
+    Array.isArray(d["milestones"]) &&
+    Array.isArray(d["releases"]) &&
+    Array.isArray(d["patentStages"]) &&
+    Array.isArray(d["techStack"]) &&
+    Array.isArray(d["automationShares"]) &&
+    Array.isArray(d["nextSteps"]) &&
+    Array.isArray(d["legalDocs"])
+  );
+}
+
+export const exportBackupFn = createServerFn({ method: "POST" }).handler(
+  async (): Promise<ApiResult<{ dump: DatabaseDump; summary: BackupSummary }>> => {
+    try {
+      const c = await ctx();
+      const actor = await c.auth.requirePermission(c.storage, "admin.manage");
+      const dump = await c.storage.exportDatabase();
+      await c.storage.setMeta("last_backup_at", dump.exportedAt);
+      await c.logAudit(
+        c.storage,
+        { id: actor.id, name: actor.name, role: actor.role },
+        {
+          action: "Backup exportado",
+          entity: "banco",
+          entityId: "*",
+          after: dump.exportedAt,
+        },
+      );
+      const sizeKb = Math.round(JSON.stringify(dump).length / 1024);
+      return {
+        ok: true,
+        data: {
+          dump,
+          summary: { exportedAt: dump.exportedAt, sizeKb, counts: backupCounts(dump) },
+        },
+      };
+    } catch (e) {
+      return { ok: false, error: errorMsg(e) };
+    }
+  },
+);
+
+export const importBackupFn = createServerFn({ method: "POST" })
+  .validator(z.object({ confirm: z.literal("RESTAURAR"), payload: z.unknown() }).strict())
+  .handler(async ({ data }): Promise<ApiResult<{ counts: Record<string, number> }>> => {
+    try {
+      const c = await ctx();
+      const actor = await c.auth.requirePermission(c.storage, "admin.manage");
+      if (!isDatabaseDump(data.payload))
+        return { ok: false, error: "Arquivo de backup inválido ou incompatível." };
+      const dump = data.payload;
+      await c.storage.importDatabase(dump);
+      await c.storage.setMeta("last_backup_at", dump.exportedAt);
+      await c.logAudit(
+        c.storage,
+        { id: actor.id, name: actor.name, role: actor.role },
+        {
+          action: "Backup restaurado",
+          entity: "banco",
+          entityId: "*",
+          after: `${dump.users.length} usuário(s), ${dump.tasks.length} tarefa(s)`,
+        },
+      );
+      return { ok: true, data: { counts: backupCounts(dump) } };
     } catch (e) {
       return { ok: false, error: errorMsg(e) };
     }
@@ -1371,7 +1586,7 @@ export const updateProfileFn = createServerFn({ method: "POST" })
           after: Object.keys(patch).join(", "),
         },
       );
-      return { ok: true, data: c.auth.publicUser(row) };
+      return { ok: true, data: await c.auth.publicUserWithFunctions(c.storage, row) };
     } catch (e) {
       return { ok: false, error: errorMsg(e) };
     }
@@ -1399,7 +1614,7 @@ export const seedDemoUsersFn = createServerFn({ method: "POST" }).handler(
       const count = await c.storage.countUsers();
       if (count > 0) {
         const me = await c.auth.getCurrentUser(c.storage);
-        if (!me || !can(me.role, "admin.manage"))
+        if (!me || !userCan(await c.auth.publicUserWithFunctions(c.storage, me), "admin.manage"))
           return { ok: false, error: "Base já possui usuários — apenas admin pode semear." };
       }
       const seeds: Array<{
@@ -1539,7 +1754,9 @@ export const createControlFn = createServerFn({ method: "POST" })
         norm: z.enum(["LGPD", "ISO 27001", "SOX"]),
         owner: z.string().trim().min(2).max(80),
         role: z.enum(["admin", "diretor", "gestor", "desenvolvedor", "auditor"]).optional(),
-        tone: z.enum(["success", "info", "warning", "neutral", "danger", "brand"]).default("warning"),
+        tone: z
+          .enum(["success", "info", "warning", "neutral", "danger", "brand"])
+          .default("warning"),
       })
       .strict(),
   )
@@ -1562,7 +1779,16 @@ export const createControlFn = createServerFn({ method: "POST" })
         lastReview: now,
         nextReview: next,
       });
-      await c.logAudit(c.storage, { id: user.id, name: user.name, role: user.role }, { action: "Controle criado", entity: "controle", entityId: id, after: `${data.control} [${role}]` });
+      await c.logAudit(
+        c.storage,
+        { id: user.id, name: user.name, role: user.role },
+        {
+          action: "Controle criado",
+          entity: "controle",
+          entityId: id,
+          after: `${data.control} [${role}]`,
+        },
+      );
       return { ok: true, data: null };
     } catch (e) {
       return { ok: false, error: errorMsg(e) };
@@ -1577,7 +1803,11 @@ export const deleteControlFn = createServerFn({ method: "POST" })
       const user = await c.auth.requirePermission(c.storage, "admin.manage");
       const ok = await c.storage.deleteControl(data.id);
       if (!ok) return { ok: false, error: "Controle não encontrado." };
-      await c.logAudit(c.storage, { id: user.id, name: user.name, role: user.role }, { action: "Controle removido", entity: "controle", entityId: data.id });
+      await c.logAudit(
+        c.storage,
+        { id: user.id, name: user.name, role: user.role },
+        { action: "Controle removido", entity: "controle", entityId: data.id },
+      );
       return { ok: true, data: null };
     } catch (e) {
       return { ok: false, error: errorMsg(e) };
@@ -1599,8 +1829,17 @@ export const createTechStackFn = createServerFn({ method: "POST" })
     try {
       const c = await ctx();
       const user = await c.auth.requirePermission(c.storage, "admin.manage");
-      await c.storage.insertTechStack({ name: data.name, category: data.category, description: data.description, ...(data.icon ? { icon: data.icon } : {}) } as unknown as import("@/data/types").TechItem);
-      await c.logAudit(c.storage, { id: user.id, name: user.name, role: user.role }, { action: "Stack adicionada", entity: "stack", entityId: data.name, after: data.name });
+      await c.storage.insertTechStack({
+        name: data.name,
+        category: data.category,
+        description: data.description,
+        ...(data.icon ? { icon: data.icon } : {}),
+      } as unknown as import("@/data/types").TechItem);
+      await c.logAudit(
+        c.storage,
+        { id: user.id, name: user.name, role: user.role },
+        { action: "Stack adicionada", entity: "stack", entityId: data.name, after: data.name },
+      );
       return { ok: true, data: null };
     } catch (e) {
       return { ok: false, error: errorMsg(e) };
@@ -1615,7 +1854,11 @@ export const deleteTechStackFn = createServerFn({ method: "POST" })
       const user = await c.auth.requirePermission(c.storage, "admin.manage");
       const ok = await c.storage.deleteTechStack(data.name);
       if (!ok) return { ok: false, error: "Stack não encontrada." };
-      await c.logAudit(c.storage, { id: user.id, name: user.name, role: user.role }, { action: "Stack removida", entity: "stack", entityId: data.name });
+      await c.logAudit(
+        c.storage,
+        { id: user.id, name: user.name, role: user.role },
+        { action: "Stack removida", entity: "stack", entityId: data.name },
+      );
       return { ok: true, data: null };
     } catch (e) {
       return { ok: false, error: errorMsg(e) };
@@ -1649,17 +1892,18 @@ export const getN8nWorkflowFn = createServerFn({ method: "GET" })
     } catch (e) {
       return { ok: false, error: errorMsg(e) };
     }
-  },
-);
+  });
 
 export const createN8nWorkflowFn = createServerFn({ method: "POST" })
   .validator(
-    z.object({
-      name: z.string().trim().min(1).max(120),
-      nodes: z.any().optional(),
-      connections: z.any().optional(),
-      active: z.boolean().optional(),
-    }).strict(),
+    z
+      .object({
+        name: z.string().trim().min(1).max(120),
+        nodes: z.any().optional(),
+        connections: z.any().optional(),
+        active: z.boolean().optional(),
+      })
+      .strict(),
   )
   .handler(async ({ data }): Promise<ApiResult<import("@/server/n8n").N8nWorkflow>> => {
     try {
@@ -1673,18 +1917,19 @@ export const createN8nWorkflowFn = createServerFn({ method: "POST" })
     } catch (e) {
       return { ok: false, error: errorMsg(e) };
     }
-  },
-);
+  });
 
 export const updateN8nWorkflowFn = createServerFn({ method: "POST" })
   .validator(
-    z.object({
-      id: z.coerce.number().min(1),
-      name: z.string().trim().min(1).max(120),
-      nodes: z.any().optional(),
-      connections: z.any().optional(),
-      active: z.boolean().optional(),
-    }).strict(),
+    z
+      .object({
+        id: z.coerce.number().min(1),
+        name: z.string().trim().min(1).max(120),
+        nodes: z.any().optional(),
+        connections: z.any().optional(),
+        active: z.boolean().optional(),
+      })
+      .strict(),
   )
   .handler(async ({ data }): Promise<ApiResult<import("@/server/n8n").N8nWorkflow>> => {
     try {
@@ -1698,8 +1943,7 @@ export const updateN8nWorkflowFn = createServerFn({ method: "POST" })
     } catch (e) {
       return { ok: false, error: errorMsg(e) };
     }
-  },
-);
+  });
 
 export const deleteN8nWorkflowFn = createServerFn({ method: "POST" })
   .validator(z.object({ id: z.coerce.number().min(1) }).strict())
@@ -1711,8 +1955,7 @@ export const deleteN8nWorkflowFn = createServerFn({ method: "POST" })
     } catch (e) {
       return { ok: false, error: errorMsg(e) };
     }
-  },
-);
+  });
 
 export const listAutomationSharesFn = createServerFn({ method: "GET" }).handler(
   async (): Promise<ApiResult<import("@/server/storage").AutomationShare[]>> => {
@@ -1722,7 +1965,8 @@ export const listAutomationSharesFn = createServerFn({ method: "GET" }).handler(
       const shares = await c.storage.listAutomationShares();
       const user = await c.auth.getCurrentUser(c.storage);
       if (!user) return { ok: false, error: "Não autenticado." };
-      const canSeeAll = can(user.role, "automation.admin") || can(user.role, "admin.manage");
+      const perm = await c.auth.publicUserWithFunctions(c.storage, user);
+      const canSeeAll = userCan(perm, "automation.admin") || userCan(perm, "admin.manage");
       if (canSeeAll) return { ok: true, data: shares };
       const filtered = shares.filter(
         (s) =>
@@ -1744,7 +1988,10 @@ export const upsertAutomationShareFn = createServerFn({ method: "POST" })
       .object({
         workflowId: z.string().min(1).max(80),
         workflowName: z.string().min(1).max(120),
-        sharedRole: z.enum(["admin", "diretor", "gestor", "desenvolvedor", "auditor"]).nullable().optional(),
+        sharedRole: z
+          .enum(["admin", "diretor", "gestor", "desenvolvedor", "auditor"])
+          .nullable()
+          .optional(),
         sharedUserIds: z.array(z.string().min(1)).max(50).optional(),
         isPrivate: z.boolean().optional(),
       })
@@ -1755,7 +2002,13 @@ export const upsertAutomationShareFn = createServerFn({ method: "POST" })
       const c = await ctx();
       const user = await c.auth.requirePermission(c.storage, "automation.create");
       const existing = await c.storage.getAutomationShareByWorkflow(data.workflowId);
-      if (existing && existing.ownerId !== user.id && !can(user.role, "automation.admin") && !can(user.role, "admin.manage")) {
+      const perm = await c.auth.publicUserWithFunctions(c.storage, user);
+      if (
+        existing &&
+        existing.ownerId !== user.id &&
+        !userCan(perm, "automation.admin") &&
+        !userCan(perm, "admin.manage")
+      ) {
         return { ok: false, error: "Apenas o dono ou admin pode editar este compartilhamento." };
       }
       const id = existing?.id ?? c.newId("auto");
@@ -1771,7 +2024,16 @@ export const upsertAutomationShareFn = createServerFn({ method: "POST" })
         isPrivate: data.isPrivate ?? true,
         createdAt: existing?.createdAt ?? new Date().toISOString(),
       });
-      await c.logAudit(c.storage, { id: user.id, name: user.name, role: user.role }, { action: existing ? "Automação compartilhada atualizada" : "Automação registrada", entity: "automação", entityId: data.workflowId, after: data.workflowName });
+      await c.logAudit(
+        c.storage,
+        { id: user.id, name: user.name, role: user.role },
+        {
+          action: existing ? "Automação compartilhada atualizada" : "Automação registrada",
+          entity: "automação",
+          entityId: data.workflowId,
+          after: data.workflowName,
+        },
+      );
       return { ok: true, data: null };
     } catch (e) {
       return { ok: false, error: errorMsg(e) };
@@ -1786,11 +2048,20 @@ export const deleteAutomationShareFn = createServerFn({ method: "POST" })
       const user = await c.auth.requirePermission(c.storage, "automation.create");
       const share = await c.storage.getAutomationShare(data.id);
       if (!share) return { ok: false, error: "Automação não encontrada." };
-      if (share.ownerId !== user.id && !can(user.role, "automation.admin") && !can(user.role, "admin.manage")) {
+      const perm = await c.auth.publicUserWithFunctions(c.storage, user);
+      if (
+        share.ownerId !== user.id &&
+        !userCan(perm, "automation.admin") &&
+        !userCan(perm, "admin.manage")
+      ) {
         return { ok: false, error: "Sem permissão para remover." };
       }
       await c.storage.deleteAutomationShare(data.id);
-      await c.logAudit(c.storage, { id: user.id, name: user.name, role: user.role }, { action: "Automação removida", entity: "automação", entityId: share.workflowId });
+      await c.logAudit(
+        c.storage,
+        { id: user.id, name: user.name, role: user.role },
+        { action: "Automação removida", entity: "automação", entityId: share.workflowId },
+      );
       return { ok: true, data: null };
     } catch (e) {
       return { ok: false, error: errorMsg(e) };
@@ -1805,7 +2076,13 @@ export const provisionN8nUserFn = createServerFn({ method: "POST" }).handler(
       const { n8nPublicUrl, provisionN8nUser } = await import("@/server/n8n");
       const password = "Temp12345!";
       const n8nUser = await provisionN8nUser(user.email, user.name, password);
-      return { ok: true, data: { n8nUrl: n8nPublicUrl(), message: `Usuário criado no n8n: ${n8nUser.email} (role: ${n8nUser.role}). Senha temporária: ${password}` } };
+      return {
+        ok: true,
+        data: {
+          n8nUrl: n8nPublicUrl(),
+          message: `Usuário criado no n8n: ${n8nUser.email} (role: ${n8nUser.role}). Senha temporária: ${password}`,
+        },
+      };
     } catch (e) {
       return { ok: false, error: errorMsg(e) };
     }
@@ -1819,17 +2096,19 @@ export const getStorageInfoFn = createServerFn({ method: "GET" }).handler(async 
   return { ...info, persistent: isStoragePersistent(), initError: getStorageInitError() };
 });
 
-export const exportDatabaseFn = createServerFn({ method: "GET" }).handler(async (): Promise<ApiResult<import("@/server/storage").DatabaseDump>> => {
-  try {
-    const c = await ctx();
-    await c.auth.requirePermission(c.storage, "admin.manage");
-    const dump = await c.storage.exportDatabase();
-    await c.storage.setMeta("last_backup_at", new Date().toISOString());
-    return { ok: true, data: dump };
-  } catch (e) {
-    return { ok: false, error: errorMsg(e) };
-  }
-});
+export const exportDatabaseFn = createServerFn({ method: "GET" }).handler(
+  async (): Promise<ApiResult<import("@/server/storage").DatabaseDump>> => {
+    try {
+      const c = await ctx();
+      await c.auth.requirePermission(c.storage, "admin.manage");
+      const dump = await c.storage.exportDatabase();
+      await c.storage.setMeta("last_backup_at", new Date().toISOString());
+      return { ok: true, data: dump };
+    } catch (e) {
+      return { ok: false, error: errorMsg(e) };
+    }
+  },
+);
 
 export const importDatabaseFn = createServerFn({ method: "POST" })
   .validator(z.object({ dump: z.any() }).strict())
@@ -1839,31 +2118,56 @@ export const importDatabaseFn = createServerFn({ method: "POST" })
       await c.auth.requirePermission(c.storage, "admin.manage");
       await c.storage.importDatabase(data.dump as import("@/server/storage").DatabaseDump);
       await c.storage.setMeta("last_backup_at", new Date().toISOString());
-      await c.logAudit(c.storage, await c.auth.requireUser(c.storage), { action: "Backup restaurado", entity: "sistema", entityId: "import" });
+      await c.logAudit(c.storage, await c.auth.requireUser(c.storage), {
+        action: "Backup restaurado",
+        entity: "sistema",
+        entityId: "import",
+      });
       return { ok: true, data: null };
     } catch (e) {
       return { ok: false, error: errorMsg(e) };
     }
   });
 
-export const listNextStepsFn = createServerFn({ method: "GET" }).handler(async (): Promise<ApiResult<import("@/server/storage").NextStep[]>> => {
-  try {
-    const c = await ctx();
-    return { ok: true, data: await c.storage.listNextSteps() };
-  } catch (e) {
-    return { ok: false, error: errorMsg(e) };
-  }
-});
+export const listNextStepsFn = createServerFn({ method: "GET" }).handler(
+  async (): Promise<ApiResult<import("@/server/storage").NextStep[]>> => {
+    try {
+      const c = await ctx();
+      return { ok: true, data: await c.storage.listNextSteps() };
+    } catch (e) {
+      return { ok: false, error: errorMsg(e) };
+    }
+  },
+);
 
 export const createNextStepFn = createServerFn({ method: "POST" })
-  .validator(z.object({ title: z.string().trim().min(3).max(120), due: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), status: z.enum(["pendente", "em_andamento", "concluido"]).optional() }).strict())
+  .validator(
+    z
+      .object({
+        title: z.string().trim().min(3).max(120),
+        due: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        status: z.enum(["pendente", "em_andamento", "concluido"]).optional(),
+      })
+      .strict(),
+  )
   .handler(async ({ data }): Promise<ApiResult<null>> => {
     try {
       const c = await ctx();
       const user = await c.auth.requirePermission(c.storage, "admin.manage");
       const steps = await c.storage.listNextSteps();
-      await c.storage.insertNextStep({ id: c.newId("ns"), title: data.title, due: data.due, status: data.status ?? "pendente", position: steps.length, createdAt: new Date().toISOString() });
-      await c.logAudit(c.storage, { id: user.id, name: user.name, role: user.role }, { action: "Próximo passo criado", entity: "next_step", entityId: data.title });
+      await c.storage.insertNextStep({
+        id: c.newId("ns"),
+        title: data.title,
+        due: data.due,
+        status: data.status ?? "pendente",
+        position: steps.length,
+        createdAt: new Date().toISOString(),
+      });
+      await c.logAudit(
+        c.storage,
+        { id: user.id, name: user.name, role: user.role },
+        { action: "Próximo passo criado", entity: "next_step", entityId: data.title },
+      );
       return { ok: true, data: null };
     } catch (e) {
       return { ok: false, error: errorMsg(e) };
@@ -1871,16 +2175,34 @@ export const createNextStepFn = createServerFn({ method: "POST" })
   });
 
 export const updateNextStepFn = createServerFn({ method: "POST" })
-  .validator(z.object({ id: z.string().min(1), title: z.string().trim().min(3).max(120).optional(), due: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), status: z.enum(["pendente", "em_andamento", "concluido"]).optional() }).strict())
+  .validator(
+    z
+      .object({
+        id: z.string().min(1),
+        title: z.string().trim().min(3).max(120).optional(),
+        due: z
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/)
+          .optional(),
+        status: z.enum(["pendente", "em_andamento", "concluido"]).optional(),
+      })
+      .strict(),
+  )
   .handler(async ({ data }): Promise<ApiResult<null>> => {
     try {
       const c = await ctx();
       const user = await c.auth.requirePermission(c.storage, "admin.manage");
       const { id, ...rest } = data;
-      const patch = Object.fromEntries(Object.entries(rest).filter(([, v]) => v !== undefined)) as Partial<import("@/server/storage").NextStep>;
+      const patch = Object.fromEntries(
+        Object.entries(rest).filter(([, v]) => v !== undefined),
+      ) as Partial<import("@/server/storage").NextStep>;
       const updated = await c.storage.updateNextStep(id, patch);
       if (!updated) return { ok: false, error: "Passo não encontrado." };
-      await c.logAudit(c.storage, { id: user.id, name: user.name, role: user.role }, { action: "Próximo passo atualizado", entity: "next_step", entityId: id });
+      await c.logAudit(
+        c.storage,
+        { id: user.id, name: user.name, role: user.role },
+        { action: "Próximo passo atualizado", entity: "next_step", entityId: id },
+      );
       return { ok: true, data: null };
     } catch (e) {
       return { ok: false, error: errorMsg(e) };
@@ -1895,7 +2217,11 @@ export const deleteNextStepFn = createServerFn({ method: "POST" })
       const user = await c.auth.requirePermission(c.storage, "admin.manage");
       const ok = await c.storage.deleteNextStep(data.id);
       if (!ok) return { ok: false, error: "Passo não encontrado." };
-      await c.logAudit(c.storage, { id: user.id, name: user.name, role: user.role }, { action: "Próximo passo removido", entity: "next_step", entityId: data.id });
+      await c.logAudit(
+        c.storage,
+        { id: user.id, name: user.name, role: user.role },
+        { action: "Próximo passo removido", entity: "next_step", entityId: data.id },
+      );
       return { ok: true, data: null };
     } catch (e) {
       return { ok: false, error: errorMsg(e) };
@@ -1915,14 +2241,16 @@ export const reorderNextStepsFn = createServerFn({ method: "POST" })
     }
   });
 
-export const listLegalDocsFn = createServerFn({ method: "GET" }).handler(async (): Promise<ApiResult<import("@/server/storage").LegalDoc[]>> => {
-  try {
-    const c = await ctx();
-    return { ok: true, data: await c.storage.listLegalDocs() };
-  } catch (e) {
-    return { ok: false, error: errorMsg(e) };
-  }
-});
+export const listLegalDocsFn = createServerFn({ method: "GET" }).handler(
+  async (): Promise<ApiResult<import("@/server/storage").LegalDoc[]>> => {
+    try {
+      const c = await ctx();
+      return { ok: true, data: await c.storage.listLegalDocs() };
+    } catch (e) {
+      return { ok: false, error: errorMsg(e) };
+    }
+  },
+);
 
 export const getLegalDocFn = createServerFn({ method: "GET" })
   .validator(z.object({ slug: z.string().min(1) }).strict())
@@ -1948,15 +2276,56 @@ export const listLegalDocVersionsFn = createServerFn({ method: "GET" })
   });
 
 export const createLegalDocFn = createServerFn({ method: "POST" })
-  .validator(z.object({ slug: z.string().regex(/^[a-z0-9-]+$/), title: z.string().trim().min(3).max(120), subtitle: z.string().trim().max(200).optional().default(""), version: z.string().trim().min(1).max(20), intro: z.string().trim().max(5000).optional().default(""), clauses: z.array(z.object({ title: z.string().trim().min(1).max(120), body: z.string().trim().min(1).max(5000) })).min(1).max(30), publishedAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }).strict())
+  .validator(
+    z
+      .object({
+        slug: z.string().regex(/^[a-z0-9-]+$/),
+        title: z.string().trim().min(3).max(120),
+        subtitle: z.string().trim().max(200).optional().default(""),
+        version: z.string().trim().min(1).max(20),
+        intro: z.string().trim().max(5000).optional().default(""),
+        clauses: z
+          .array(
+            z.object({
+              title: z.string().trim().min(1).max(120),
+              body: z.string().trim().min(1).max(5000),
+            }),
+          )
+          .min(1)
+          .max(30),
+        publishedAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      })
+      .strict(),
+  )
   .handler(async ({ data }): Promise<ApiResult<null>> => {
     try {
       const c = await ctx();
       const user = await c.auth.requirePermission(c.storage, "admin.manage");
       const id = c.newId("ld");
       const now = new Date().toISOString();
-      await c.storage.insertLegalDoc({ id, slug: data.slug, title: data.title, subtitle: data.subtitle ?? "", version: data.version, intro: data.intro ?? "", clauses: data.clauses, publishedAt: data.publishedAt, createdAt: now, updatedAt: now, createdById: user.id });
-      await c.logAudit(c.storage, { id: user.id, name: user.name, role: user.role }, { action: "Documento legal criado", entity: "legal_doc", entityId: id, after: `${data.slug} ${data.version}` });
+      await c.storage.insertLegalDoc({
+        id,
+        slug: data.slug,
+        title: data.title,
+        subtitle: data.subtitle ?? "",
+        version: data.version,
+        intro: data.intro ?? "",
+        clauses: data.clauses,
+        publishedAt: data.publishedAt,
+        createdAt: now,
+        updatedAt: now,
+        createdById: user.id,
+      });
+      await c.logAudit(
+        c.storage,
+        { id: user.id, name: user.name, role: user.role },
+        {
+          action: "Documento legal criado",
+          entity: "legal_doc",
+          entityId: id,
+          after: `${data.slug} ${data.version}`,
+        },
+      );
       return { ok: true, data: null };
     } catch (e) {
       return { ok: false, error: errorMsg(e) };
@@ -1964,7 +2333,14 @@ export const createLegalDocFn = createServerFn({ method: "POST" })
   });
 
 export const changePasswordFn = createServerFn({ method: "POST" })
-  .validator(z.object({ currentPassword: z.string().min(1), newPassword: z.string().trim().min(8).max(200) }).strict())
+  .validator(
+    z
+      .object({
+        currentPassword: z.string().min(1),
+        newPassword: z.string().trim().min(8).max(200),
+      })
+      .strict(),
+  )
   .handler(async ({ data }): Promise<ApiResult<null>> => {
     try {
       const c = await ctx();
@@ -1978,7 +2354,11 @@ export const changePasswordFn = createServerFn({ method: "POST" })
       await c.storage.deleteSessionsForUser(user.id);
       const { updateUserPassword } = await import("@/server/passwords-helpers");
       await updateUserPassword(c.storage, user.id, hash, salt);
-      await c.logAudit(c.storage, { id: user.id, name: user.name, role: user.role }, { action: "Senha alterada", entity: "usuário", entityId: user.id });
+      await c.logAudit(
+        c.storage,
+        { id: user.id, name: user.name, role: user.role },
+        { action: "Senha alterada", entity: "usuário", entityId: user.id },
+      );
       return { ok: true, data: null };
     } catch (e) {
       return { ok: false, error: errorMsg(e) };
@@ -1994,11 +2374,26 @@ export const createPasswordResetFn = createServerFn({ method: "POST" })
       const target = await c.storage.getUserById(data.userId);
       if (!target) return { ok: false, error: "Usuário não encontrado." };
       const raw = c.newId("rst") + Math.random().toString(36).slice(2);
-      const tokenHash = await (await import("node:crypto")).createHash("sha256").update(raw).digest("hex");
+      const tokenHash = await (
+        await import("node:crypto")
+      )
+        .createHash("sha256")
+        .update(raw)
+        .digest("hex");
       const now = new Date();
       const expiresAt = new Date(now.getTime() + 60 * 60 * 1000).toISOString();
-      await c.storage.insertResetToken({ tokenHash, userId: target.id, createdAt: now.toISOString(), expiresAt, usedAt: null });
-      await c.logAudit(c.storage, { id: actor.id, name: actor.name, role: actor.role }, { action: "Link de redefinição gerado", entity: "usuário", entityId: target.id });
+      await c.storage.insertResetToken({
+        tokenHash,
+        userId: target.id,
+        createdAt: now.toISOString(),
+        expiresAt,
+        usedAt: null,
+      });
+      await c.logAudit(
+        c.storage,
+        { id: actor.id, name: actor.name, role: actor.role },
+        { action: "Link de redefinição gerado", entity: "usuário", entityId: target.id },
+      );
       return { ok: true, data: { token: raw, expiresAt } };
     } catch (e) {
       return { ok: false, error: errorMsg(e) };
@@ -2006,75 +2401,115 @@ export const createPasswordResetFn = createServerFn({ method: "POST" })
   });
 
 export const resetPasswordFn = createServerFn({ method: "POST" })
-  .validator(z.object({ token: z.string().min(8), newPassword: z.string().trim().min(8).max(200) }).strict())
+  .validator(
+    z.object({ token: z.string().min(8), newPassword: z.string().trim().min(8).max(200) }).strict(),
+  )
   .handler(async ({ data }): Promise<ApiResult<null>> => {
     try {
       const c = await ctx();
-      const tokenHash = await (await import("node:crypto")).createHash("sha256").update(data.token).digest("hex");
+      const tokenHash = await (
+        await import("node:crypto")
+      )
+        .createHash("sha256")
+        .update(data.token)
+        .digest("hex");
       const rec = await c.storage.getResetTokenByHash(tokenHash);
       if (!rec) return { ok: false, error: "Token inválido." };
       if (rec.usedAt) return { ok: false, error: "Token já usado." };
-      if (new Date(rec.expiresAt).getTime() < Date.now()) return { ok: false, error: "Token expirado." };
+      if (new Date(rec.expiresAt).getTime() < Date.now())
+        return { ok: false, error: "Token expirado." };
       const salt = c.pw.generateSaltHex();
       const hash = await c.pw.hashPassword(data.newPassword, c.pepper, salt);
       const { updateUserPassword } = await import("@/server/passwords-helpers");
       await updateUserPassword(c.storage, rec.userId, hash, salt);
       await c.storage.markResetTokenUsed(tokenHash, new Date().toISOString());
       await c.storage.deleteSessionsForUser(rec.userId);
-      await c.logAudit(c.storage, null, { action: "Senha redefinida via token", entity: "usuário", entityId: rec.userId });
+      await c.logAudit(c.storage, null, {
+        action: "Senha redefinida via token",
+        entity: "usuário",
+        entityId: rec.userId,
+      });
       return { ok: true, data: null };
     } catch (e) {
       return { ok: false, error: errorMsg(e) };
     }
   });
 
-export const listUserSessionsFn = createServerFn({ method: "GET" }).handler(async (): Promise<ApiResult<import("@/server/storage").SessionRow[]>> => {
-  try {
-    const c = await ctx();
-    const user = await c.auth.requireUser(c.storage);
-    const isAdmin = can(user.role, "admin.manage");
-    const targetId = user.id;
-    const list = await c.storage.listSessionsForUser(targetId);
-    void isAdmin;
-    return { ok: true, data: list };
-  } catch (e) {
-    return { ok: false, error: errorMsg(e) };
-  }
-});
-
-export const revokeAllSessionsFn = createServerFn({ method: "POST" }).handler(async (): Promise<ApiResult<null>> => {
-  try {
-    const c = await ctx();
-    const user = await c.auth.requireUser(c.storage);
-    await c.storage.deleteSessionsForUser(user.id);
-    await c.auth.destroyCurrentSession(c.storage);
-    return { ok: true, data: null };
-  } catch (e) {
-    return { ok: false, error: errorMsg(e) };
-  }
-});
-
-export const globalSearchFn = createServerFn({ method: "GET" })
-  .validator(z.object({ q: z.string().trim().min(1).max(80) }).strict())
-  .handler(async ({ data }): Promise<ApiResult<{ tasks: import("@/data/types").Task[]; risks: import("@/data/types").Risk[]; wiki: import("@/data/types").WikiArticle[]; controls: import("@/data/types").ComplianceControl[] }>> => {
+export const listUserSessionsFn = createServerFn({ method: "GET" }).handler(
+  async (): Promise<ApiResult<import("@/server/storage").SessionRow[]>> => {
     try {
       const c = await ctx();
-      await c.auth.requireUser(c.storage);
-      const q = data.q.toLowerCase();
-      const [tasks, risks, wiki, controls] = await Promise.all([c.storage.listTasks(), c.storage.listRisks(), c.storage.listWiki(), c.storage.listControls()]);
-      return {
-        ok: true,
-        data: {
-          tasks: tasks.filter((t) => `${t.title} ${t.description} ${t.tags.join(" ")}`.toLowerCase().includes(q)).slice(0, 10),
-          risks: risks.filter((r) => `${r.title} ${r.category} ${r.mitigation}`.toLowerCase().includes(q)).slice(0, 10),
-          wiki: wiki.filter((w) => `${w.title} ${w.summary} ${w.category}`.toLowerCase().includes(q)).slice(0, 10),
-          controls: controls.filter((co) => `${co.control} ${co.norm} ${co.owner}`.toLowerCase().includes(q)).slice(0, 10),
-        },
-      };
+      const user = await c.auth.requireUser(c.storage);
+      const targetId = user.id;
+      const list = await c.storage.listSessionsForUser(targetId);
+      return { ok: true, data: list };
     } catch (e) {
       return { ok: false, error: errorMsg(e) };
     }
-  });
+  },
+);
+
+export const revokeAllSessionsFn = createServerFn({ method: "POST" }).handler(
+  async (): Promise<ApiResult<null>> => {
+    try {
+      const c = await ctx();
+      const user = await c.auth.requireUser(c.storage);
+      await c.storage.deleteSessionsForUser(user.id);
+      await c.auth.destroyCurrentSession(c.storage);
+      return { ok: true, data: null };
+    } catch (e) {
+      return { ok: false, error: errorMsg(e) };
+    }
+  },
+);
+
+export const globalSearchFn = createServerFn({ method: "GET" })
+  .validator(z.object({ q: z.string().trim().min(1).max(80) }).strict())
+  .handler(
+    async ({
+      data,
+    }): Promise<
+      ApiResult<{
+        tasks: import("@/data/types").Task[];
+        risks: import("@/data/types").Risk[];
+        wiki: import("@/data/types").WikiArticle[];
+        controls: import("@/data/types").ComplianceControl[];
+      }>
+    > => {
+      try {
+        const c = await ctx();
+        await c.auth.requireUser(c.storage);
+        const q = data.q.toLowerCase();
+        const [tasks, risks, wiki, controls] = await Promise.all([
+          c.storage.listTasks(),
+          c.storage.listRisks(),
+          c.storage.listWiki(),
+          c.storage.listControls(),
+        ]);
+        return {
+          ok: true,
+          data: {
+            tasks: tasks
+              .filter((t) =>
+                `${t.title} ${t.description} ${t.tags.join(" ")}`.toLowerCase().includes(q),
+              )
+              .slice(0, 10),
+            risks: risks
+              .filter((r) => `${r.title} ${r.category} ${r.mitigation}`.toLowerCase().includes(q))
+              .slice(0, 10),
+            wiki: wiki
+              .filter((w) => `${w.title} ${w.summary} ${w.category}`.toLowerCase().includes(q))
+              .slice(0, 10),
+            controls: controls
+              .filter((co) => `${co.control} ${co.norm} ${co.owner}`.toLowerCase().includes(q))
+              .slice(0, 10),
+          },
+        };
+      } catch (e) {
+        return { ok: false, error: errorMsg(e) };
+      }
+    },
+  );
 
 export const saveRecordFn = createServerFn({ method: "POST" })
   .validator(
@@ -2273,4 +2708,3 @@ export const revokeInviteFn = createServerFn({ method: "POST" })
       return { ok: false, error: errorMsg(e) };
     }
   });
-

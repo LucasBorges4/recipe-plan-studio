@@ -18,6 +18,9 @@ import type {
   JsonObject,
 } from "@/lib/records";
 import type { Role, RoleFunction } from "@/lib/rbac";
+import { mkdirSync, writeFileSync, unlinkSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 /**
  * Camada de persistência do portal.
@@ -79,8 +82,21 @@ export interface Storage {
   clearAllUsers(): Promise<number>;
   listRoleFunctions(role: Role): Promise<RoleFunctionRow[]>;
   listAllRoleFunctions(): Promise<RoleFunctionRow[]>;
-  syncRoleFunctions(role: Role, functions: Array<{ key: string; description: string }>): Promise<void>;
+  syncRoleFunctions(
+    role: Role,
+    functions: Array<{ key: string; description: string }>,
+  ): Promise<void>;
   deleteRoleFunctions(role: Role): Promise<void>;
+
+  listUserFunctions(userId: string): Promise<UserFunctionRow[]>;
+  grantUserFunction(
+    userId: string,
+    functionKey: string,
+    description: string,
+    grantedBy: string | null,
+    grantedAt?: string,
+  ): Promise<boolean>;
+  revokeUserFunction(userId: string, functionKey: string): Promise<boolean>;
 
   getSessionByTokenHash(tokenHash: string): Promise<SessionRow | null>;
   insertSession(session: SessionRow): Promise<void>;
@@ -255,6 +271,7 @@ export interface DatabaseDump {
   legalDocs: LegalDoc[];
   resetTokens: ResetToken[];
   meta: Record<string, string>;
+  userFunctions: UserFunctionRow[];
 }
 
 export interface StorageInfo {
@@ -298,6 +315,15 @@ export interface RoleFunctionRow {
   role: Role;
   functionKey: string;
   description: string;
+}
+
+/** Função concedida individualmente a um usuário pelo admin. */
+export interface UserFunctionRow {
+  userId: string;
+  functionKey: string;
+  description: string;
+  grantedAt: string;
+  grantedBy: string | null;
 }
 
 /* ------------------------------------------------------------------ */
@@ -526,6 +552,15 @@ CREATE TABLE IF NOT EXISTS role_functions (
   PRIMARY KEY (role, function_key)
 );
 CREATE INDEX IF NOT EXISTS role_functions_role_idx ON role_functions(role);
+CREATE TABLE IF NOT EXISTS user_functions (
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  function_key TEXT NOT NULL,
+  description TEXT NOT NULL,
+  granted_at TEXT NOT NULL,
+  granted_by TEXT,
+  PRIMARY KEY (user_id, function_key)
+);
+CREATE INDEX IF NOT EXISTS user_functions_user_idx ON user_functions(user_id);
 `;
 
 const str = (v: SqlValue | undefined, fallback = ""): string =>
@@ -568,29 +603,39 @@ export class SqliteStorage implements Storage {
           void 0;
         }
       }
-       for (const sql of [
-         "ALTER TABLE controls ADD COLUMN role TEXT NOT NULL DEFAULT 'gestor'",
-         "ALTER TABLE risks ADD COLUMN role TEXT NOT NULL DEFAULT 'gestor'",
-       ]) {
-         try {
-           db.exec(sql);
-         } catch {
-           void 0;
-         }
-       }
-       try {
-         db.exec(
-           "CREATE TABLE IF NOT EXISTS role_functions (" +
-             "role TEXT NOT NULL, function_key TEXT NOT NULL, " +
-             "description TEXT NOT NULL, PRIMARY KEY (role, function_key))",
-         );
-         db.exec(
-           "CREATE INDEX IF NOT EXISTS role_functions_role_idx ON role_functions(role)",
-         );
-       } catch {
-         void 0;
-       }
-       return new SqliteStorage(db);
+      for (const sql of [
+        "ALTER TABLE controls ADD COLUMN role TEXT NOT NULL DEFAULT 'gestor'",
+        "ALTER TABLE risks ADD COLUMN role TEXT NOT NULL DEFAULT 'gestor'",
+      ]) {
+        try {
+          db.exec(sql);
+        } catch {
+          void 0;
+        }
+      }
+      try {
+        db.exec(
+          "CREATE TABLE IF NOT EXISTS role_functions (" +
+            "role TEXT NOT NULL, function_key TEXT NOT NULL, " +
+            "description TEXT NOT NULL, PRIMARY KEY (role, function_key))",
+        );
+        db.exec("CREATE INDEX IF NOT EXISTS role_functions_role_idx ON role_functions(role)");
+      } catch {
+        void 0;
+      }
+      try {
+        db.exec(
+          "CREATE TABLE IF NOT EXISTS user_functions (" +
+            "user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, " +
+            "function_key TEXT NOT NULL, description TEXT NOT NULL, " +
+            "granted_at TEXT NOT NULL, granted_by TEXT, " +
+            "PRIMARY KEY (user_id, function_key))",
+        );
+        db.exec("CREATE INDEX IF NOT EXISTS user_functions_user_idx ON user_functions(user_id)");
+      } catch {
+        void 0;
+      }
+      return new SqliteStorage(db);
     } catch {
       void 0;
       return null;
@@ -654,6 +699,38 @@ export class SqliteStorage implements Storage {
   }
   async deleteRoleFunctions(role: Role): Promise<void> {
     this.db.prepare("DELETE FROM role_functions WHERE role = ?").run(role);
+  }
+  async listUserFunctions(userId: string): Promise<UserFunctionRow[]> {
+    return this.many(
+      "SELECT user_id AS userId, function_key AS functionKey, description, granted_at AS grantedAt, granted_by AS grantedBy FROM user_functions WHERE user_id = ? ORDER BY function_key",
+      userId,
+    ).map((r) => ({
+      userId: r["userId"] as string,
+      functionKey: r["functionKey"] as string,
+      description: r["description"] as string,
+      grantedAt: r["grantedAt"] as string,
+      grantedBy: r["grantedBy"] == null ? null : (r["grantedBy"] as string),
+    }));
+  }
+  async grantUserFunction(
+    userId: string,
+    functionKey: string,
+    description: string,
+    grantedBy: string | null,
+    grantedAt = new Date().toISOString(),
+  ): Promise<boolean> {
+    const info = this.db
+      .prepare(
+        "INSERT OR IGNORE INTO user_functions (user_id, function_key, description, granted_at, granted_by) VALUES (?, ?, ?, ?, ?)",
+      )
+      .run(userId, functionKey, description, grantedAt, grantedBy);
+    return Number(info.changes) > 0;
+  }
+  async revokeUserFunction(userId: string, functionKey: string): Promise<boolean> {
+    const info = this.db
+      .prepare("DELETE FROM user_functions WHERE user_id = ? AND function_key = ?")
+      .run(userId, functionKey);
+    return Number(info.changes) > 0;
   }
   async insertUser(u: UserRow) {
     this.db
@@ -1547,6 +1624,7 @@ export class SqliteStorage implements Storage {
       legalDocs,
       resetTokens,
       metaRows,
+      userFunctions,
     ] = await Promise.all([
       this.listUsers(),
       this.many("SELECT * FROM sessions").map((r) => ({
@@ -1585,6 +1663,15 @@ export class SqliteStorage implements Storage {
       })),
       this.listResetTokens(),
       this.many("SELECT * FROM meta"),
+      this.many(
+        "SELECT user_id AS userId, function_key AS functionKey, description, granted_at AS grantedAt, granted_by AS grantedBy FROM user_functions ORDER BY user_id, function_key",
+      ).map((r): UserFunctionRow => ({
+        userId: str(r["userId"]),
+        functionKey: str(r["functionKey"]),
+        description: str(r["description"]),
+        grantedAt: str(r["grantedAt"]),
+        grantedBy: nul(r["grantedBy"]),
+      })),
     ]);
     const meta: Record<string, string> = {};
     for (const r of metaRows) meta[str(r["key"])] = str(r["value"]);
@@ -1610,6 +1697,7 @@ export class SqliteStorage implements Storage {
       legalDocs: legalDocs as LegalDoc[],
       resetTokens,
       meta,
+      userFunctions,
     };
   }
   async importDatabase(dump: DatabaseDump): Promise<void> {
@@ -1635,6 +1723,7 @@ export class SqliteStorage implements Storage {
         "next_steps",
         "legal_docs",
         "password_reset_tokens",
+        "user_functions",
         "meta",
       ];
       for (const t of tables) this.db.exec(`DELETE FROM ${t}`);
@@ -1657,6 +1746,14 @@ export class SqliteStorage implements Storage {
       for (const n of dump.nextSteps) await this.insertNextStep(n);
       for (const l of dump.legalDocs) await this.insertLegalDoc(l);
       for (const r of dump.resetTokens) await this.insertResetToken(r);
+      for (const uf of dump.userFunctions ?? [])
+        await this.grantUserFunction(
+          uf.userId,
+          uf.functionKey,
+          uf.description,
+          uf.grantedBy,
+          uf.grantedAt,
+        );
       for (const [k, v] of Object.entries(dump.meta ?? {})) await this.setMeta(k, v);
       this.db.exec("COMMIT");
     } catch (e) {
@@ -1821,6 +1918,7 @@ export class MemoryStorage implements Storage {
   private docs: DocRecord[] = [];
   private invites: InviteRow[] = [];
   private roleFunctions: RoleFunctionRow[] = [];
+  private userFunctions: UserFunctionRow[] = [];
 
   async countUsers() {
     return this.users.length;
@@ -1853,6 +1951,29 @@ export class MemoryStorage implements Storage {
   async deleteRoleFunctions(role: Role): Promise<void> {
     this.roleFunctions = this.roleFunctions.filter((f) => f.role !== role);
   }
+  async listUserFunctions(userId: string): Promise<UserFunctionRow[]> {
+    return this.userFunctions.filter((f) => f.userId === userId);
+  }
+  async grantUserFunction(
+    userId: string,
+    functionKey: string,
+    description: string,
+    grantedBy: string | null,
+    grantedAt = new Date().toISOString(),
+  ): Promise<boolean> {
+    if (this.userFunctions.some((f) => f.userId === userId && f.functionKey === functionKey)) {
+      return false;
+    }
+    this.userFunctions.push({ userId, functionKey, description, grantedAt, grantedBy });
+    return true;
+  }
+  async revokeUserFunction(userId: string, functionKey: string): Promise<boolean> {
+    const before = this.userFunctions.length;
+    this.userFunctions = this.userFunctions.filter(
+      (f) => !(f.userId === userId && f.functionKey === functionKey),
+    );
+    return this.userFunctions.length < before;
+  }
   async insertUser(u: UserRow) {
     this.users.push(u);
   }
@@ -1865,11 +1986,13 @@ export class MemoryStorage implements Storage {
   async deleteUser(id: string) {
     this.users = this.users.filter((u) => u.id !== id);
     this.sessions = this.sessions.filter((s) => s.userId !== id);
+    this.userFunctions = this.userFunctions.filter((f) => f.userId !== id);
   }
   async clearAllUsers() {
     const n = this.users.length;
     this.users = [];
     this.sessions = [];
+    this.userFunctions = [];
     return n;
   }
 
@@ -2228,6 +2351,7 @@ export class MemoryStorage implements Storage {
       legalDocs: [...this.legalDocs],
       resetTokens: [...this.resetTokens],
       meta: Object.fromEntries(this.meta),
+      userFunctions: [...this.userFunctions],
     };
   }
   async importDatabase(dump: DatabaseDump): Promise<void> {
@@ -2250,6 +2374,7 @@ export class MemoryStorage implements Storage {
     this.nextSteps = [...(dump.nextSteps ?? [])];
     this.legalDocs = [...(dump.legalDocs ?? [])];
     this.resetTokens = [...(dump.resetTokens ?? [])];
+    this.userFunctions = [...(dump.userFunctions ?? [])];
     this.meta = new Map(Object.entries(dump.meta ?? {}));
   }
   async getStorageInfo(): Promise<StorageInfo> {
@@ -2328,8 +2453,7 @@ async function seedIfEmpty(storage: Storage): Promise<void> {
     for (const c of controls) await storage.insertControl(c);
   }
   if ((await storage.listModules()).length === 0) {
-    for (const m of modules)
-      await storage.insertModule({ ...m, date: isoFromBrOrText(m.date) });
+    for (const m of modules) await storage.insertModule({ ...m, date: isoFromBrOrText(m.date) });
   }
   if ((await storage.listPatentStages()).length === 0) {
     for (const p of patentStages)
@@ -2376,7 +2500,10 @@ async function seedIfEmpty(storage: Storage): Promise<void> {
   if ((await storage.listAllRoleFunctions()).length === 0) {
     const { roleFunctionsData } = await import("@/lib/rbac");
     for (const role of Object.keys(roleFunctionsData) as Role[]) {
-      await storage.syncRoleFunctions(role, roleFunctionsData[role].map((f) => ({ key: f.key, description: f.description })));
+      await storage.syncRoleFunctions(
+        role,
+        roleFunctionsData[role].map((f) => ({ key: f.key, description: f.description })),
+      );
     }
   }
   await seedDocsIfEmpty(storage);
@@ -2488,19 +2615,45 @@ export function isStoragePersistent(): boolean {
   return activePersistent;
 }
 
+/** Verifica se um diretório é gravável criando (e apagando) um arquivo-sonda. */
+function dirIsWritable(dir: string): boolean {
+  try {
+    mkdirSync(dir, { recursive: true });
+    const probe = join(dir, `.probe_${Date.now()}_${Math.random().toString(36).slice(2)}`);
+    writeFileSync(probe, "x");
+    unlinkSync(probe);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+let resolvedDbPath: string | null = null;
 function resolveDatabasePath(): string {
+  if (resolvedDbPath) return resolvedDbPath;
   const fromEnv =
     typeof process !== "undefined" && process.env
       ? (process.env["DATABASE_PATH"] ?? "").trim()
       : "";
-  if (fromEnv && fromEnv.trim().length > 0) {
-    const trimmed = fromEnv.trim();
-    if (trimmed.startsWith("/")) return trimmed;
-    const root = new URL("../../", import.meta.url).pathname;
-    return root + trimmed;
-  }
   const root = new URL("../../", import.meta.url).pathname;
-  return root + ".data/portal.db";
+  if (fromEnv) {
+    resolvedDbPath = fromEnv.startsWith("/") ? fromEnv : root + fromEnv;
+    return resolvedDbPath;
+  }
+  // Prefere .data junto ao app quando gravável (dev local); senão usa um
+  // diretório efêmero e gravável (ex.: /tmp do Node/Workers), evitando
+  // tentativas contra o bundle (read-only) em runtimes de borda.
+  const dataDir = root + ".data";
+  if (dirIsWritable(dataDir)) {
+    resolvedDbPath = dataDir + "/portal.db";
+    return resolvedDbPath;
+  }
+  try {
+    resolvedDbPath = join(tmpdir(), "portal.db");
+  } catch {
+    resolvedDbPath = dataDir + "/portal.db";
+  }
+  return resolvedDbPath;
 }
 
 export function isRequirePersistent(): boolean {
@@ -2518,6 +2671,26 @@ export function getStorageInitError(): string | null {
   return storageInitError;
 }
 
+/** Detecta se `node:sqlite` está disponível neste runtime. */
+async function sqliteCapable(): Promise<boolean> {
+  try {
+    const mod = (await import("node:sqlite")) as unknown as { DatabaseSync?: unknown };
+    return typeof mod.DatabaseSync === "function";
+  } catch {
+    return false;
+  }
+}
+
+/** Nome legível do runtime, usado nas mensagens de diagnóstico. */
+function runtimeLabel(): string {
+  const g = globalThis as { workerd?: unknown; WebSocketPair?: unknown };
+  if (typeof g.WebSocketPair === "function" || typeof g.workerd === "object")
+    return "Cloudflare Workers";
+  if (typeof process !== "undefined" && process.versions?.node)
+    return `Node ${process.versions.node}`;
+  return "runtime";
+}
+
 /**
  * Retorna o storage do processo:
  * 1. SQLite em arquivo (persistente) quando DATABASE_PATH abre com sucesso;
@@ -2531,48 +2704,52 @@ export function getStorage(): Promise<Storage> {
 }
 
 async function initStorage(): Promise<Storage> {
-  const path = resolveDatabasePath();
-  console.info(`[portal] Caminho do banco: ${path}`);
   const requirePersistent = isRequirePersistent();
-  if (path !== ":memory:") {
-    try {
-      const fileDb = await SqliteStorage.open(path);
-      if (fileDb) {
-        await seedIfEmpty(fileDb);
-        activePersistent = true;
-        storageInitError = null;
-        console.info(`[portal] SQLite persistente em ${path}`);
-        return fileDb;
+  const runtime = runtimeLabel();
+  if (await sqliteCapable()) {
+    const path = resolveDatabasePath();
+    console.info(`[portal] Caminho do banco: ${path}`);
+    if (path !== ":memory:") {
+      try {
+        const fileDb = await SqliteStorage.open(path);
+        if (fileDb) {
+          await seedIfEmpty(fileDb);
+          activePersistent = true;
+          storageInitError = null;
+          console.info(`[portal] SQLite persistente em ${path}`);
+          return fileDb;
+        }
+      } catch (e) {
+        console.error(`[portal] Falha ao abrir SQLite em ${path}:`, e);
       }
-    } catch (e) {
-      console.error(`[portal] Falha ao abrir SQLite em ${path}:`, e);
-    }
-    if (requirePersistent) {
-      storageInitError = `STORAGE_REQUIRE_PERSISTENT=1 mas não foi possível abrir SQLite em ${path}. Verifique DATABASE_PATH e permissões de disco.`;
+      if (requirePersistent) {
+        storageInitError = `STORAGE_REQUIRE_PERSISTENT=1 mas não foi possível abrir SQLite em ${path}. Verifique DATABASE_PATH e permissões de disco.`;
+        console.error(`[portal] ${storageInitError}`);
+        throw new Error(storageInitError);
+      }
+      console.warn(`[portal] Falha ao abrir SQLite em ${path}, caindo para memória.`);
+    } else if (requirePersistent) {
+      storageInitError = `STORAGE_REQUIRE_PERSISTENT=1 mas DATABASE_PATH=:memory:. Configure um caminho persistente.`;
       console.error(`[portal] ${storageInitError}`);
       throw new Error(storageInitError);
     }
-    console.warn(`[portal] Falha ao abrir SQLite em ${path}, caindo para memória.`);
-  } else if (requirePersistent) {
-    storageInitError = `STORAGE_REQUIRE_PERSISTENT=1 mas DATABASE_PATH=:memory:. Configure um caminho persistente.`;
-    console.error(`[portal] ${storageInitError}`);
-    throw new Error(storageInitError);
-  }
-  const memorySqlite = await SqliteStorage.open(":memory:");
-  if (memorySqlite) {
-    await seedIfEmpty(memorySqlite);
-    activePersistent = false;
-    if (!storageInitError)
+    const memorySqlite = await SqliteStorage.open(":memory:");
+    if (memorySqlite) {
+      await seedIfEmpty(memorySqlite);
+      activePersistent = false;
       storageInitError =
-        "Armazenamento em memória (volátil): os dados serão perdidos a cada reinício. Configure DATABASE_PATH persistente.";
+        "Falha ao abrir SQLite em arquivo; usando armazenamento em memória (volátil).";
+      console.warn(`[portal] ${storageInitError}`);
+      return memorySqlite;
+    }
+  } else {
+    storageInitError = `node:sqlite indisponível neste runtime (${runtime}): armazenamento em memória (não persistente).`;
     console.warn(`[portal] ${storageInitError}`);
-    return memorySqlite;
   }
   const fallback = new MemoryStorage();
   await seedIfEmpty(fallback);
   activePersistent = false;
-  if (!storageInitError)
-    storageInitError = "node:sqlite indisponível: armazenamento em memória (não persistente).";
+  if (!storageInitError) storageInitError = "Armazenamento em memória (não persistente).";
   console.warn(`[portal] ${storageInitError}`);
   return fallback;
 }

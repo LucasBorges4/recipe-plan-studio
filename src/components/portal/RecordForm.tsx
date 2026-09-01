@@ -18,7 +18,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { saveRecordFn, deleteRecordFn } from "@/lib/portal-api";
 import { qk, useSession } from "@/lib/api-hooks";
-import { can } from "@/lib/rbac";
+import { userCan } from "@/lib/rbac";
 import { docKindLabel, type DocKind } from "@/lib/doc-schemas";
 
 /**
@@ -38,7 +38,7 @@ type Values = Record<string, unknown>;
 
 export function useCanManageRecords() {
   const { data: session } = useSession();
-  return !!session?.user && can(session.user.role, "record.manage");
+  return !!session?.user && userCan(session.user, "record.manage");
 }
 
 function initialValues(fields: FieldDef[], initial?: Values): Values {
@@ -313,7 +313,8 @@ export function DeleteRecordButton({ id, label }: { id: string; label: string })
       aria-label={`Excluir ${label}`}
       disabled={remove.isPending}
       onClick={() => {
-        if (confirm(`Excluir "${label}"? A exclusão fica registrada na auditoria.`)) remove.mutate();
+        if (confirm(`Excluir "${label}"? A exclusão fica registrada na auditoria.`))
+          remove.mutate();
       }}
     >
       <Trash2 className="size-4 text-destructive" />

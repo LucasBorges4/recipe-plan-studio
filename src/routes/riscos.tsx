@@ -7,7 +7,7 @@ import { PageHeader } from "@/components/portal/PageHeader";
 import { NoticeBanner } from "@/components/portal/NoticeBanner";
 import { StatusBadge } from "@/components/portal/StatusBadge";
 import { severityLabel, severityTone } from "@/lib/portal-utils";
-import { can, roleLabel, roles } from "@/lib/rbac";
+import { userCan, roleLabel, roles } from "@/lib/rbac";
 import type { Role } from "@/lib/rbac";
 import { usePortalData, useSession, qk } from "@/lib/api-hooks";
 import { createRiskFn, deleteRiskFn } from "@/lib/portal-api";
@@ -46,8 +46,9 @@ function RiscosPage() {
   const { data: state } = usePortalData();
   const { data: session } = useSession();
   const risks = state?.risks ?? [];
-  const mayManage = !!session?.user && can(session.user.role, "risk.manage");
-  const isSuperior = !!session?.user && (session.user.role === "admin" || session.user.role === "diretor");
+  const mayManage = !!session?.user && userCan(session.user, "risk.manage");
+  const isSuperior =
+    !!session?.user && (session.user.role === "admin" || session.user.role === "diretor");
   const isEmpty = risks.length === 0;
   const [cell, setCell] = useState<{ p: number; i: number } | null>(null);
   const [roleFilter, setRoleFilter] = useState<Role | "Todas">("Todas");
@@ -57,8 +58,11 @@ function RiscosPage() {
   const [owner, setOwner] = useState("");
   const [newRole, setNewRole] = useState<Role>(session?.user?.role ?? "gestor");
   const [mitigation, setMitigation] = useState("");
-  const filteredByRole = roleFilter === "Todas" ? risks : risks.filter((r) => r.role === roleFilter);
-  const list = cell ? filteredByRole.filter((r) => r.probability === cell.p && r.impact === cell.i) : filteredByRole;
+  const filteredByRole =
+    roleFilter === "Todas" ? risks : risks.filter((r) => r.role === roleFilter);
+  const list = cell
+    ? filteredByRole.filter((r) => r.probability === cell.p && r.impact === cell.i)
+    : filteredByRole;
   const byRole = (() => {
     const m = new Map<string, number>();
     for (const r of risks) m.set(r.role, (m.get(r.role) ?? 0) + 1);
@@ -187,12 +191,18 @@ function RiscosPage() {
           ))}
         </select>
         {byRole.map(([role, count]) => (
-          <span key={role} className="rounded-full border border-border bg-card px-3 py-1 text-xs text-muted-foreground">
-            {roleLabel[role as Role] ?? role}: <span className="font-semibold text-foreground">{count}</span>
+          <span
+            key={role}
+            className="rounded-full border border-border bg-card px-3 py-1 text-xs text-muted-foreground"
+          >
+            {roleLabel[role as Role] ?? role}:{" "}
+            <span className="font-semibold text-foreground">{count}</span>
           </span>
         ))}
         {!isSuperior && session?.user ? (
-          <span className="rounded-full bg-brand/10 px-3 py-1 text-xs text-brand">Sua visão: {roleLabel[session.user.role]}</span>
+          <span className="rounded-full bg-brand/10 px-3 py-1 text-xs text-brand">
+            Sua visão: {roleLabel[session.user.role]}
+          </span>
         ) : null}
       </div>
 
@@ -212,7 +222,9 @@ function RiscosPage() {
                 {[5, 4, 3, 2, 1].map((p) =>
                   [1, 2, 3, 4, 5].map((i) => {
                     const score = p * i;
-                    const inCell = filteredByRole.filter((r) => r.probability === p && r.impact === i);
+                    const inCell = filteredByRole.filter(
+                      (r) => r.probability === p && r.impact === i,
+                    );
                     const selected = cell?.p === p && cell?.i === i;
                     return (
                       <button
@@ -275,7 +287,8 @@ function RiscosPage() {
                   </span>
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  {r.category} · Dono: {r.owner} · Papel: {roleLabel[r.role as Role] ?? r.role} · P{r.probability} x I{r.impact}
+                  {r.category} · Dono: {r.owner} · Papel: {roleLabel[r.role as Role] ?? r.role} · P
+                  {r.probability} x I{r.impact}
                 </p>
                 <p className="mt-2 text-sm text-muted-foreground">
                   <span className="font-medium text-foreground">Mitigação: </span>
