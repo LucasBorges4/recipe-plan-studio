@@ -2493,15 +2493,12 @@ function resolveDatabasePath(): string {
     typeof process !== "undefined" && process.env
       ? (process.env["DATABASE_PATH"] ?? "").trim()
       : "";
-  if (fromEnv && fromEnv.trim().length > 0) {
-    const trimmed = fromEnv.trim();
-    if (trimmed.startsWith("/")) return trimmed;
-    const root = new URL("../../", import.meta.url).pathname;
-    return root + trimmed;
-  }
-  const root = new URL("../../", import.meta.url).pathname;
-  return root + ".data/portal.db";
+  // Nunca use `import.meta.url` aqui: no runtime edge (workerd) ele pode não ser
+  // uma URL válida e `new URL(...)` lança "Invalid URL string.", derrubando o SSR.
+  if (fromEnv.length > 0) return fromEnv;
+  return ".data/portal.db";
 }
+
 
 export function isRequirePersistent(): boolean {
   const v =
