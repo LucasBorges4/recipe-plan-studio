@@ -2502,6 +2502,13 @@ export function isStoragePersistent(): boolean {
   return activePersistent;
 }
 
+/** Torna o caminho absoluto sem usar `import.meta.url` (inválido no runtime edge). */
+function toAbsolute(p: string): string {
+  if (p === ":memory:" || p.startsWith("/")) return p;
+  const cwd = typeof process !== "undefined" && process.cwd ? process.cwd() : "";
+  return cwd ? `${cwd.replace(/\/$/, "")}/${p.replace(/^\.\//, "")}` : p;
+}
+
 function resolveDatabasePath(): string {
   const fromEnv =
     typeof process !== "undefined" && process.env
@@ -2509,9 +2516,32 @@ function resolveDatabasePath(): string {
       : "";
   // Nunca use `import.meta.url` aqui: no runtime edge (workerd) ele pode não ser
   // uma URL válida e `new URL(...)` lança "Invalid URL string.", derrubando o SSR.
-  if (fromEnv.length > 0) return fromEnv;
-  return ".data/portal.db";
+  if (fromEnv.length > 0) return toAbsolute(fromEnv);
+  return activeDatabasePath ?? toAbsolute(".data/portal.db");
 }
+
+/** Caminho realmente aberto pelo storage (preenchido em `initStorage`). */
+let activeDatabasePath: string | null = null;
+
+export function getActiveDatabasePath(): string | null {
+  return activeDatabasePath;
+}
+
+/** Candidatos persistentes, em ordem de preferência. */
+function candidateDatabasePaths(): string[] {
+  const fromEnv =
+    typeof process !== "undefined" && process.env
+      ? (process.env["DATABASE_PATH"] ?? "").trim()
+      : "";
+  const list: string[] = [];
+  if (fromEnv.length > 0) list.push(toAbsolute(fromEnv));
+  if (fromEnv !== ":memory:") {
+    list.push(toAbsolute(".data/portal.db"));
+    list.push("/tmp/portal.db");
+  }
+  return list.filter((p, i) => p !== ":memory:" && list.indexOf(p) === i);
+}
+
 
 
 export function isRequirePersistent(): boolean {
