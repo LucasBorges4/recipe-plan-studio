@@ -28,21 +28,21 @@ export function NoticeBanner({ children }: { children?: React.ReactNode }) {
         <p className="flex items-center gap-1.5 font-medium">
           <HardDrive className="size-3.5" /> Armazenamento em memória (não persistente)
         </p>
-        {storagePath ? (
-          <p className="mt-0.5 font-mono text-[11px] opacity-80">{storagePath}</p>
-        ) : null}
         <p className="mt-1.5 text-xs leading-relaxed">
-          Os dados escritos aqui não sobrevivem a reinícios nem deploys neste ambiente.
-          <br />
-          Em execução local, instale um Node com <span className="font-mono">node:sqlite</span> ou
-          defina <span className="font-mono">DATABASE_PATH</span> para persistir. No deploy, baixe
-          um backup em Administração → Validação e restaure após novos deploys.
+          Este ambiente não oferece um banco persistente ({" "}
+          <span className="font-mono">node:sqlite</span> indisponível no runtime de preview), então
+          os dados escritos aqui são perdidos a cada reinício ou novo deploy.
         </p>
-        {storageInitError ? (
-          <p className="mt-2 border-t border-warning/20 pt-2 text-[11px] opacity-80">
-            {storageInitError}
-          </p>
-        ) : null}
+        <ul className="mt-2 list-disc space-y-1 pl-4 text-xs leading-relaxed">
+          <li>
+            Para dados duradouros, rode localmente (<span className="font-mono">npm run dev</span>)
+            — usa SQLite em <span className="font-mono">.data/portal.db</span>.
+          </li>
+          <li>
+            Neste preview, baixe um backup em Administração → Validação e restaure após cada novo
+            deploy.
+          </li>
+        </ul>
       </div>
     </div>
   );

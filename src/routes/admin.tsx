@@ -867,7 +867,7 @@ function AdminPage() {
                   <p className="text-sm font-medium text-foreground">Persistência ativa</p>
                   <p className="text-xs text-muted-foreground">
                     {state?.persistent ? "SQLite em disco" : "Modo memória — dados voláteis"}
-                    {state?.storagePath ? ` (${state.storagePath})` : ""}
+                    {state?.persistent && state?.storagePath ? ` (${state.storagePath})` : ""}
                   </p>
                 </div>
                 <StatusBadge tone={state?.persistent ? "success" : "danger"}>
