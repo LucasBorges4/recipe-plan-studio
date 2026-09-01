@@ -2328,10 +2328,12 @@ async function seedIfEmpty(storage: Storage): Promise<void> {
     for (const c of controls) await storage.insertControl(c);
   }
   if ((await storage.listModules()).length === 0) {
-    for (const m of modules) await storage.insertModule(m);
+    for (const m of modules)
+      await storage.insertModule({ ...m, date: isoFromBrOrText(m.date) });
   }
   if ((await storage.listPatentStages()).length === 0) {
-    for (const p of patentStages) await storage.insertPatentStage(p);
+    for (const p of patentStages)
+      await storage.insertPatentStage({ ...p, deadline: isoFromBrOrText(p.deadline) });
   }
   if ((await storage.listWiki()).length === 0) {
     for (const w of wikiArticles) await storage.insertWiki(w);
@@ -2436,7 +2438,7 @@ async function seedDocsIfEmpty(storage: Storage): Promise<void> {
   }
   for (const t of stack) await put("tech", { ...t });
   for (const s of patentStages) {
-    const { id: _id, ...rest } = s;
+    const { id: _id, ...rest } = { ...s, deadline: isoFromBrOrText(s.deadline) };
     await put("patent", { ...rest });
   }
   for (const a of wikiArticles) await put("wiki", { ...a });

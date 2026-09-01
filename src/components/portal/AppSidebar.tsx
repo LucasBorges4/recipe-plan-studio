@@ -16,6 +16,7 @@ import {
   ScrollText,
   Bot,
   X,
+  Search,
 } from "lucide-react";
 import { useState } from "react";
 import { useQueryClient, useMutation } from "@tanstack/react-query";
@@ -23,6 +24,7 @@ import { toast } from "sonner";
 import { LogOut, LogIn } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { roleLabel } from "@/lib/rbac";
+import { useGlobalSearch } from "@/lib/api-hooks";
 import { useSession, qk } from "@/lib/api-hooks";
 import { logoutFn } from "@/lib/portal-api";
 
@@ -161,6 +163,8 @@ function Brand() {
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const search = useGlobalSearch(searchQuery);
 
   return (
     <div className="flex min-h-screen bg-surface">
@@ -204,6 +208,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           >
             <PanelLeft className="size-4" />
           </button>
+          <div className="relative flex-1 max-w-sm">
+            <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Pesquisar…"
+              className="w-full rounded-md border border-input bg-background pl-8 pr-3 py-1.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-brand"
+            />
+          </div>
         </header>
         <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 lg:px-8 lg:py-10">
           {children}

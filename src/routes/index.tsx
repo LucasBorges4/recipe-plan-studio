@@ -169,7 +169,7 @@ function Index() {
                           <StatusBadge tone={m.tone}>{m.status}</StatusBadge>
                         </span>
                         <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                          <Calendar className="size-3" /> {m.date}
+                          <Calendar className="size-3" /> {formatBR(m.date)}
                         </span>
                       </span>
                       <span className="flex w-40 items-center gap-2">

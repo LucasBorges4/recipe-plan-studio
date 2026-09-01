@@ -892,7 +892,7 @@ export const addModuleFn = createServerFn({ method: "POST" })
         name: data.name,
         status: "Aguardando início",
         tone: "neutral",
-        date: fmtBR(new Date()),
+        date: new Date().toISOString().slice(0, 10),
         done: 0,
         total: 0,
       });
@@ -1629,6 +1629,91 @@ export const getN8nInfoFn = createServerFn({ method: "GET" }).handler(
   },
 );
 
+export const listN8nWorkflowsFn = createServerFn({ method: "GET" }).handler(
+  async (): Promise<ApiResult<import("@/server/n8n").N8nWorkflow[]>> => {
+    try {
+      const { listN8nWorkflows } = await import("@/server/n8n");
+      return { ok: true, data: await listN8nWorkflows() };
+    } catch (e) {
+      return { ok: false, error: errorMsg(e) };
+    }
+  },
+);
+
+export const getN8nWorkflowFn = createServerFn({ method: "GET" })
+  .validator(z.object({ id: z.coerce.number().min(1) }).strict())
+  .handler(async ({ data }): Promise<ApiResult<import("@/server/n8n").N8nWorkflow>> => {
+    try {
+      const { getN8nWorkflow } = await import("@/server/n8n");
+      return { ok: true, data: await getN8nWorkflow(data.id) };
+    } catch (e) {
+      return { ok: false, error: errorMsg(e) };
+    }
+  },
+);
+
+export const createN8nWorkflowFn = createServerFn({ method: "POST" })
+  .validator(
+    z.object({
+      name: z.string().trim().min(1).max(120),
+      nodes: z.any().optional(),
+      connections: z.any().optional(),
+      active: z.boolean().optional(),
+    }).strict(),
+  )
+  .handler(async ({ data }): Promise<ApiResult<import("@/server/n8n").N8nWorkflow>> => {
+    try {
+      const { createN8nWorkflow, n8nApiKey } = await import("@/server/n8n");
+      if (!n8nApiKey()) return { ok: false, error: "N8N_API_KEY não configurada." };
+      const payload: import("@/server/n8n").N8nWorkflowCreatePayload = { name: data.name };
+      if (data.nodes !== undefined) payload.nodes = data.nodes;
+      if (data.connections !== undefined) payload.connections = data.connections;
+      if (data.active !== undefined) payload.active = data.active;
+      return { ok: true, data: await createN8nWorkflow(payload) };
+    } catch (e) {
+      return { ok: false, error: errorMsg(e) };
+    }
+  },
+);
+
+export const updateN8nWorkflowFn = createServerFn({ method: "POST" })
+  .validator(
+    z.object({
+      id: z.coerce.number().min(1),
+      name: z.string().trim().min(1).max(120),
+      nodes: z.any().optional(),
+      connections: z.any().optional(),
+      active: z.boolean().optional(),
+    }).strict(),
+  )
+  .handler(async ({ data }): Promise<ApiResult<import("@/server/n8n").N8nWorkflow>> => {
+    try {
+      const { updateN8nWorkflow, n8nApiKey } = await import("@/server/n8n");
+      if (!n8nApiKey()) return { ok: false, error: "N8N_API_KEY não configurada." };
+      const payload: import("@/server/n8n").N8nWorkflowCreatePayload = { name: data.name };
+      if (data.nodes !== undefined) payload.nodes = data.nodes;
+      if (data.connections !== undefined) payload.connections = data.connections;
+      if (data.active !== undefined) payload.active = data.active;
+      return { ok: true, data: await updateN8nWorkflow(data.id, payload) };
+    } catch (e) {
+      return { ok: false, error: errorMsg(e) };
+    }
+  },
+);
+
+export const deleteN8nWorkflowFn = createServerFn({ method: "POST" })
+  .validator(z.object({ id: z.coerce.number().min(1) }).strict())
+  .handler(async ({ data }): Promise<ApiResult<null>> => {
+    try {
+      const { deleteN8nWorkflow } = await import("@/server/n8n");
+      await deleteN8nWorkflow(data.id);
+      return { ok: true, data: null };
+    } catch (e) {
+      return { ok: false, error: errorMsg(e) };
+    }
+  },
+);
+
 export const listAutomationSharesFn = createServerFn({ method: "GET" }).handler(
   async (): Promise<ApiResult<import("@/server/storage").AutomationShare[]>> => {
     try {
@@ -1717,8 +1802,10 @@ export const provisionN8nUserFn = createServerFn({ method: "POST" }).handler(
     try {
       const c = await ctx();
       const user = await c.auth.requireUser(c.storage);
-      const { n8nPublicUrl } = await import("@/server/n8n");
-      return { ok: true, data: { n8nUrl: n8nPublicUrl(), message: `Login n8n use o mesmo e-mail: ${user.email} (crie a conta no n8n na primeira vez)` } };
+      const { n8nPublicUrl, provisionN8nUser } = await import("@/server/n8n");
+      const password = "Temp12345!";
+      const n8nUser = await provisionN8nUser(user.email, user.name, password);
+      return { ok: true, data: { n8nUrl: n8nPublicUrl(), message: `Usuário criado no n8n: ${n8nUser.email} (role: ${n8nUser.role}). Senha temporária: ${password}` } };
     } catch (e) {
       return { ok: false, error: errorMsg(e) };
     }

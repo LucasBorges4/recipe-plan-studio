@@ -6,10 +6,9 @@ import { PageHeader } from "@/components/portal/PageHeader";
 import { NoticeBanner } from "@/components/portal/NoticeBanner";
 import { StatusBadge } from "@/components/portal/StatusBadge";
 import { Initials } from "@/components/portal/ProgressBar";
-import { termsDoc, lgpdDoc } from "@/data/legal";
+import { useAdminUsers, usePortalData, useRoleFunctions, useSession, qk, useInvites } from "@/lib/api-hooks";
 import { roles, roleLabel } from "@/lib/rbac";
 import type { Role } from "@/lib/rbac";
-import { useAdminUsers, usePortalData, useSession, useRoleFunctions, qk } from "@/lib/api-hooks";
 import {
   setUserRoleFn,
   deleteUserFn,
@@ -142,6 +141,8 @@ function AdminPage() {
   const { data: usersRes } = useAdminUsers(isAdmin);
   const users = usersRes?.ok ? usersRes.data : [];
   const { data: state } = usePortalData();
+  const { data: invitesRes } = useInvites();
+  const invites = invitesRes?.ok ? invitesRes.data : [];
   const mods = state?.modules ?? [];
   const cols = state?.columns ?? [];
 
@@ -269,6 +270,8 @@ function AdminPage() {
         {persistent
           ? " e persistem entre reinicializações."
           : ", mas neste modo o armazenamento é em memória e reinicia a cada instância."}
+        {state?.storagePath ? ` Caminho: ${state.storagePath}` : ""}
+        {state?.storageInitError ? ` Erro: ${state.storageInitError}` : ""}
       </NoticeBanner>
 
       <div className="mb-6 flex items-start gap-3 rounded-lg border border-warning/25 bg-warning-soft px-4 py-3 text-sm text-warning">
@@ -286,8 +289,9 @@ function AdminPage() {
           <TabsTrigger value="modulos">Módulos</TabsTrigger>
           <TabsTrigger value="board">Colunas do board</TabsTrigger>
           <TabsTrigger value="docs">Documentos</TabsTrigger>
-          <TabsTrigger value="perfis">Perfis & funções</TabsTrigger>
-          <TabsTrigger value="perigo">Perigo</TabsTrigger>
+           <TabsTrigger value="perfis">Perfis & funções</TabsTrigger>
+           <TabsTrigger value="validacao">Validação</TabsTrigger>
+           <TabsTrigger value="perigo">Perigo</TabsTrigger>
         </TabsList>
 
         <TabsContent value="usuarios" className="mt-4">
@@ -464,8 +468,8 @@ function AdminPage() {
 
         <TabsContent value="docs" className="mt-4">
           <ul className="grid gap-4 md:grid-cols-2">
-            {[termsDoc, lgpdDoc].map((d) => (
-              <li key={d.title} className="rounded-xl border border-border bg-card p-5">
+            {(state?.legalDocs ?? []).map((d) => (
+              <li key={d.id} className="rounded-xl border border-border bg-card p-5">
                 <div className="flex items-center justify-between">
                   <p className="text-sm font-semibold text-foreground">{d.title}</p>
                   <StatusBadge tone="success">{d.version}</StatusBadge>
@@ -529,6 +533,68 @@ function AdminPage() {
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="validacao" className="mt-4">
+          <div className="rounded-xl border border-border bg-card p-6">
+            <h2 className="text-sm font-semibold text-foreground">Checklist de entrega</h2>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Valide os pré-requisitos antes da implantação.
+            </p>
+            <ul className="mt-4 space-y-3">
+              <li className="flex items-center justify-between rounded-lg border border-border bg-surface px-4 py-3">
+                <div>
+                  <p className="text-sm font-medium text-foreground">Persistência ativa</p>
+                  <p className="text-xs text-muted-foreground">
+                    {state?.persistent ? "SQLite em disco" : "Modo memória — dados voláteis"}
+                    {state?.storagePath ? ` (${state.storagePath})` : ""}
+                  </p>
+                </div>
+                <StatusBadge tone={state?.persistent ? "success" : "danger"}>
+                  {state?.persistent ? "OK" : "Atenção"}
+                </StatusBadge>
+              </li>
+              <li className="flex items-center justify-between rounded-lg border border-border bg-surface px-4 py-3">
+                <div>
+                  <p className="text-sm font-medium text-foreground">Administrador criado</p>
+                  <p className="text-xs text-muted-foreground">
+                    {(users as Array<{ role: string }>).filter((u) => u.role === "admin").length} admin(s) encontrado(s)
+                  </p>
+                </div>
+                <StatusBadge tone={(users as Array<{ role: string }>).some((u) => u.role === "admin") ? "success" : "danger"}>
+                  {(users as Array<{ role: string }>).some((u) => u.role === "admin") ? "OK" : "Faltando"}
+                </StatusBadge>
+              </li>
+              <li className="flex items-center justify-between rounded-lg border border-border bg-surface px-4 py-3">
+                <div>
+                  <p className="text-sm font-medium text-foreground">Documentos publicados</p>
+                  <p className="text-xs text-muted-foreground">
+                    {state?.legalDocs?.filter((d) => d.slug === "termos" || d.slug === "lgpd").length ?? 0} de 2
+                  </p>
+                </div>
+                <StatusBadge
+                  tone={
+                    (state?.legalDocs?.filter((d) => d.slug === "termos" || d.slug === "lgpd").length ?? 0) >= 2
+                      ? "success"
+                      : "warning"
+                  }
+                >
+                  {(state?.legalDocs?.filter((d) => d.slug === "termos" || d.slug === "lgpd").length ?? 0) >= 2 ? "OK" : "Incompleto"}
+                </StatusBadge>
+              </li>
+              <li className="flex items-center justify-between rounded-lg border border-border bg-surface px-4 py-3">
+                <div>
+                  <p className="text-sm font-medium text-foreground">Convites ativos</p>
+                  <p className="text-xs text-muted-foreground">
+                    {invites.filter((i) => i.status === "Pendente").length} pendente(s)
+                  </p>
+                </div>
+                <StatusBadge tone={invites.some((i) => i.status === "Pendente") ? "success" : "neutral"}>
+                  {invites.some((i) => i.status === "Pendente") ? "OK" : "Sem convites"}
+                </StatusBadge>
+              </li>
+            </ul>
           </div>
         </TabsContent>
       </Tabs>

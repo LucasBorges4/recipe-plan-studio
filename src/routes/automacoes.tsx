@@ -6,7 +6,8 @@ import { PageHeader } from "@/components/portal/PageHeader";
 import { useSession } from "@/lib/api-hooks";
 import { roles, roleLabel, can } from "@/lib/rbac";
 import type { Role } from "@/lib/rbac";
-import { getN8nInfoFn, listAutomationSharesFn, upsertAutomationShareFn, deleteAutomationShareFn, provisionN8nUserFn } from "@/lib/portal-api";
+import { getN8nInfoFn, listAutomationSharesFn, upsertAutomationShareFn, deleteAutomationShareFn, provisionN8nUserFn, createN8nWorkflowFn, deleteN8nWorkflowFn, listN8nWorkflowsFn } from "@/lib/portal-api";
+import type { N8nWorkflow } from "@/server/n8n";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 
@@ -37,12 +38,41 @@ function AutomacoesPage() {
   const [wfName, setWfName] = useState("");
   const [sharedRole, setSharedRole] = useState<string>("");
   const [isPrivate, setIsPrivate] = useState(true);
+  const [newWfName, setNewWfName] = useState("");
+
+  const { data: n8nWorkflows, isLoading: workflowsLoading } = useQuery({
+    queryKey: ["n8n-workflows"],
+    queryFn: () => listN8nWorkflowsFn(),
+    enabled: !!user,
+    staleTime: 30_000,
+  });
+  const workflows: N8nWorkflow[] = (n8nWorkflows?.ok ? n8nWorkflows.data : []) ?? [];
+
+  const createWfM = useMutation({
+    mutationFn: (name: string) => createN8nWorkflowFn({ data: { name } }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["n8n-workflows"] });
+      toast.success("Workflow criado no n8n.");
+      setNewWfName("");
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao criar workflow."),
+  });
+
+  const deleteWfM = useMutation({
+    mutationFn: (id: number) => deleteN8nWorkflowFn({ data: { id } }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["n8n-workflows"] });
+      toast.success("Workflow removido do n8n.");
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao remover workflow."),
+  });
 
   const upsertM = useMutation({
     mutationFn: (v: { workflowId: string; workflowName: string; sharedRole: Role | null; isPrivate: boolean }) =>
       upsertAutomationShareFn({ data: v as never }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["automation-shares"] });
+      qc.invalidateQueries({ queryKey: ["n8n-workflows"] });
       toast.success("Automação salva.");
       setWfId(""); setWfName("");
     },
@@ -51,7 +81,7 @@ function AutomacoesPage() {
 
   const deleteM = useMutation({
     mutationFn: (v: { id: string }) => deleteAutomationShareFn({ data: v }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["automation-shares"] }); toast.success("Removida."); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["automation-shares"] }); qc.invalidateQueries({ queryKey: ["n8n-workflows"] }); toast.success("Removida."); },
   });
 
   const provisionM = useMutation({
@@ -158,10 +188,50 @@ function AutomacoesPage() {
 
       {canCreate && (
         <div className="mt-6 rounded-xl border border-border bg-card p-4">
+          <h3 className="flex items-center gap-2 text-sm font-semibold"><Bot className="size-4" /> Gerenciar workflows no n8n</h3>
+          <p className="mt-1 text-xs text-muted-foreground">Crie e gerencie workflows diretamente pela API do n8n. Criar um workflow também o registra automaticamente para compartilhamento.</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <input value={newWfName} onChange={(e) => setNewWfName(e.target.value)} placeholder="Nome do novo workflow" className="min-w-40 flex-1 rounded-md border border-input bg-card px-3 py-2 text-xs" />
+            <button
+              disabled={!newWfName.trim() || createWfM.isPending}
+              onClick={() => createWfM.mutate(newWfName.trim())}
+              className="rounded-md bg-brand px-4 py-2 text-xs font-medium text-brand-foreground disabled:opacity-50"
+            >
+              {createWfM.isPending ? "Criando..." : "Criar no n8n"}
+            </button>
+          </div>
+          {workflowsLoading ? (
+            <p className="mt-2 text-xs text-muted-foreground">Carregando workflows...</p>
+          ) : workflows.length === 0 ? (
+            <p className="mt-2 text-xs text-muted-foreground">Nenhum workflow encontrado no n8n.</p>
+          ) : (
+            <div className="mt-3 grid gap-2">
+              {workflows.map((wf) => (
+                <div key={wf.id} className="flex items-center justify-between rounded-lg border border-border px-3 py-2">
+                  <div>
+                    <p className="text-sm font-medium">{wf.name} <span className="text-xs text-muted-foreground">(ID: {wf.id})</span></p>
+                    <p className="text-xs text-muted-foreground">{wf.active ? "Ativo" : "Inativo"} · {wf.nodes.length} nó(s)</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <a href={`${n8nUrl}/workflow/${wf.id}`} target="_blank" rel="noopener noreferrer" className="text-xs text-brand hover:underline">Abrir</a>
+                    {(isSuperior || String(wf.userId) === user?.id) && (
+                      <button onClick={() => deleteWfM.mutate(wf.id)} disabled={deleteWfM.isPending} className="text-muted-foreground hover:text-danger disabled:opacity-50"><Trash2 className="size-4" /></button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          <hr className="my-4 border-border" />
           <h3 className="flex items-center gap-2 text-sm font-semibold"><Lock className="size-4" /> Registrar / compartilhar automação</h3>
           <p className="mt-1 text-xs text-muted-foreground">Após criar o workflow no n8n, registre-o aqui para gerir a visibilidade. Apenas você (dono) e roles superiores podem alterar. Privado = só você vê.</p>
           <div className="mt-3 flex flex-wrap gap-2">
-            <input value={wfId} onChange={(e) => setWfId(e.target.value)} placeholder="Workflow ID (ex: 1 ou hash do n8n)" className="min-w-40 flex-1 rounded-md border border-input bg-card px-3 py-2 text-xs" />
+            <select value={wfId} onChange={(e) => setWfId(e.target.value)} className="min-w-40 flex-1 rounded-md border border-input bg-card px-3 py-2 text-xs">
+              <option value="">-- selecione um workflow --</option>
+              {workflows.map((wf) => (
+                <option key={wf.id} value={wf.id}>{wf.name} (ID: {wf.id})</option>
+              ))}
+            </select>
             <input value={wfName} onChange={(e) => setWfName(e.target.value)} placeholder="Nome do workflow" className="min-w-40 flex-1 rounded-md border border-input bg-card px-3 py-2 text-xs" />
             <select value={sharedRole} onChange={(e) => setSharedRole(e.target.value)} className="rounded-md border border-input bg-card px-3 py-2 text-xs">
               <option value="">-- visibilidade --</option>
@@ -172,10 +242,10 @@ function AutomacoesPage() {
               <input type="checkbox" checked={isPrivate} onChange={(e) => setIsPrivate(e.target.checked)} /> Privado
             </label>
             <button
-              disabled={!wfId.trim() || !wfName.trim() || upsertM.isPending}
+              disabled={!wfId || !wfName.trim() || upsertM.isPending}
               onClick={() => {
                 const sr = sharedRole === "__public" ? null : (sharedRole as Role | null);
-                upsertM.mutate({ workflowId: wfId.trim(), workflowName: wfName.trim(), sharedRole: isPrivate ? null : sr, isPrivate });
+                upsertM.mutate({ workflowId: wfId, workflowName: wfName.trim(), sharedRole: isPrivate ? null : sr, isPrivate });
               }}
               className="rounded-md bg-brand px-4 py-2 text-xs font-medium text-brand-foreground disabled:opacity-50"
             >

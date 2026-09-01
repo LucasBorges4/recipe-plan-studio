@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import {
   listPublicUsersFn,
   meFn,
@@ -7,9 +7,16 @@ import {
   listUsersFn,
   taskHistoryFn,
   listRoleFunctionsFn,
+  listN8nWorkflowsFn,
+  getN8nWorkflowFn,
+  listUserSessionsFn,
+  revokeAllSessionsFn,
+  globalSearchFn,
+  listInvitesFn,
 } from "@/lib/portal-api";
 import type { PublicUser } from "@/lib/rbac";
 import type { AuditEntry, PortalStatePayload } from "@/lib/records";
+import type { N8nWorkflow } from "@/server/n8n";
 
 /** Chaves de cache compartilhadas entre loader e componentes. */
 export const qk = {
@@ -81,4 +88,57 @@ export function useRoleFunctions() {
   });
 }
 
-export type { AuditEntry, PortalStatePayload };
+export function useN8nWorkflows() {
+  return useQuery({
+    queryKey: ["n8n-workflows"] as const,
+    queryFn: () => listN8nWorkflowsFn(),
+    staleTime: 30_000,
+  });
+}
+
+export function useN8nWorkflow(id: number | undefined) {
+  return useQuery({
+    queryKey: ["n8n-workflow", id] as const,
+    queryFn: () => getN8nWorkflowFn({ data: { id: id! } }),
+    enabled: !!id,
+    staleTime: 30_000,
+  });
+}
+
+export function useUserSessions() {
+  return useQuery({
+    queryKey: ["user-sessions"] as const,
+    queryFn: () => listUserSessionsFn(),
+    staleTime: 30_000,
+  });
+}
+
+export function useRevokeSessions() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => revokeAllSessionsFn(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: qk.session });
+      queryClient.invalidateQueries({ queryKey: ["user-sessions"] });
+    },
+  });
+}
+
+export type { AuditEntry, PortalStatePayload, N8nWorkflow };
+
+export function useGlobalSearch(q: string) {
+  return useQuery({
+    queryKey: ["global-search", q] as const,
+    queryFn: () => globalSearchFn({ data: { q } }),
+    enabled: q.length >= 2,
+    staleTime: 15_000,
+  });
+}
+
+export function useInvites() {
+  return useQuery({
+    queryKey: ["invites"] as const,
+    queryFn: () => listInvitesFn(),
+    staleTime: 30_000,
+  });
+}
