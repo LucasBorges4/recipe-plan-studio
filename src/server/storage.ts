@@ -2614,8 +2614,9 @@ async function initStorage(): Promise<Storage> {
   const fallback = new MemoryStorage();
   await seedIfEmpty(fallback);
   activePersistent = false;
-  if (!storageInitError)
-    storageInitError = "node:sqlite indisponível: armazenamento em memória (não persistente).";
+  activeDatabasePath = ":memory:";
+  storageInitError = `node:sqlite indisponível neste runtime: armazenamento em memória (não persistente). Detalhe: ${cause}`;
   console.warn(`[portal] ${storageInitError}`);
+
   return fallback;
 }
