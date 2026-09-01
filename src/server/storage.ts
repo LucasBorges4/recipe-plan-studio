@@ -2572,43 +2572,45 @@ export function getStorage(): Promise<Storage> {
 }
 
 async function initStorage(): Promise<Storage> {
-  const path = resolveDatabasePath();
-  console.info(`[portal] Caminho do banco: ${path}`);
   const requirePersistent = isRequirePersistent();
-  if (path !== ":memory:") {
-    try {
-      const fileDb = await SqliteStorage.open(path);
-      if (fileDb) {
-        await seedIfEmpty(fileDb);
-        activePersistent = true;
-        storageInitError = null;
-        console.info(`[portal] SQLite persistente em ${path}`);
-        return fileDb;
-      }
-    } catch (e) {
-      console.error(`[portal] Falha ao abrir SQLite em ${path}:`, e);
+  const candidates = candidateDatabasePaths();
+  const failures: string[] = [];
+
+  for (const candidate of candidates) {
+    console.info(`[portal] Tentando SQLite em ${candidate}`);
+    const fileDb = await SqliteStorage.open(candidate);
+    if (fileDb) {
+      await seedIfEmpty(fileDb);
+      activePersistent = true;
+      activeDatabasePath = candidate;
+      storageInitError = null;
+      console.info(`[portal] SQLite persistente em ${candidate}`);
+      return fileDb;
     }
-    if (requirePersistent) {
-      storageInitError = `STORAGE_REQUIRE_PERSISTENT=1 mas não foi possível abrir SQLite em ${path}. Verifique DATABASE_PATH e permissões de disco.`;
-      console.error(`[portal] ${storageInitError}`);
-      throw new Error(storageInitError);
-    }
-    console.warn(`[portal] Falha ao abrir SQLite em ${path}, caindo para memória.`);
-  } else if (requirePersistent) {
-    storageInitError = `STORAGE_REQUIRE_PERSISTENT=1 mas DATABASE_PATH=:memory:. Configure um caminho persistente.`;
+    failures.push(`${candidate}: ${SqliteStorage.lastOpenError ?? "erro desconhecido"}`);
+  }
+
+  const cause =
+    failures.length > 0
+      ? failures.join(" | ")
+      : "DATABASE_PATH=:memory: (nenhum caminho persistente configurado)";
+
+  if (requirePersistent) {
+    storageInitError = `STORAGE_REQUIRE_PERSISTENT=1 e nenhum caminho persistente pôde ser aberto — ${cause}`;
     console.error(`[portal] ${storageInitError}`);
     throw new Error(storageInitError);
   }
+
   const memorySqlite = await SqliteStorage.open(":memory:");
   if (memorySqlite) {
     await seedIfEmpty(memorySqlite);
     activePersistent = false;
-    if (!storageInitError)
-      storageInitError =
-        "Armazenamento em memória (volátil): os dados serão perdidos a cada reinício. Configure DATABASE_PATH persistente.";
+    activeDatabasePath = ":memory:";
+    storageInitError = `Armazenamento em memória (volátil): os dados serão perdidos a cada reinício. Causa: ${cause}. Configure DATABASE_PATH para um caminho gravável.`;
     console.warn(`[portal] ${storageInitError}`);
     return memorySqlite;
   }
+
   const fallback = new MemoryStorage();
   await seedIfEmpty(fallback);
   activePersistent = false;
