@@ -600,11 +600,15 @@ export class SqliteStorage implements Storage {
        } catch {
          void 0;
        }
+       SqliteStorage.lastOpenError = null;
        return new SqliteStorage(db);
-    } catch {
-      void 0;
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      SqliteStorage.lastOpenError = message;
+      console.error(`[portal] Falha ao abrir SQLite em ${path}: ${message}`);
       return null;
     }
+
   }
 
   private one(sql: string, ...params: SqlValue[]) {
