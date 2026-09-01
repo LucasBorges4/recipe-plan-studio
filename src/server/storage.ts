@@ -64,7 +64,7 @@ export interface SessionRow {
 /* ------------------------------------------------------------------ */
 
 export interface Storage {
-  readonly kind: "sqlite" | "memory";
+  readonly kind: "sqlite" | "d1" | "memory";
 
   countUsers(): Promise<number>;
   getUserByEmail(email: string): Promise<UserRow | null>;
@@ -272,7 +272,7 @@ export interface DatabaseDump {
 }
 
 export interface StorageInfo {
-  kind: "sqlite" | "memory";
+  kind: "sqlite" | "d1" | "memory";
   persistent: boolean;
   path: string;
   lastBackupAt: string | null;
@@ -579,107 +579,51 @@ function rowToUser(r: Record<string, SqlValue>): UserRow {
   };
 }
 
-export class SqliteStorage implements Storage {
-  readonly kind = "sqlite" as const;
-
-  private constructor(private db: SqlDatabase) {}
-
+/**
+ * Base com toda a lógica SQL compartilhada. Os drivers de baixo nível implementam
+ * apenas as primitivas `one/many/run/exec`: node:sqlite (arquivo/memória) e o
+ * binding Cloudflare D1. O adaptador D1 fica dormente até existir binding e a
+ * flag STORAGE_D1=1 (ver `resolveD1Binding`).
+ */
+export abstract class SqliteBackend implements Storage {
   /** Último erro real ocorrido em `open` (usado para diagnóstico na interface). */
   static lastOpenError: string | null = null;
 
-  static async open(path: string): Promise<SqliteStorage | null> {
-    try {
-      if (path !== ":memory:") {
-        const { mkdirSync } = await import("node:fs");
-        const nodePath = await import("node:path");
-        const dir = nodePath.dirname(path);
-        if (dir && dir !== ".") mkdirSync(dir, { recursive: true });
-      }
-      const mod = (await import("node:sqlite")) as unknown as {
-        DatabaseSync: new (path: string, opts?: object) => SqlDatabase;
-      };
-      const db = new mod.DatabaseSync(path);
+  abstract readonly kind: StorageInfo["kind"];
 
-      db.exec("PRAGMA journal_mode = WAL;");
-      db.exec("PRAGMA foreign_keys = ON;");
-      db.exec(SCHEMA);
-      for (const col of ["department TEXT", "bio TEXT"]) {
-        try {
-          db.exec(`ALTER TABLE users ADD COLUMN ${col}`);
-        } catch {
-          void 0;
-        }
-      }
-      for (const sql of [
-        "ALTER TABLE controls ADD COLUMN role TEXT NOT NULL DEFAULT 'gestor'",
-        "ALTER TABLE risks ADD COLUMN role TEXT NOT NULL DEFAULT 'gestor'",
-      ]) {
-        try {
-          db.exec(sql);
-        } catch {
-          void 0;
-        }
-      }
-      try {
-        db.exec(
-          "CREATE TABLE IF NOT EXISTS role_functions (" +
-            "role TEXT NOT NULL, function_key TEXT NOT NULL, " +
-            "description TEXT NOT NULL, PRIMARY KEY (role, function_key))",
-        );
-        db.exec("CREATE INDEX IF NOT EXISTS role_functions_role_idx ON role_functions(role)");
-      } catch {
-        void 0;
-      }
-      try {
-        db.exec(
-          "CREATE TABLE IF NOT EXISTS user_functions (" +
-            "user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, " +
-            "function_key TEXT NOT NULL, description TEXT NOT NULL, " +
-            "granted_at TEXT NOT NULL, granted_by TEXT, " +
-            "PRIMARY KEY (user_id, function_key))",
-        );
-        db.exec("CREATE INDEX IF NOT EXISTS user_functions_user_idx ON user_functions(user_id)");
-      } catch {
-        void 0;
-      }
-      SqliteStorage.lastOpenError = null;
-      return new SqliteStorage(db);
-    } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
-      SqliteStorage.lastOpenError = message;
-      console.error(`[portal] Falha ao abrir SQLite em ${path}: ${message}`);
-      return null;
-    }
-  }
+  protected abstract one(
+    sql: string,
+    ...params: SqlValue[]
+  ): Promise<Record<string, SqlValue> | undefined>;
+  protected abstract many(sql: string, ...params: SqlValue[]): Promise<Record<string, SqlValue>[]>;
+  protected abstract run(sql: string, ...params: SqlValue[]): Promise<{ changes: number }>;
+  protected abstract exec(sql: string): Promise<void>;
 
-  private one(sql: string, ...params: SqlValue[]) {
-    return this.db.prepare(sql).get(...params);
-  }
-  private many(sql: string, ...params: SqlValue[]) {
-    return this.db.prepare(sql).all(...params);
-  }
-  private num(sql: string, ...params: SqlValue[]): number {
-    return Number(this.one(sql, ...params)?.["n"] ?? 0);
+  protected async num(sql: string, ...params: SqlValue[]): Promise<number> {
+    const r = await this.one(sql, ...params);
+    return Number(r?.["n"] ?? 0);
   }
 
   async countUsers() {
-    return this.num("SELECT COUNT(*) AS n FROM users");
+    return await this.num("SELECT COUNT(*) AS n FROM users");
   }
   async getUserByEmail(email: string) {
-    const r = this.one("SELECT * FROM users WHERE email = ? COLLATE NOCASE", email.trim());
+    const r = await this.one("SELECT * FROM users WHERE email = ? COLLATE NOCASE", email.trim());
     return r ? rowToUser(r) : null;
   }
   async getUserById(id: string) {
-    const r = this.one("SELECT * FROM users WHERE id = ?", id);
+    const r = await this.one("SELECT * FROM users WHERE id = ?", id);
     return r ? rowToUser(r) : null;
   }
   async listUsers() {
-    return this.many("SELECT * FROM users ORDER BY created_at ASC, id ASC").map(rowToUser);
+    return (await this.many("SELECT * FROM users ORDER BY created_at ASC, id ASC")).map(rowToUser);
   }
   async listRoleFunctions(role: Role): Promise<RoleFunctionRow[]> {
-    return this.many(
-      "SELECT role, function_key AS functionKey, description FROM role_functions WHERE role = ? ORDER BY function_key",
-      role,
+    return (
+      await this.many(
+        "SELECT role, function_key AS functionKey, description FROM role_functions WHERE role = ? ORDER BY function_key",
+        role,
+      )
     ).map((r) => ({
       role: r["role"] as Role,
       functionKey: r["functionKey"] as string,
@@ -687,8 +631,10 @@ export class SqliteStorage implements Storage {
     }));
   }
   async listAllRoleFunctions(): Promise<RoleFunctionRow[]> {
-    return this.many(
-      "SELECT role, function_key AS functionKey, description FROM role_functions ORDER BY role, function_key",
+    return (
+      await this.many(
+        "SELECT role, function_key AS functionKey, description FROM role_functions ORDER BY role, function_key",
+      )
     ).map((r) => ({
       role: r["role"] as Role,
       functionKey: r["functionKey"] as string,
@@ -699,21 +645,25 @@ export class SqliteStorage implements Storage {
     role: Role,
     functions: Array<{ key: string; description: string }>,
   ): Promise<void> {
-    this.db.prepare("DELETE FROM role_functions WHERE role = ?").run(role);
-    const ins = this.db.prepare(
-      "INSERT INTO role_functions (role, function_key, description) VALUES (?, ?, ?)",
-    );
+    await this.run("DELETE FROM role_functions WHERE role = ?", role);
     for (const f of functions) {
-      ins.run(role, f.key, f.description);
+      await this.run(
+        "INSERT INTO role_functions (role, function_key, description) VALUES (?, ?, ?)",
+        role,
+        f.key,
+        f.description,
+      );
     }
   }
   async deleteRoleFunctions(role: Role): Promise<void> {
-    this.db.prepare("DELETE FROM role_functions WHERE role = ?").run(role);
+    await this.run("DELETE FROM role_functions WHERE role = ?", role);
   }
   async listUserFunctions(userId: string): Promise<UserFunctionRow[]> {
-    return this.many(
-      "SELECT user_id AS userId, function_key AS functionKey, description, granted_at AS grantedAt, granted_by AS grantedBy FROM user_functions WHERE user_id = ? ORDER BY function_key",
-      userId,
+    return (
+      await this.many(
+        "SELECT user_id AS userId, function_key AS functionKey, description, granted_at AS grantedAt, granted_by AS grantedBy FROM user_functions WHERE user_id = ? ORDER BY function_key",
+        userId,
+      )
     ).map((r) => ({
       userId: r["userId"] as string,
       functionKey: r["functionKey"] as string,
@@ -729,37 +679,39 @@ export class SqliteStorage implements Storage {
     grantedBy: string | null,
     grantedAt = new Date().toISOString(),
   ): Promise<boolean> {
-    const info = this.db
-      .prepare(
-        "INSERT OR IGNORE INTO user_functions (user_id, function_key, description, granted_at, granted_by) VALUES (?, ?, ?, ?, ?)",
-      )
-      .run(userId, functionKey, description, grantedAt, grantedBy);
+    const info = await this.run(
+      "INSERT OR IGNORE INTO user_functions (user_id, function_key, description, granted_at, granted_by) VALUES (?, ?, ?, ?, ?)",
+      userId,
+      functionKey,
+      description,
+      grantedAt,
+      grantedBy,
+    );
     return Number(info.changes) > 0;
   }
   async revokeUserFunction(userId: string, functionKey: string): Promise<boolean> {
-    const info = this.db
-      .prepare("DELETE FROM user_functions WHERE user_id = ? AND function_key = ?")
-      .run(userId, functionKey);
+    const info = await this.run(
+      "DELETE FROM user_functions WHERE user_id = ? AND function_key = ?",
+      userId,
+      functionKey,
+    );
     return Number(info.changes) > 0;
   }
   async insertUser(u: UserRow) {
-    this.db
-      .prepare(
-        "INSERT INTO users (id, name, email, role, job_title, department, bio, password_hash, password_salt, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-      )
-      .run(
-        u.id,
-        u.name,
-        u.email,
-        u.role,
-        u.jobTitle ?? null,
-        u.department ?? null,
-        u.bio ?? null,
-        u.passwordHash,
-        u.passwordSalt,
-        u.createdAt,
-        u.createdAt,
-      );
+    await this.run(
+      "INSERT INTO users (id, name, email, role, job_title, department, bio, password_hash, password_salt, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      u.id,
+      u.name,
+      u.email,
+      u.role,
+      u.jobTitle ?? null,
+      u.department ?? null,
+      u.bio ?? null,
+      u.passwordHash,
+      u.passwordSalt,
+      u.createdAt,
+      u.createdAt,
+    );
   }
   async updateUser(
     id: string,
@@ -790,21 +742,21 @@ export class SqliteStorage implements Storage {
     if (!sets.length) return;
     sets.push("updated_at = ?");
     params.push(new Date().toISOString(), id);
-    this.db.prepare(`UPDATE users SET ${sets.join(", ")} WHERE id = ?`).run(...params);
+    await this.run(`UPDATE users SET ${sets.join(", ")} WHERE id = ?`, ...params);
   }
   async deleteUser(id: string) {
-    this.db.prepare("DELETE FROM sessions WHERE user_id = ?").run(id);
-    this.db.prepare("DELETE FROM users WHERE id = ?").run(id);
+    await this.run("DELETE FROM sessions WHERE user_id = ?", id);
+    await this.run("DELETE FROM users WHERE id = ?", id);
   }
   async clearAllUsers() {
-    const n = this.num("SELECT COUNT(*) AS n FROM users");
-    this.db.prepare("DELETE FROM sessions").run();
-    this.db.prepare("DELETE FROM users").run();
+    const n = await this.num("SELECT COUNT(*) AS n FROM users");
+    await this.run("DELETE FROM sessions");
+    await this.run("DELETE FROM users");
     return n;
   }
 
   async getSessionByTokenHash(tokenHash: string) {
-    const r = this.one("SELECT * FROM sessions WHERE token_hash = ?", tokenHash);
+    const r = await this.one("SELECT * FROM sessions WHERE token_hash = ?", tokenHash);
     if (!r) return null;
     return {
       tokenHash: str(r["token_hash"]),
@@ -814,45 +766,49 @@ export class SqliteStorage implements Storage {
     };
   }
   async insertSession(s: SessionRow) {
-    this.db
-      .prepare(
-        "INSERT INTO sessions (token_hash, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)",
-      )
-      .run(s.tokenHash, s.userId, s.createdAt, s.expiresAt);
+    await this.run(
+      "INSERT INTO sessions (token_hash, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)",
+      s.tokenHash,
+      s.userId,
+      s.createdAt,
+      s.expiresAt,
+    );
   }
   async deleteSession(tokenHash: string) {
-    this.db.prepare("DELETE FROM sessions WHERE token_hash = ?").run(tokenHash);
+    await this.run("DELETE FROM sessions WHERE token_hash = ?", tokenHash);
   }
   async deleteSessionsForUser(userId: string) {
-    this.db.prepare("DELETE FROM sessions WHERE user_id = ?").run(userId);
+    await this.run("DELETE FROM sessions WHERE user_id = ?", userId);
   }
   async purgeExpiredSessions(nowIso: string) {
-    this.db.prepare("DELETE FROM sessions WHERE expires_at < ?").run(nowIso);
+    await this.run("DELETE FROM sessions WHERE expires_at < ?", nowIso);
   }
 
   async listColumns() {
-    return this.many("SELECT name FROM board_columns ORDER BY position ASC").map((r) =>
+    return (await this.many("SELECT name FROM board_columns ORDER BY position ASC")).map((r) =>
       str(r["name"]),
     );
   }
   async insertColumn(name: string) {
-    const pos = this.num("SELECT COALESCE(MAX(position), -1) + 1 AS n FROM board_columns");
-    const res = this.db
-      .prepare("INSERT OR IGNORE INTO board_columns (position, name) VALUES (?, ?)")
-      .run(pos, name);
+    const pos = await this.num("SELECT COALESCE(MAX(position), -1) + 1 AS n FROM board_columns");
+    const res = await this.run(
+      "INSERT OR IGNORE INTO board_columns (position, name) VALUES (?, ?)",
+      pos,
+      name,
+    );
     return Number(res.changes) > 0;
   }
   async deleteColumn(name: string) {
     if ((await this.countTasksInColumn(name)) > 0) return false;
-    const res = this.db.prepare("DELETE FROM board_columns WHERE name = ?").run(name);
+    const res = await this.run("DELETE FROM board_columns WHERE name = ?", name);
     return Number(res.changes) > 0;
   }
   async countTasksInColumn(name: string) {
-    return this.num("SELECT COUNT(*) AS n FROM tasks WHERE column_name = ?", name);
+    return await this.num("SELECT COUNT(*) AS n FROM tasks WHERE column_name = ?", name);
   }
 
   async listTasks() {
-    return this.many("SELECT * FROM tasks ORDER BY rowid DESC").map((r): Task => ({
+    return (await this.many("SELECT * FROM tasks ORDER BY rowid DESC")).map((r): Task => ({
       id: str(r["id"]),
       title: str(r["title"]),
       description: str(r["description"]),
@@ -865,7 +821,7 @@ export class SqliteStorage implements Storage {
     }));
   }
   async getTask(id: string) {
-    const r = this.one("SELECT * FROM tasks WHERE id = ?", id);
+    const r = await this.one("SELECT * FROM tasks WHERE id = ?", id);
     if (!r) return null;
     return {
       id: str(r["id"]),
@@ -880,35 +836,32 @@ export class SqliteStorage implements Storage {
     };
   }
   async insertTask(t: Task) {
-    this.db
-      .prepare(
-        "INSERT INTO tasks (id, title, description, column_name, priority, tags, assignee, due, comments) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-      )
-      .run(
-        t.id,
-        t.title,
-        t.description,
-        t.column,
-        t.priority,
-        JSON.stringify(t.tags),
-        t.assignee,
-        t.due ?? null,
-        t.comments ?? null,
-      );
+    await this.run(
+      "INSERT INTO tasks (id, title, description, column_name, priority, tags, assignee, due, comments) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      t.id,
+      t.title,
+      t.description,
+      t.column,
+      t.priority,
+      JSON.stringify(t.tags),
+      t.assignee,
+      t.due ?? null,
+      t.comments ?? null,
+    );
   }
   async updateTaskColumn(id: string, column: string) {
     const task = await this.getTask(id);
     if (!task) return null;
-    this.db.prepare("UPDATE tasks SET column_name = ? WHERE id = ?").run(column, id);
+    await this.run("UPDATE tasks SET column_name = ? WHERE id = ?", column, id);
     return { ...task, column };
   }
   async deleteTask(id: string) {
-    const info = this.db.prepare("DELETE FROM tasks WHERE id = ?").run(id);
+    const info = await this.run("DELETE FROM tasks WHERE id = ?", id);
     return Number(info.changes) > 0;
   }
 
   async listComments() {
-    return this.many("SELECT * FROM comments ORDER BY at ASC, rowid ASC").map(
+    return (await this.many("SELECT * FROM comments ORDER BY at ASC, rowid ASC")).map(
       (r): CommentRecord => ({
         id: str(r["id"]),
         taskId: str(r["task_id"]),
@@ -920,65 +873,72 @@ export class SqliteStorage implements Storage {
     );
   }
   async insertComment(c: CommentRecord) {
-    this.db
-      .prepare(
-        "INSERT INTO comments (id, task_id, author_id, author_name, at, body) VALUES (?, ?, ?, ?, ?, ?)",
-      )
-      .run(c.id, c.taskId, c.authorId, c.authorName, c.at, c.body);
+    await this.run(
+      "INSERT INTO comments (id, task_id, author_id, author_name, at, body) VALUES (?, ?, ?, ?, ?, ?)",
+      c.id,
+      c.taskId,
+      c.authorId,
+      c.authorName,
+      c.at,
+      c.body,
+    );
   }
 
   async listControls() {
-    return this.many("SELECT * FROM controls ORDER BY rowid ASC").map((r): ComplianceControl => ({
-      id: str(r["id"]),
-      control: str(r["control"]),
-      norm: str(r["norm"]) as ComplianceControl["norm"],
-      owner: str(r["owner"]),
-      role: (str(r["role"]) || "gestor") as ComplianceControl["role"],
-      status: str(r["status"]),
-      tone: str(r["tone"]) as ComplianceControl["tone"],
-      lastReview: str(r["last_review"]),
-      nextReview: str(r["next_review"]),
-      overdue: Boolean(r["overdue"]),
-    }));
+    return (await this.many("SELECT * FROM controls ORDER BY rowid ASC")).map(
+      (r): ComplianceControl => ({
+        id: str(r["id"]),
+        control: str(r["control"]),
+        norm: str(r["norm"]) as ComplianceControl["norm"],
+        owner: str(r["owner"]),
+        role: (str(r["role"]) || "gestor") as ComplianceControl["role"],
+        status: str(r["status"]),
+        tone: str(r["tone"]) as ComplianceControl["tone"],
+        lastReview: str(r["last_review"]),
+        nextReview: str(r["next_review"]),
+        overdue: Boolean(r["overdue"]),
+      }),
+    );
   }
   async getControl(id: string) {
     return (await this.listControls()).find((c) => c.id === id) ?? null;
   }
   async insertControl(c: ComplianceControl) {
-    this.db
-      .prepare(
-        "INSERT OR IGNORE INTO controls (id, control, norm, owner, role, status, tone, last_review, next_review, overdue) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-      )
-      .run(
-        c.id,
-        c.control,
-        c.norm,
-        c.owner,
-        c.role ?? "gestor",
-        c.status,
-        c.tone,
-        c.lastReview,
-        c.nextReview,
-        c.overdue ? 1 : 0,
-      );
+    await this.run(
+      "INSERT OR IGNORE INTO controls (id, control, norm, owner, role, status, tone, last_review, next_review, overdue) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      c.id,
+      c.control,
+      c.norm,
+      c.owner,
+      c.role ?? "gestor",
+      c.status,
+      c.tone,
+      c.lastReview,
+      c.nextReview,
+      c.overdue ? 1 : 0,
+    );
   }
   async reviewControl(
     id: string,
     patch: Pick<ComplianceControl, "status" | "tone" | "lastReview" | "nextReview" | "overdue">,
   ) {
-    this.db
-      .prepare(
-        "UPDATE controls SET status = ?, tone = ?, last_review = ?, next_review = ?, overdue = ? WHERE id = ?",
-      )
-      .run(patch.status, patch.tone, patch.lastReview, patch.nextReview, patch.overdue ? 1 : 0, id);
+    await this.run(
+      "UPDATE controls SET status = ?, tone = ?, last_review = ?, next_review = ?, overdue = ? WHERE id = ?",
+      patch.status,
+      patch.tone,
+      patch.lastReview,
+      patch.nextReview,
+      patch.overdue ? 1 : 0,
+      id,
+    );
   }
   async deleteControl(id: string) {
-    const res = this.db.prepare("DELETE FROM controls WHERE id = ?").run(id);
+    const res = await this.run("DELETE FROM controls WHERE id = ?", id);
     return Number(res.changes) > 0;
   }
 
   async listEvidences() {
-    return this.many("SELECT * FROM evidences ORDER BY at DESC, rowid DESC").map(
+    return (await this.many("SELECT * FROM evidences ORDER BY at DESC, rowid DESC")).map(
       (r): EvidenceRecord => ({
         id: str(r["id"]),
         controlId: str(r["control_id"]),
@@ -997,61 +957,52 @@ export class SqliteStorage implements Storage {
     return (await this.listEvidences()).find((e) => e.id === id) ?? null;
   }
   async insertEvidence(e: EvidenceRecord) {
-    this.db
-      .prepare(
-        "INSERT INTO evidences (id, control_id, file_name, sent_by_id, sent_by_name, at, status, reviewer_name, reviewed_at, note) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-      )
-      .run(
-        e.id,
-        e.controlId,
-        e.fileName,
-        e.sentById,
-        e.sentByName,
-        e.at,
-        e.status,
-        e.reviewerName ?? null,
-        e.reviewedAt ?? null,
-        e.note ?? null,
-      );
+    await this.run(
+      "INSERT INTO evidences (id, control_id, file_name, sent_by_id, sent_by_name, at, status, reviewer_name, reviewed_at, note) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      e.id,
+      e.controlId,
+      e.fileName,
+      e.sentById,
+      e.sentByName,
+      e.at,
+      e.status,
+      e.reviewerName ?? null,
+      e.reviewedAt ?? null,
+      e.note ?? null,
+    );
   }
   async reviewEvidence(
     id: string,
     patch: Pick<EvidenceRecord, "status" | "reviewerName" | "reviewedAt" | "note">,
   ) {
-    this.db
-      .prepare(
-        "UPDATE evidences SET status = ?, reviewer_name = ?, reviewed_at = ?, note = ? WHERE id = ?",
-      )
-      .run(
-        patch.status,
-        patch.reviewerName ?? null,
-        patch.reviewedAt ?? null,
-        patch.note ?? null,
-        id,
-      );
+    await this.run(
+      "UPDATE evidences SET status = ?, reviewer_name = ?, reviewed_at = ?, note = ? WHERE id = ?",
+      patch.status,
+      patch.reviewerName ?? null,
+      patch.reviewedAt ?? null,
+      patch.note ?? null,
+      id,
+    );
   }
 
   async insertAudit(a: AuditEntry) {
-    this.db
-      .prepare(
-        "INSERT INTO audit (id, at, actor_id, actor_name, actor_role, action, entity, entity_id, before, after, reason) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-      )
-      .run(
-        a.id,
-        a.at,
-        a.actorId,
-        a.actor,
-        a.actorRole,
-        a.action,
-        a.entity,
-        a.entityId,
-        a.before ?? null,
-        a.after ?? null,
-        a.reason ?? null,
-      );
+    await this.run(
+      "INSERT INTO audit (id, at, actor_id, actor_name, actor_role, action, entity, entity_id, before, after, reason) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      a.id,
+      a.at,
+      a.actorId,
+      a.actor,
+      a.actorRole,
+      a.action,
+      a.entity,
+      a.entityId,
+      a.before ?? null,
+      a.after ?? null,
+      a.reason ?? null,
+    );
   }
   async listAudit() {
-    return this.many("SELECT * FROM audit ORDER BY seq DESC").map((r): AuditEntry => ({
+    return (await this.many("SELECT * FROM audit ORDER BY seq DESC")).map((r): AuditEntry => ({
       id: str(r["id"]),
       at: str(r["at"]),
       actorId: nul(r["actor_id"]),
@@ -1066,11 +1017,11 @@ export class SqliteStorage implements Storage {
     }));
   }
   async countAudit() {
-    return this.num("SELECT COUNT(*) AS n FROM audit");
+    return await this.num("SELECT COUNT(*) AS n FROM audit");
   }
 
   async listModules() {
-    return this.many("SELECT * FROM modules ORDER BY rowid ASC").map((r): Module => ({
+    return (await this.many("SELECT * FROM modules ORDER BY rowid ASC")).map((r): Module => ({
       id: str(r["id"]),
       name: str(r["name"]),
       status: str(r["status"]),
@@ -1081,19 +1032,24 @@ export class SqliteStorage implements Storage {
     }));
   }
   async insertModule(m: Module) {
-    this.db
-      .prepare(
-        "INSERT OR IGNORE INTO modules (id, name, status, tone, date, done, total) VALUES (?, ?, ?, ?, ?, ?, ?)",
-      )
-      .run(m.id, m.name, m.status, m.tone, m.date, m.done, m.total);
+    await this.run(
+      "INSERT OR IGNORE INTO modules (id, name, status, tone, date, done, total) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      m.id,
+      m.name,
+      m.status,
+      m.tone,
+      m.date,
+      m.done,
+      m.total,
+    );
   }
   async deleteModule(id: string) {
-    const res = this.db.prepare("DELETE FROM modules WHERE id = ?").run(id);
+    const res = await this.run("DELETE FROM modules WHERE id = ?", id);
     return Number(res.changes) > 0;
   }
 
   async listRisks() {
-    return this.many("SELECT * FROM risks ORDER BY rowid ASC").map((r): Risk => ({
+    return (await this.many("SELECT * FROM risks ORDER BY rowid ASC")).map((r): Risk => ({
       id: str(r["id"]),
       title: str(r["title"]),
       category: str(r["category"]),
@@ -1105,7 +1061,7 @@ export class SqliteStorage implements Storage {
     }));
   }
   async getRisk(id: string) {
-    const r = this.one("SELECT * FROM risks WHERE id = ?", id);
+    const r = await this.one("SELECT * FROM risks WHERE id = ?", id);
     if (!r) return null;
     return {
       id: str(r["id"]),
@@ -1119,59 +1075,55 @@ export class SqliteStorage implements Storage {
     };
   }
   async insertRisk(r: Risk) {
-    this.db
-      .prepare(
-        "INSERT OR IGNORE INTO risks (id, title, category, owner, role, probability, impact, mitigation) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-      )
-      .run(
-        r.id,
-        r.title,
-        r.category,
-        r.owner,
-        r.role ?? "gestor",
-        r.probability,
-        r.impact,
-        r.mitigation,
-      );
+    await this.run(
+      "INSERT OR IGNORE INTO risks (id, title, category, owner, role, probability, impact, mitigation) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      r.id,
+      r.title,
+      r.category,
+      r.owner,
+      r.role ?? "gestor",
+      r.probability,
+      r.impact,
+      r.mitigation,
+    );
   }
   async updateRisk(id: string, patch: Partial<Risk>) {
     const cur = await this.getRisk(id);
     if (!cur) return null;
     const next = { ...cur, ...patch, id };
-    this.db
-      .prepare(
-        "UPDATE risks SET title = ?, category = ?, owner = ?, role = ?, probability = ?, impact = ?, mitigation = ? WHERE id = ?",
-      )
-      .run(
-        next.title,
-        next.category,
-        next.owner,
-        next.role,
-        next.probability,
-        next.impact,
-        next.mitigation,
-        id,
-      );
+    await this.run(
+      "UPDATE risks SET title = ?, category = ?, owner = ?, role = ?, probability = ?, impact = ?, mitigation = ? WHERE id = ?",
+      next.title,
+      next.category,
+      next.owner,
+      next.role,
+      next.probability,
+      next.impact,
+      next.mitigation,
+      id,
+    );
     return next;
   }
   async deleteRisk(id: string) {
-    const res = this.db.prepare("DELETE FROM risks WHERE id = ?").run(id);
+    const res = await this.run("DELETE FROM risks WHERE id = ?", id);
     return Number(res.changes) > 0;
   }
 
   async listWiki() {
-    return this.many("SELECT * FROM wiki_articles ORDER BY rowid ASC").map((r): WikiArticle => ({
-      slug: str(r["slug"]),
-      title: str(r["title"]),
-      category: str(r["category"]),
-      summary: str(r["summary"]),
-      updatedAt: str(r["updated_at"]),
-      version: str(r["version"]),
-      sections: safeJson(r["sections"], []),
-    }));
+    return (await this.many("SELECT * FROM wiki_articles ORDER BY rowid ASC")).map(
+      (r): WikiArticle => ({
+        slug: str(r["slug"]),
+        title: str(r["title"]),
+        category: str(r["category"]),
+        summary: str(r["summary"]),
+        updatedAt: str(r["updated_at"]),
+        version: str(r["version"]),
+        sections: safeJson(r["sections"], []),
+      }),
+    );
   }
   async getWiki(slug: string) {
-    const r = this.one("SELECT * FROM wiki_articles WHERE slug = ?", slug);
+    const r = await this.one("SELECT * FROM wiki_articles WHERE slug = ?", slug);
     if (!r) return null;
     return {
       slug: str(r["slug"]),
@@ -1184,46 +1136,40 @@ export class SqliteStorage implements Storage {
     };
   }
   async insertWiki(a: WikiArticle) {
-    this.db
-      .prepare(
-        "INSERT OR IGNORE INTO wiki_articles (slug, title, category, summary, updated_at, version, sections) VALUES (?, ?, ?, ?, ?, ?, ?)",
-      )
-      .run(
-        a.slug,
-        a.title,
-        a.category,
-        a.summary,
-        a.updatedAt,
-        a.version,
-        JSON.stringify(a.sections),
-      );
+    await this.run(
+      "INSERT OR IGNORE INTO wiki_articles (slug, title, category, summary, updated_at, version, sections) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      a.slug,
+      a.title,
+      a.category,
+      a.summary,
+      a.updatedAt,
+      a.version,
+      JSON.stringify(a.sections),
+    );
   }
   async updateWiki(slug: string, patch: Partial<WikiArticle>) {
     const cur = await this.getWiki(slug);
     if (!cur) return null;
     const next = { ...cur, ...patch, slug };
-    this.db
-      .prepare(
-        "UPDATE wiki_articles SET title = ?, category = ?, summary = ?, updated_at = ?, version = ?, sections = ? WHERE slug = ?",
-      )
-      .run(
-        next.title,
-        next.category,
-        next.summary,
-        next.updatedAt,
-        next.version,
-        JSON.stringify(next.sections),
-        slug,
-      );
+    await this.run(
+      "UPDATE wiki_articles SET title = ?, category = ?, summary = ?, updated_at = ?, version = ?, sections = ? WHERE slug = ?",
+      next.title,
+      next.category,
+      next.summary,
+      next.updatedAt,
+      next.version,
+      JSON.stringify(next.sections),
+      slug,
+    );
     return next;
   }
   async deleteWiki(slug: string) {
-    const res = this.db.prepare("DELETE FROM wiki_articles WHERE slug = ?").run(slug);
+    const res = await this.run("DELETE FROM wiki_articles WHERE slug = ?", slug);
     return Number(res.changes) > 0;
   }
 
   async listMilestones() {
-    return this.many("SELECT * FROM milestones ORDER BY rowid ASC").map((r): Milestone => ({
+    return (await this.many("SELECT * FROM milestones ORDER BY rowid ASC")).map((r): Milestone => ({
       id: str(r["id"]),
       date: str(r["date"]),
       type: str(r["type"]) as Milestone["type"],
@@ -1232,46 +1178,54 @@ export class SqliteStorage implements Storage {
     }));
   }
   async insertMilestone(m: Milestone) {
-    this.db
-      .prepare(
-        "INSERT OR IGNORE INTO milestones (id, date, type, title, description) VALUES (?, ?, ?, ?, ?)",
-      )
-      .run(m.id, m.date, m.type, m.title, m.description);
+    await this.run(
+      "INSERT OR IGNORE INTO milestones (id, date, type, title, description) VALUES (?, ?, ?, ?, ?)",
+      m.id,
+      m.date,
+      m.type,
+      m.title,
+      m.description,
+    );
   }
   async deleteMilestone(id: string) {
-    const res = this.db.prepare("DELETE FROM milestones WHERE id = ?").run(id);
+    const res = await this.run("DELETE FROM milestones WHERE id = ?", id);
     return Number(res.changes) > 0;
   }
 
   async listReleases() {
-    return this.many("SELECT * FROM releases ORDER BY rowid DESC").map((r): Release => ({
+    return (await this.many("SELECT * FROM releases ORDER BY rowid DESC")).map((r): Release => ({
       version: str(r["version"]),
       date: str(r["date"]),
       items: safeJson(r["items"], []),
     }));
   }
   async insertRelease(r: Release) {
-    this.db
-      .prepare("INSERT OR IGNORE INTO releases (version, date, items) VALUES (?, ?, ?)")
-      .run(r.version, r.date, JSON.stringify(r.items));
+    await this.run(
+      "INSERT OR IGNORE INTO releases (version, date, items) VALUES (?, ?, ?)",
+      r.version,
+      r.date,
+      JSON.stringify(r.items),
+    );
   }
   async deleteRelease(version: string) {
-    const res = this.db.prepare("DELETE FROM releases WHERE version = ?").run(version);
+    const res = await this.run("DELETE FROM releases WHERE version = ?", version);
     return Number(res.changes) > 0;
   }
 
   async listPatentStages() {
-    return this.many("SELECT * FROM patent_stages ORDER BY rowid ASC").map((r): PatentStage => ({
-      id: str(r["id"]),
-      title: str(r["title"]),
-      description: str(r["description"]),
-      owner: str(r["owner"]),
-      deadline: str(r["deadline"]),
-      status: str(r["status"]) as PatentStage["status"],
-    }));
+    return (await this.many("SELECT * FROM patent_stages ORDER BY rowid ASC")).map(
+      (r): PatentStage => ({
+        id: str(r["id"]),
+        title: str(r["title"]),
+        description: str(r["description"]),
+        owner: str(r["owner"]),
+        deadline: str(r["deadline"]),
+        status: str(r["status"]) as PatentStage["status"],
+      }),
+    );
   }
   async getPatentStage(id: string) {
-    const r = this.one("SELECT * FROM patent_stages WHERE id = ?", id);
+    const r = await this.one("SELECT * FROM patent_stages WHERE id = ?", id);
     if (!r) return null;
     return {
       id: str(r["id"]),
@@ -1283,26 +1237,34 @@ export class SqliteStorage implements Storage {
     };
   }
   async insertPatentStage(s: PatentStage) {
-    this.db
-      .prepare(
-        "INSERT OR IGNORE INTO patent_stages (id, title, description, owner, deadline, status) VALUES (?, ?, ?, ?, ?, ?)",
-      )
-      .run(s.id, s.title, s.description, s.owner, s.deadline, s.status);
+    await this.run(
+      "INSERT OR IGNORE INTO patent_stages (id, title, description, owner, deadline, status) VALUES (?, ?, ?, ?, ?, ?)",
+      s.id,
+      s.title,
+      s.description,
+      s.owner,
+      s.deadline,
+      s.status,
+    );
   }
   async updatePatentStage(id: string, patch: Partial<PatentStage>) {
     const cur = await this.getPatentStage(id);
     if (!cur) return null;
     const next = { ...cur, ...patch, id };
-    this.db
-      .prepare(
-        "UPDATE patent_stages SET title = ?, description = ?, owner = ?, deadline = ?, status = ? WHERE id = ?",
-      )
-      .run(next.title, next.description, next.owner, next.deadline, next.status, id);
+    await this.run(
+      "UPDATE patent_stages SET title = ?, description = ?, owner = ?, deadline = ?, status = ? WHERE id = ?",
+      next.title,
+      next.description,
+      next.owner,
+      next.deadline,
+      next.status,
+      id,
+    );
     return next;
   }
 
   async listTechStack() {
-    return this.many("SELECT * FROM tech_stack ORDER BY rowid ASC").map((r): TechItem => ({
+    return (await this.many("SELECT * FROM tech_stack ORDER BY rowid ASC")).map((r): TechItem => ({
       name: str(r["name"]),
       category: str(r["category"]),
       description: str(r["description"]),
@@ -1310,36 +1272,33 @@ export class SqliteStorage implements Storage {
     })) as TechItem[];
   }
   async insertTechStack(item: TechItem & { icon?: string }) {
-    this.db
-      .prepare(
-        "INSERT OR IGNORE INTO tech_stack (name, category, description, icon) VALUES (?, ?, ?, ?)",
-      )
-      .run(
-        item.name,
-        item.category,
-        item.description,
-        (item as unknown as { icon?: string }).icon ?? null,
-      );
+    await this.run(
+      "INSERT OR IGNORE INTO tech_stack (name, category, description, icon) VALUES (?, ?, ?, ?)",
+      item.name,
+      item.category,
+      item.description,
+      (item as unknown as { icon?: string }).icon ?? null,
+    );
   }
   async deleteTechStack(name: string) {
-    const res = this.db.prepare("DELETE FROM tech_stack WHERE name = ?").run(name);
+    const res = await this.run("DELETE FROM tech_stack WHERE name = ?", name);
     return Number(res.changes) > 0;
   }
 
   async getMeta(key: string) {
-    const r = this.one("SELECT value FROM meta WHERE key = ?", key);
+    const r = await this.one("SELECT value FROM meta WHERE key = ?", key);
     return r ? str(r["value"]) : null;
   }
   async setMeta(key: string, value: string) {
-    this.db
-      .prepare(
-        "INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-      )
-      .run(key, value);
+    await this.run(
+      "INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+      key,
+      value,
+    );
   }
 
   async listAutomationShares() {
-    return this.many("SELECT * FROM automation_shares ORDER BY created_at DESC").map(
+    return (await this.many("SELECT * FROM automation_shares ORDER BY created_at DESC")).map(
       (r): AutomationShare => ({
         id: str(r["id"]),
         workflowId: str(r["workflow_id"]),
@@ -1355,7 +1314,7 @@ export class SqliteStorage implements Storage {
     );
   }
   async getAutomationShare(id: string) {
-    const r = this.one("SELECT * FROM automation_shares WHERE id = ?", id);
+    const r = await this.one("SELECT * FROM automation_shares WHERE id = ?", id);
     if (!r) return null;
     return {
       id: str(r["id"]),
@@ -1371,35 +1330,32 @@ export class SqliteStorage implements Storage {
     };
   }
   async getAutomationShareByWorkflow(workflowId: string) {
-    const r = this.one("SELECT * FROM automation_shares WHERE workflow_id = ?", workflowId);
+    const r = await this.one("SELECT * FROM automation_shares WHERE workflow_id = ?", workflowId);
     if (!r) return null;
     return this.getAutomationShare(str(r["id"]));
   }
   async upsertAutomationShare(s: AutomationShare) {
-    this.db
-      .prepare(
-        "INSERT INTO automation_shares (id, workflow_id, workflow_name, owner_id, owner_name, owner_role, shared_role, shared_user_ids, is_private, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(workflow_id) DO UPDATE SET workflow_name=excluded.workflow_name, shared_role=excluded.shared_role, shared_user_ids=excluded.shared_user_ids, is_private=excluded.is_private",
-      )
-      .run(
-        s.id,
-        s.workflowId,
-        s.workflowName,
-        s.ownerId,
-        s.ownerName,
-        s.ownerRole,
-        s.sharedRole,
-        JSON.stringify(s.sharedUserIds),
-        s.isPrivate ? 1 : 0,
-        s.createdAt,
-      );
+    await this.run(
+      "INSERT INTO automation_shares (id, workflow_id, workflow_name, owner_id, owner_name, owner_role, shared_role, shared_user_ids, is_private, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(workflow_id) DO UPDATE SET workflow_name=excluded.workflow_name, shared_role=excluded.shared_role, shared_user_ids=excluded.shared_user_ids, is_private=excluded.is_private",
+      s.id,
+      s.workflowId,
+      s.workflowName,
+      s.ownerId,
+      s.ownerName,
+      s.ownerRole,
+      s.sharedRole,
+      JSON.stringify(s.sharedUserIds),
+      s.isPrivate ? 1 : 0,
+      s.createdAt,
+    );
   }
   async deleteAutomationShare(id: string) {
-    const res = this.db.prepare("DELETE FROM automation_shares WHERE id = ?").run(id);
+    const res = await this.run("DELETE FROM automation_shares WHERE id = ?", id);
     return Number(res.changes) > 0;
   }
 
   async listNextSteps() {
-    return this.many("SELECT * FROM next_steps ORDER BY position ASC, created_at ASC").map(
+    return (await this.many("SELECT * FROM next_steps ORDER BY position ASC, created_at ASC")).map(
       (r): NextStep => ({
         id: str(r["id"]),
         title: str(r["title"]),
@@ -1411,7 +1367,7 @@ export class SqliteStorage implements Storage {
     );
   }
   async getNextStep(id: string) {
-    const r = this.one("SELECT * FROM next_steps WHERE id = ?", id);
+    const r = await this.one("SELECT * FROM next_steps WHERE id = ?", id);
     if (!r) return null;
     return {
       id: str(r["id"]),
@@ -1423,38 +1379,47 @@ export class SqliteStorage implements Storage {
     };
   }
   async insertNextStep(s: NextStep) {
-    this.db
-      .prepare(
-        "INSERT OR IGNORE INTO next_steps (id, title, due, status, position, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-      )
-      .run(s.id, s.title, s.due, s.status, s.position, s.createdAt);
+    await this.run(
+      "INSERT OR IGNORE INTO next_steps (id, title, due, status, position, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+      s.id,
+      s.title,
+      s.due,
+      s.status,
+      s.position,
+      s.createdAt,
+    );
   }
   async updateNextStep(id: string, patch: Partial<NextStep>) {
     const cur = await this.getNextStep(id);
     if (!cur) return null;
     const next = { ...cur, ...patch, id };
-    this.db
-      .prepare("UPDATE next_steps SET title = ?, due = ?, status = ?, position = ? WHERE id = ?")
-      .run(next.title, next.due, next.status, next.position, id);
+    await this.run(
+      "UPDATE next_steps SET title = ?, due = ?, status = ?, position = ? WHERE id = ?",
+      next.title,
+      next.due,
+      next.status,
+      next.position,
+      id,
+    );
     return next;
   }
   async deleteNextStep(id: string) {
-    const res = this.db.prepare("DELETE FROM next_steps WHERE id = ?").run(id);
+    const res = await this.run("DELETE FROM next_steps WHERE id = ?", id);
     return Number(res.changes) > 0;
   }
   async reorderNextSteps(orderedIds: string[]) {
     for (let i = 0; i < orderedIds.length; i++) {
       const id = orderedIds[i];
-      if (id) this.db.prepare("UPDATE next_steps SET position = ? WHERE id = ?").run(i, id);
+      if (id) await this.run("UPDATE next_steps SET position = ? WHERE id = ?", i, id);
     }
   }
 
   async listLegalDocs() {
-    const rows = this.many(
+    const rows = await this.many(
       "SELECT * FROM legal_docs WHERE id IN (SELECT id FROM legal_docs GROUP BY slug HAVING MAX(published_at)) ORDER BY slug ASC",
     );
     if (rows.length === 0)
-      return this.many("SELECT * FROM legal_docs ORDER BY slug ASC, published_at DESC").map(
+      return (await this.many("SELECT * FROM legal_docs ORDER BY slug ASC, published_at DESC")).map(
         (r): LegalDoc => ({
           id: str(r["id"]),
           slug: str(r["slug"]),
@@ -1470,7 +1435,7 @@ export class SqliteStorage implements Storage {
         }),
       ) as LegalDoc[];
     const latest = new Map<string, Record<string, SqlValue>>();
-    for (const r of this.many("SELECT * FROM legal_docs ORDER BY published_at DESC")) {
+    for (const r of await this.many("SELECT * FROM legal_docs ORDER BY published_at DESC")) {
       const slug = str(r["slug"]);
       if (!latest.has(slug)) latest.set(slug, r);
     }
@@ -1489,7 +1454,7 @@ export class SqliteStorage implements Storage {
     }));
   }
   async getLegalDoc(slug: string) {
-    const r = this.one(
+    const r = await this.one(
       "SELECT * FROM legal_docs WHERE slug = ? ORDER BY published_at DESC LIMIT 1",
       slug,
     );
@@ -1509,7 +1474,7 @@ export class SqliteStorage implements Storage {
     };
   }
   async getLegalDocById(id: string) {
-    const r = this.one("SELECT * FROM legal_docs WHERE id = ?", id);
+    const r = await this.one("SELECT * FROM legal_docs WHERE id = ?", id);
     if (!r) return null;
     return {
       id: str(r["id"]),
@@ -1526,9 +1491,8 @@ export class SqliteStorage implements Storage {
     };
   }
   async listLegalDocVersions(slug: string) {
-    return this.many(
-      "SELECT * FROM legal_docs WHERE slug = ? ORDER BY published_at DESC",
-      slug,
+    return (
+      await this.many("SELECT * FROM legal_docs WHERE slug = ? ORDER BY published_at DESC", slug)
     ).map((r): LegalDoc => ({
       id: str(r["id"]),
       slug: str(r["slug"]),
@@ -1544,36 +1508,35 @@ export class SqliteStorage implements Storage {
     }));
   }
   async insertLegalDoc(doc: LegalDoc) {
-    this.db
-      .prepare(
-        "INSERT INTO legal_docs (id, slug, title, subtitle, version, intro, clauses, published_at, created_at, updated_at, created_by_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-      )
-      .run(
-        doc.id,
-        doc.slug,
-        doc.title,
-        doc.subtitle,
-        doc.version,
-        doc.intro,
-        JSON.stringify(doc.clauses),
-        doc.publishedAt,
-        doc.createdAt,
-        doc.updatedAt,
-        doc.createdById,
-      );
+    await this.run(
+      "INSERT INTO legal_docs (id, slug, title, subtitle, version, intro, clauses, published_at, created_at, updated_at, created_by_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      doc.id,
+      doc.slug,
+      doc.title,
+      doc.subtitle,
+      doc.version,
+      doc.intro,
+      JSON.stringify(doc.clauses),
+      doc.publishedAt,
+      doc.createdAt,
+      doc.updatedAt,
+      doc.createdById,
+    );
   }
 
   async listResetTokens() {
-    return this.many("SELECT * FROM password_reset_tokens ORDER BY created_at DESC").map((r) => ({
-      tokenHash: str(r["token_hash"]),
-      userId: str(r["user_id"]),
-      createdAt: str(r["created_at"]),
-      expiresAt: str(r["expires_at"]),
-      usedAt: nul(r["used_at"]),
-    }));
+    return (await this.many("SELECT * FROM password_reset_tokens ORDER BY created_at DESC")).map(
+      (r) => ({
+        tokenHash: str(r["token_hash"]),
+        userId: str(r["user_id"]),
+        createdAt: str(r["created_at"]),
+        expiresAt: str(r["expires_at"]),
+        usedAt: nul(r["used_at"]),
+      }),
+    );
   }
   async getResetTokenByHash(tokenHash: string) {
-    const r = this.one("SELECT * FROM password_reset_tokens WHERE token_hash = ?", tokenHash);
+    const r = await this.one("SELECT * FROM password_reset_tokens WHERE token_hash = ?", tokenHash);
     if (!r) return null;
     return {
       tokenHash: str(r["token_hash"]),
@@ -1584,27 +1547,32 @@ export class SqliteStorage implements Storage {
     };
   }
   async insertResetToken(t: ResetToken) {
-    this.db
-      .prepare(
-        "INSERT INTO password_reset_tokens (token_hash, user_id, created_at, expires_at, used_at) VALUES (?, ?, ?, ?, ?)",
-      )
-      .run(t.tokenHash, t.userId, t.createdAt, t.expiresAt, t.usedAt);
+    await this.run(
+      "INSERT INTO password_reset_tokens (token_hash, user_id, created_at, expires_at, used_at) VALUES (?, ?, ?, ?, ?)",
+      t.tokenHash,
+      t.userId,
+      t.createdAt,
+      t.expiresAt,
+      t.usedAt,
+    );
   }
   async markResetTokenUsed(tokenHash: string, usedAt: string) {
-    this.db
-      .prepare("UPDATE password_reset_tokens SET used_at = ? WHERE token_hash = ?")
-      .run(usedAt, tokenHash);
+    await this.run(
+      "UPDATE password_reset_tokens SET used_at = ? WHERE token_hash = ?",
+      usedAt,
+      tokenHash,
+    );
   }
   async deleteExpiredResetTokens(nowIso: string) {
-    this.db
-      .prepare("DELETE FROM password_reset_tokens WHERE expires_at < ? AND used_at IS NULL")
-      .run(nowIso);
+    await this.run(
+      "DELETE FROM password_reset_tokens WHERE expires_at < ? AND used_at IS NULL",
+      nowIso,
+    );
   }
 
   async listSessionsForUser(userId: string) {
-    return this.many(
-      "SELECT * FROM sessions WHERE user_id = ? ORDER BY created_at DESC",
-      userId,
+    return (
+      await this.many("SELECT * FROM sessions WHERE user_id = ? ORDER BY created_at DESC", userId)
     ).map((r) => ({
       tokenHash: str(r["token_hash"]),
       userId: str(r["user_id"]),
@@ -1637,7 +1605,7 @@ export class SqliteStorage implements Storage {
       userFunctions,
     ] = await Promise.all([
       this.listUsers(),
-      this.many("SELECT * FROM sessions").map((r) => ({
+      (await this.many("SELECT * FROM sessions")).map((r) => ({
         tokenHash: str(r["token_hash"]),
         userId: str(r["user_id"]),
         createdAt: str(r["created_at"]),
@@ -1658,23 +1626,27 @@ export class SqliteStorage implements Storage {
       this.listTechStack(),
       this.listAutomationShares(),
       this.listNextSteps(),
-      this.many("SELECT * FROM legal_docs ORDER BY published_at DESC").map((r): LegalDoc => ({
-        id: str(r["id"]),
-        slug: str(r["slug"]),
-        title: str(r["title"]),
-        subtitle: str(r["subtitle"]),
-        version: str(r["version"]),
-        intro: str(r["intro"]),
-        clauses: safeJson(r["clauses"], []),
-        publishedAt: str(r["published_at"]),
-        createdAt: str(r["created_at"]),
-        updatedAt: str(r["updated_at"]),
-        createdById: nul(r["created_by_id"]),
-      })),
+      (await this.many("SELECT * FROM legal_docs ORDER BY published_at DESC")).map(
+        (r): LegalDoc => ({
+          id: str(r["id"]),
+          slug: str(r["slug"]),
+          title: str(r["title"]),
+          subtitle: str(r["subtitle"]),
+          version: str(r["version"]),
+          intro: str(r["intro"]),
+          clauses: safeJson(r["clauses"], []),
+          publishedAt: str(r["published_at"]),
+          createdAt: str(r["created_at"]),
+          updatedAt: str(r["updated_at"]),
+          createdById: nul(r["created_by_id"]),
+        }),
+      ),
       this.listResetTokens(),
-      this.many("SELECT * FROM meta"),
-      this.many(
-        "SELECT user_id AS userId, function_key AS functionKey, description, granted_at AS grantedAt, granted_by AS grantedBy FROM user_functions ORDER BY user_id, function_key",
+      await this.many("SELECT * FROM meta"),
+      (
+        await this.many(
+          "SELECT user_id AS userId, function_key AS functionKey, description, granted_at AS grantedAt, granted_by AS grantedBy FROM user_functions ORDER BY user_id, function_key",
+        )
       ).map((r): UserFunctionRow => ({
         userId: str(r["userId"]),
         functionKey: str(r["functionKey"]),
@@ -1711,7 +1683,7 @@ export class SqliteStorage implements Storage {
     };
   }
   async importDatabase(dump: DatabaseDump): Promise<void> {
-    this.db.exec("BEGIN");
+    await this.exec("BEGIN");
     try {
       const tables = [
         "users",
@@ -1736,7 +1708,7 @@ export class SqliteStorage implements Storage {
         "user_functions",
         "meta",
       ];
-      for (const t of tables) this.db.exec(`DELETE FROM ${t}`);
+      for (const t of tables) await this.exec(`DELETE FROM ${t}`);
       for (const u of dump.users) await this.insertUser(u);
       for (const s of dump.sessions) await this.insertSession(s as SessionRow);
       for (const c of dump.columns) await this.insertColumn(c);
@@ -1765,9 +1737,9 @@ export class SqliteStorage implements Storage {
           uf.grantedAt,
         );
       for (const [k, v] of Object.entries(dump.meta ?? {})) await this.setMeta(k, v);
-      this.db.exec("COMMIT");
+      await this.exec("COMMIT");
     } catch (e) {
-      this.db.exec("ROLLBACK");
+      await this.exec("ROLLBACK");
       throw e;
     }
   }
@@ -1782,63 +1754,280 @@ export class SqliteStorage implements Storage {
   }
   /* --- registros genéricos de módulo --- */
   async listDocs() {
-    return this.many("SELECT * FROM docs ORDER BY rowid ASC").map(rowToDoc);
+    return (await this.many("SELECT * FROM docs ORDER BY rowid ASC")).map(rowToDoc);
   }
   async listDocsByKind(kind: string) {
-    return this.many("SELECT * FROM docs WHERE kind = ? ORDER BY rowid ASC", kind).map(rowToDoc);
+    return (await this.many("SELECT * FROM docs WHERE kind = ? ORDER BY rowid ASC", kind)).map(
+      rowToDoc,
+    );
   }
   async getDoc(id: string) {
-    const r = this.one("SELECT * FROM docs WHERE id = ?", id);
+    const r = await this.one("SELECT * FROM docs WHERE id = ?", id);
     return r ? rowToDoc(r) : null;
   }
   async upsertDoc(doc: DocRecord) {
-    this.db
-      .prepare(
-        `INSERT INTO docs (id, kind, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?)
+    await this.run(
+      `INSERT INTO docs (id, kind, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at`,
-      )
-      .run(doc.id, doc.kind, JSON.stringify(doc.data), doc.createdAt, doc.updatedAt);
+      doc.id,
+      doc.kind,
+      JSON.stringify(doc.data),
+      doc.createdAt,
+      doc.updatedAt,
+    );
   }
   async deleteDoc(id: string) {
-    return Number(this.db.prepare("DELETE FROM docs WHERE id = ?").run(id).changes) > 0;
+    return Number((await this.run("DELETE FROM docs WHERE id = ?", id)).changes) > 0;
   }
 
   /* --- convites de cadastro --- */
   async insertInvite(i: InviteRow) {
-    this.db
-      .prepare(
-        `INSERT INTO invites (code_hash, id, email, role, hint, created_by, created_by_name, created_at, expires_at, used_at, used_by)
+    await this.run(
+      `INSERT INTO invites (code_hash, id, email, role, hint, created_by, created_by_name, created_at, expires_at, used_at, used_by)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      )
-      .run(
-        i.codeHash,
-        i.id,
-        i.email,
-        i.role,
-        i.hint,
-        i.createdBy,
-        i.createdByName,
-        i.createdAt,
-        i.expiresAt,
-        i.usedAt,
-        i.usedBy,
-      );
+      i.codeHash,
+      i.id,
+      i.email,
+      i.role,
+      i.hint,
+      i.createdBy,
+      i.createdByName,
+      i.createdAt,
+      i.expiresAt,
+      i.usedAt,
+      i.usedBy,
+    );
   }
   async listInvites() {
-    return this.many("SELECT * FROM invites ORDER BY created_at DESC").map(rowToInvite);
+    return (await this.many("SELECT * FROM invites ORDER BY created_at DESC")).map(rowToInvite);
   }
   async getInviteByHash(codeHash: string) {
-    const r = this.one("SELECT * FROM invites WHERE code_hash = ?", codeHash);
+    const r = await this.one("SELECT * FROM invites WHERE code_hash = ?", codeHash);
     return r ? rowToInvite(r) : null;
   }
   async markInviteUsed(codeHash: string, usedAt: string, usedBy: string) {
-    this.db
-      .prepare("UPDATE invites SET used_at = ?, used_by = ? WHERE code_hash = ?")
-      .run(usedAt, usedBy, codeHash);
+    await this.run(
+      "UPDATE invites SET used_at = ?, used_by = ? WHERE code_hash = ?",
+      usedAt,
+      usedBy,
+      codeHash,
+    );
   }
   async deleteInvite(id: string) {
-    return Number(this.db.prepare("DELETE FROM invites WHERE id = ?").run(id).changes) > 0;
+    return Number((await this.run("DELETE FROM invites WHERE id = ?", id)).changes) > 0;
   }
+}
+
+/* ------------------------------------------------------------------ */
+/* Drivers SQL: node:sqlite (arquivo/memória) e Cloudflare D1          */
+/* ------------------------------------------------------------------ */
+
+type AsyncExec = (sql: string) => Promise<void>;
+
+/** Cria tabelas e índices, além das migrações aditivas, via `exec` async. */
+async function ensureSqliteSchema(exec: AsyncExec, opts?: { skipPragmas?: boolean }) {
+  if (!opts?.skipPragmas) {
+    await exec("PRAGMA journal_mode = WAL;");
+    await exec("PRAGMA foreign_keys = ON;");
+  }
+  await exec(SCHEMA);
+  for (const col of ["department TEXT", "bio TEXT"]) {
+    try {
+      await exec(`ALTER TABLE users ADD COLUMN ${col}`);
+    } catch {
+      void 0;
+    }
+  }
+  for (const sql of [
+    "ALTER TABLE controls ADD COLUMN role TEXT NOT NULL DEFAULT 'gestor'",
+    "ALTER TABLE risks ADD COLUMN role TEXT NOT NULL DEFAULT 'gestor'",
+  ]) {
+    try {
+      await exec(sql);
+    } catch {
+      void 0;
+    }
+  }
+  try {
+    await exec(
+      "CREATE TABLE IF NOT EXISTS role_functions (" +
+        "role TEXT NOT NULL, function_key TEXT NOT NULL, " +
+        "description TEXT NOT NULL, PRIMARY KEY (role, function_key))",
+    );
+    await exec("CREATE INDEX IF NOT EXISTS role_functions_role_idx ON role_functions(role)");
+  } catch {
+    void 0;
+  }
+  try {
+    await exec(
+      "CREATE TABLE IF NOT EXISTS user_functions (" +
+        "user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, " +
+        "function_key TEXT NOT NULL, description TEXT NOT NULL, " +
+        "granted_at TEXT NOT NULL, granted_by TEXT, " +
+        "PRIMARY KEY (user_id, function_key))",
+    );
+    await exec("CREATE INDEX IF NOT EXISTS user_functions_user_idx ON user_functions(user_id)");
+  } catch {
+    void 0;
+  }
+}
+
+/** SQLite embutido do Node (`node:sqlite`), em arquivo persistente ou memória. */
+export class SqliteStorage extends SqliteBackend {
+  readonly kind = "sqlite" as const;
+
+  private constructor(private db: SqlDatabase) {
+    super();
+  }
+
+  static async open(path: string): Promise<SqliteStorage | null> {
+    try {
+      if (path !== ":memory:") {
+        const { mkdirSync } = await import("node:fs");
+        const nodePath = await import("node:path");
+        const dir = nodePath.dirname(path);
+        if (dir && dir !== ".") mkdirSync(dir, { recursive: true });
+      }
+      const mod = (await import("node:sqlite")) as unknown as {
+        DatabaseSync: new (path: string, opts?: object) => SqlDatabase;
+      };
+      const db = new mod.DatabaseSync(path);
+      const storage = new SqliteStorage(db);
+      await ensureSqliteSchema((sql) => storage.exec(sql));
+      SqliteBackend.lastOpenError = null;
+      return storage;
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      SqliteBackend.lastOpenError = message;
+      console.error(`[portal] Falha ao abrir SQLite em ${path}: ${message}`);
+      return null;
+    }
+  }
+
+  protected async one(sql: string, ...params: SqlValue[]) {
+    return this.db.prepare(sql).get(...params);
+  }
+  protected async many(sql: string, ...params: SqlValue[]) {
+    return this.db.prepare(sql).all(...params);
+  }
+  protected async run(sql: string, ...params: SqlValue[]) {
+    const r = this.db.prepare(sql).run(...params);
+    return { changes: Number(r.changes) };
+  }
+  protected async exec(sql: string) {
+    this.db.exec(sql);
+  }
+}
+
+type D1ValueLike = string | number | ArrayBuffer | null;
+
+function toD1Params(params: SqlValue[]): D1ValueLike[] {
+  return params.map((p) =>
+    typeof p === "bigint" ? Number(p) : p instanceof Uint8Array ? (p.buffer as ArrayBuffer) : p,
+  );
+}
+
+/** Driver "dormente" sobre o binding Cloudflare D1 (precisa da flag STORAGE_D1). */
+export class D1Storage extends SqliteBackend {
+  readonly kind = "d1" as const;
+
+  private constructor(
+    private db: D1DatabaseLike,
+    private bindingName: string,
+  ) {
+    super();
+  }
+
+  /** Ativa o storage sobre um binding D1 válido, criando o schema se necessário. */
+  static async open(binding: D1DatabaseLike, name: string): Promise<D1Storage | null> {
+    try {
+      const storage = new D1Storage(binding, name);
+      await ensureSqliteSchema((sql) => storage.exec(sql), { skipPragmas: true });
+      SqliteBackend.lastOpenError = null;
+      return storage;
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      SqliteBackend.lastOpenError = message;
+      console.error(`[portal] Falha ao inicializar D1Storage("${name}"): ${message}`);
+      return null;
+    }
+  }
+
+  protected async one(sql: string, ...params: SqlValue[]) {
+    const row = await this.db
+      .prepare(sql)
+      .bind(...toD1Params(params))
+      .first();
+    return row ?? undefined;
+  }
+  protected async many(sql: string, ...params: SqlValue[]) {
+    const res = await this.db
+      .prepare(sql)
+      .bind(...toD1Params(params))
+      .all();
+    return (res?.results ?? []) as Record<string, SqlValue>[];
+  }
+  protected async run(sql: string, ...params: SqlValue[]) {
+    const res = await this.db
+      .prepare(sql)
+      .bind(...toD1Params(params))
+      .run();
+    return { changes: Number(res?.meta?.changes ?? 0) };
+  }
+  protected async exec(sql: string) {
+    await this.db.exec(sql);
+  }
+
+  override async getStorageInfo(): Promise<StorageInfo> {
+    return {
+      kind: this.kind,
+      persistent: true,
+      path: `d1:${this.bindingName}`,
+      lastBackupAt: await this.getMeta("last_backup_at"),
+      requirePersistent: isRequirePersistent(),
+    };
+  }
+}
+
+interface D1PreparedLike {
+  bind(...params: D1ValueLike[]): D1PreparedLike;
+  all(): Promise<{ results?: Record<string, SqlValue>[] }>;
+  first(): Promise<Record<string, SqlValue> | null | undefined>;
+  run(): Promise<{ meta?: { changes?: number; last_row_id?: number } }>;
+}
+
+interface D1DatabaseLike {
+  exec(sql: string): Promise<unknown>;
+  prepare(sql: string): D1PreparedLike;
+}
+
+/** Resgata o binding D1 do runtime edge (Workers/Nitro) quando configurado. */
+function resolveD1Binding(): { db: D1DatabaseLike; name: string } | null {
+  const flag =
+    typeof process !== "undefined" && process.env
+      ? (process.env["STORAGE_D1"] ?? "").trim().toLowerCase()
+      : "";
+  if (flag !== "1" && flag !== "true" && flag !== "yes") return null;
+  const name =
+    typeof process !== "undefined" && process.env
+      ? (process.env["D1_BINDING_NAME"] ?? "DB").trim()
+      : "DB";
+  const candidates: unknown[] = [
+    (globalThis as Record<string, unknown>)[name],
+    typeof process !== "undefined" ? (process.env as Record<string, unknown>)[name] : undefined,
+  ];
+  for (const candidate of candidates) {
+    if (
+      candidate &&
+      typeof candidate === "object" &&
+      typeof (candidate as D1DatabaseLike).prepare === "function" &&
+      typeof (candidate as D1DatabaseLike).exec === "function"
+    ) {
+      return { db: candidate as D1DatabaseLike, name };
+    }
+  }
+  SqliteBackend.lastOpenError = `binding "${name}" não encontrado (STORAGE_D1=1 exige um binding D1 no runtime)`;
+  return null;
 }
 
 function safeJsonObject(v: SqlValue | undefined): JsonObject {
@@ -1974,7 +2163,13 @@ export class MemoryStorage implements Storage {
     if (this.userFunctions.some((f) => f.userId === userId && f.functionKey === functionKey)) {
       return false;
     }
-    this.userFunctions.push({ userId, functionKey, description, grantedAt, grantedBy });
+    this.userFunctions.push({
+      userId,
+      functionKey,
+      description,
+      grantedAt,
+      grantedBy,
+    });
     return true;
   }
   async revokeUserFunction(userId: string, functionKey: string): Promise<boolean> {
@@ -2137,7 +2332,10 @@ export class MemoryStorage implements Storage {
   }
 
   async listRisks() {
-    return this.risks.map((r) => ({ ...r, role: (r.role ?? "gestor") as Risk["role"] }));
+    return this.risks.map((r) => ({
+      ...r,
+      role: (r.role ?? "gestor") as Risk["role"],
+    }));
   }
   async getRisk(id: string) {
     const r = this.risks.find((r) => r.id === id) ?? null;
@@ -2467,7 +2665,10 @@ async function seedIfEmpty(storage: Storage): Promise<void> {
   }
   if ((await storage.listPatentStages()).length === 0) {
     for (const p of patentStages)
-      await storage.insertPatentStage({ ...p, deadline: isoFromBrOrText(p.deadline) });
+      await storage.insertPatentStage({
+        ...p,
+        deadline: isoFromBrOrText(p.deadline),
+      });
   }
   if ((await storage.listWiki()).length === 0) {
     for (const w of wikiArticles) await storage.insertWiki(w);
@@ -2512,7 +2713,10 @@ async function seedIfEmpty(storage: Storage): Promise<void> {
     for (const role of Object.keys(roleFunctionsData) as Role[]) {
       await storage.syncRoleFunctions(
         role,
-        roleFunctionsData[role].map((f) => ({ key: f.key, description: f.description })),
+        roleFunctionsData[role].map((f) => ({
+          key: f.key,
+          description: f.description,
+        })),
       );
     }
   }
@@ -2575,7 +2779,10 @@ async function seedDocsIfEmpty(storage: Storage): Promise<void> {
   }
   for (const t of stack) await put("tech", { ...t });
   for (const s of patentStages) {
-    const { id: _id, ...rest } = { ...s, deadline: isoFromBrOrText(s.deadline) };
+    const { id: _id, ...rest } = {
+      ...s,
+      deadline: isoFromBrOrText(s.deadline),
+    };
     await put("patent", { ...rest });
   }
   for (const a of wikiArticles) await put("wiki", { ...a });
@@ -2694,6 +2901,28 @@ export function getStorage(): Promise<Storage> {
 
 async function initStorage(): Promise<Storage> {
   const requirePersistent = isRequirePersistent();
+
+  const d1 = resolveD1Binding();
+  if (d1) {
+    console.info(`[portal] Tentando D1Storage (binding "${d1.name}")`);
+    const d1Storage = await D1Storage.open(d1.db, d1.name);
+    if (d1Storage) {
+      await seedIfEmpty(d1Storage);
+      activePersistent = true;
+      activeDatabasePath = `d1:${d1.name}`;
+      storageInitError = null;
+      console.info(`[portal] D1Storage ativo (binding "${d1.name}")`);
+      return d1Storage;
+    }
+    const err = `binding "${d1.name}" falhou ao inicializar: ${SqliteBackend.lastOpenError ?? "erro desconhecido"}`;
+    if (requirePersistent) {
+      storageInitError = `STORAGE_REQUIRE_PERSISTENT=1 e D1 indisponível — ${err}`;
+      console.error(`[portal] ${storageInitError}`);
+      throw new Error(storageInitError);
+    }
+    console.warn(`[portal] ${err}`);
+  }
+
   const candidates = candidateDatabasePaths();
   const failures: string[] = [];
 
