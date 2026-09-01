@@ -1,67 +1,61 @@
-# Finalização do Portal de Governança Grupo Geos — Prompt Estruturado
+# Corrigir a persistência do banco (sem Lovable Cloud)
 
-## ROLE
-Você é o engenheiro sênior responsável pelo Portal de Governança do Grupo Geos: aplicação TanStack Start com backend próprio (SQLite via `node:sqlite`, rodando na VM Oracle), RBAC real, auditoria imutável e convites com código secreto.
+## O que está acontecendo
 
-## GOAL
-Entregar o portal como produto final: sem dados estáticos residuais, com persistência garantida, cadastro/edição completos em todos os módulos e UX de painel de gestão (estilo ClickUp) coerente em toda a aplicação.
+O portal já usa SQLite embutido (`node:sqlite`) com caminho padrão `.data/portal.db`.
+Só que a pasta `.data/` não existe no projeto e o driver nunca a cria: `DatabaseSync`
+falha ao abrir o arquivo, o erro é engolido silenciosamente (`catch { return null }`)
+e o sistema cai no modo em memória — daí o aviso "os dados serão perdidos a cada
+reinício". Além disso o caminho é relativo, então depende do diretório de trabalho
+do processo.
 
-## TASK
-1. Garantir persistência real e visível (nunca degradar silenciosamente para memória).
-2. Eliminar os últimos conteúdos estáticos (Patente, Documentos Legais, Próximos Passos, lista de Módulos).
-3. Completar o ciclo de vida do usuário (perfil, senha, sessões, convites).
-4. Padronizar CRUD, datas reais e estados vazios/carregando em todos os módulos.
-5. Validar entrega com checklist operacional dentro do Admin.
+Conclusão: não é preciso banco externo nem Cloud. Basta garantir diretório e
+caminho absoluto, e parar de esconder a falha real.
 
-## CONTEXT
-Estado verificado hoje no código:
-- `src/server/storage.ts` (2.562 linhas) abre SQLite em `DATABASE_PATH`; se o caminho não for gravável cai para SQLite em memória e, no limite, para storage em memória — com `storageInitError` preenchido. Existe a flag `STORAGE_REQUIRE_PERSISTENT`.
-- Módulos já persistidos no banco: tarefas, compliance, riscos, wiki, diário/releases, engenharia/time, convites, auditoria.
-- Ainda com dados estáticos: `src/routes/patente.tsx` importa `patentStages` de `@/data/patent`; `src/routes/admin.tsx` importa `termsDoc`/`lgpdDoc` de `@/data/legal`; `src/data/modules.ts` alimenta módulos/próximos passos no dashboard.
-- Componentes reutilizáveis disponíveis: `RecordForm.tsx` (RecordDialog + DeleteRecordButton), `StatusBadge`, `PageHeader`, `InvitesPanel`, `LegalDocPage`.
-- RBAC em `src/lib/rbac.ts`; API cliente em `src/lib/portal-api.ts`; validação Zod em `src/lib/doc-schemas.ts`.
+## Correções
 
-## CONSTRAINTS
-- Não alterar a identidade visual (sidebar navy, cores semânticas de status, tipografia atual).
-- Não ativar Lovable Cloud/Supabase nem qualquer serviço externo: apenas o backend existente.
-- Nenhum stub, texto de demonstração, data fictícia ou "Teste — Tarefa NNN".
-- Toda escrita passa por validação Zod no servidor e gera registro de auditoria imutável.
-- Ações destrutivas e de aprovação restritas por papel (admin/diretor/gestor/dev/auditor).
-- Nenhuma migração pode apagar dados já cadastrados pelo usuário.
+1. **Caminho absoluto e estável** (`src/server/storage.ts` → `resolveDatabasePath`)
+   - Mantém `DATABASE_PATH` como prioridade; quando relativo, resolve contra
+     `process.cwd()` com `path.resolve` (sem `import.meta.url`, que quebra no edge).
+   - Padrão continua `.data/portal.db`, agora resolvido para caminho absoluto.
 
-## TOOLS
-- Banco: tabelas SQLite em `src/server/storage.ts` (+ migrações idempotentes).
-- API: `src/lib/portal-api.ts`, hooks em `src/lib/api-hooks.ts`, schemas em `src/lib/doc-schemas.ts`.
-- UI: componentes de `src/components/portal/`, rotas em `src/routes/`.
-- Testes: vitest (`src/server/__tests__`, `src/lib/__tests__`); verificação de UI via preview/Playwright.
+2. **Criar o diretório antes de abrir** (`SqliteStorage.open`)
+   - `mkdirSync(dirname(path), { recursive: true })` quando o caminho não é `:memory:`.
+   - Se a criação falhar, seguir para as alternativas do passo 4.
 
-## OUTPUT
-- Código na árvore atual, sem novos serviços externos.
-- Cada módulo com criar/editar/excluir funcional, validação e auditoria.
-- Painel Admin com: status da persistência, backup/restore do banco, convites, checklist de entrega.
-- Suíte de testes verde e build sem erros.
+3. **Não engolir o erro**
+   - `SqliteStorage.open` passa a registrar a causa real (`console.error`) e a
+     expor a mensagem para o bootstrap, para que o banner do Admin mostre o motivo
+     concreto (permissão, FS somente leitura, `node:sqlite` ausente) em vez de um
+     aviso genérico.
 
-## WORKFLOW
-**Passo 1 — Persistência auditável**
-Expor `storageInitError` e o driver ativo (`sqlite`/`memory`) num banner no Admin; documentar `DATABASE_PATH` e ligar `STORAGE_REQUIRE_PERSISTENT` em produção; adicionar export/import do banco (backup/restore) com auditoria.
+4. **Cadeia de fallback persistente antes de memória**
+   - Ordem de tentativa: `DATABASE_PATH` → `<cwd>/.data/portal.db` → `/tmp/portal.db`.
+   - Só cai em memória quando nenhuma delas abre; nesse caso a mensagem passa a
+     citar o caminho e o erro que impediram a persistência.
 
-**Passo 2 — Patente no banco**
-Criar tabela `patent_stages` com migração a partir de `@/data/patent` (uma vez, se vazia); CRUD com ordem, status e datas; remover o import estático de `patente.tsx`.
+5. **Sinalização correta na interface**
+   - `getStorageInitError()` retorna a causa detalhada; o aviso já exibido no portal
+     passa a mostrá-la. Quando o SQLite em arquivo abre, o aviso desaparece.
 
-**Passo 3 — Documentos legais versionados**
-Migrar Termos e LGPD para a tabela `docs`, com editor no Admin, versão, data de vigência e histórico; `termos.tsx`/`lgpd.tsx` passam a ler do banco via `LegalDocPage`.
+6. **Configuração e repositório**
+   - `.gitignore`: ignorar `.data/` (arquivo do banco, `-wal`, `-shm`).
+   - `.env.example`: documentar `DATABASE_PATH` e `STORAGE_REQUIRE_PERSISTENT=1`
+     para ambientes onde a volatilidade deve ser um erro fatal (ex.: a VM Oracle).
 
-**Passo 4 — Dashboard sem estático**
-Mover módulos e "Próximos Passos" para o banco, com CRUD e ordenação; termômetro e KPIs derivados apenas de dados reais; estado vazio explicativo quando não houver registros.
+## Validação
 
-**Passo 5 — Datas reais**
-Substituir datas textuais (diário, releases, patente) por campos ISO com date picker, ordenação e filtros por período; formatação pt-BR na exibição.
+- Reiniciar o dev server e conferir no log `[portal] SQLite persistente em <caminho>`.
+- Confirmar que `.data/portal.db` foi criado.
+- Criar um registro (ex.: uma tarefa), reiniciar o servidor e verificar que o
+  registro continua lá — prova de persistência real.
+- Conferir que o banner de armazenamento volátil não aparece mais no portal.
 
-**Passo 6 — Ciclo de vida do usuário**
-Concluir `perfil.tsx` (nome, e-mail, troca de senha), gestão de usuários e papéis no Admin, listagem/revogação de sessões e fluxo de convite por e-mail com código secreto de uso único e expiração.
+## Observações técnicas
 
-**Passo 7 — Polimento de UX**
-Skeletons de carregamento, toasts de sucesso/erro, busca global, ocultar (não apenas desabilitar) ações sem permissão, e estados vazios com CTA em todos os módulos.
-
-**Passo 8 — Validação de entrega**
-Checklist no Admin (persistência OK, admin criado, documentos legais publicados, convites ativos), rodar testes, revisar auditoria de ponta a ponta e verificar cada rota no preview.
+- Nenhuma dependência nova: `node:sqlite`, `node:fs` e `node:path` são embutidos.
+- Nada de Lovable Cloud, Supabase ou serviço externo.
+- Sem alteração de identidade visual e sem apagar dados existentes.
+- Em runtime edge (workerd) `node:sqlite` pode não existir; nesse cenário o
+  aviso continuará aparecendo com a causa explícita, e a execução em Node
+  (VM Oracle / dev) usa o arquivo normalmente.
