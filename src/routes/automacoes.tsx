@@ -439,8 +439,11 @@ function AutomacoesPage() {
           workflow.
         </p>
         <p className="mt-1">
-          IP externo: 163.176.45.217 · Porta n8n dedicada: 5679 · n8n legado: 5678 · Para produção
-          exponha via HTTPS/reverse proxy e defina N8N_API_KEY + N8N_PUBLIC_URL.
+          IP público detectado automaticamente via N8N_PUBLIC_URL / api.ipify.org · Porta dedicada: 5679 · n8n legado: 5678 · Defina N8N_API_KEY + N8N_PUBLIC_URL no .env para produção.
+        </p>
+        <p className="mt-1 text-[11px]">
+          URL atual: <code className="rounded bg-white px-1 py-0.5">{n8nUrl}</code>
+          {n8nInfo?.url !== n8nInfo?.publicUrl ? ` (interno: ${n8nInfo?.url})` : ""}
         </p>
       </div>
     </>

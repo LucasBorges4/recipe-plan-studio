@@ -10,9 +10,10 @@ services:
       GENERIC_TIMEZONE: America/Sao_Paulo
       TZ: America/Sao_Paulo
       N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:-change-me-32chars-please}
-      N8N_PUBLIC_URL: ${N8N_PUBLIC_URL:-https://163-176-45-217.sslip.io}
+      # Se N8N_PUBLIC_URL não estiver no .env, defina manualmente ou use o script scripts/detect-public-ip.sh
+      N8N_PUBLIC_URL: ${N8N_PUBLIC_URL:-}
       N8N_API_KEY: ${N8N_API_KEY:-}
-      WEBHOOK_URL: ${N8N_PUBLIC_URL:-https://163-176-45-217.sslip.io}
+      WEBHOOK_URL: ${WEBHOOK_URL:-${N8N_PUBLIC_URL:-}}
     volumes:
       - n8n_recipe_data:/home/node/.n8n
     healthcheck:

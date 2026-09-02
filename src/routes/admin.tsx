@@ -42,6 +42,9 @@ import {
   revokeUserFunctionFn,
   exportBackupFn,
   importBackupFn,
+  createTechStackFn,
+  deleteTechStackFn,
+  generateAutoRisksFn,
 } from "@/lib/portal-api";
 import { roleProfiles } from "@/lib/rbac";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -127,6 +130,45 @@ const functionCatalog: Array<{ key: string; description: string; role: Role }> =
   fns.map((f) => ({ key: f.key, description: f.description, role: r as Role })),
 );
 
+/** Atalhos de delegação por módulo — concede conjuntos de funções de uma vez. */
+const moduleDelegation: Array<{
+  label: string;
+  icon: string;
+  keys: string[];
+  description: string;
+}> = [
+  {
+    label: "Wiki",
+    icon: "📚",
+    keys: ["wiki.write", "wiki.maintain"],
+    description: "Escrever e manter artigos da Wiki",
+  },
+  {
+    label: "Tarefas",
+    icon: "✅",
+    keys: ["tasks.manage", "tasks.move", "tasks.approve", "tasks.comment"],
+    description: "Criar, mover, aprovar e comentar tarefas",
+  },
+  {
+    label: "Diário de Bordo",
+    icon: "📓",
+    keys: ["journal.manage"],
+    description: "Gerenciar marcos e releases do diário",
+  },
+  {
+    label: "Compliance",
+    icon: "🛡️",
+    keys: ["evidence.attach", "evidence.review", "compliance.validate", "audit.read"],
+    description: "Anexar e revisar evidências, validar conformidade",
+  },
+  {
+    label: "Mapa de Riscos",
+    icon: "⚠️",
+    keys: ["risks.manage", "risks.monitor"],
+    description: "Gerenciar e monitorar riscos e mitigações",
+  },
+];
+
 /** Controle do admin: concede/revoga funções individuais de um usuário. */
 function UserFunctionsDialog({
   user,
@@ -161,6 +203,22 @@ function UserFunctionsDialog({
     onError: (e) => toast.error(e instanceof Error ? e.message : "Falha ao alterar função."),
   });
 
+  // Mutação em lote para delegação rápida por módulo
+  const bulkM = useMutation({
+    mutationFn: async (v: { keys: string[]; grant: boolean }) => {
+      for (const k of v.keys) {
+        if (v.grant && !granted.has(k)) await grantUserFunctionFn({ data: { userId: user.id, functionKey: k } });
+        if (!v.grant && granted.has(k)) await revokeUserFunctionFn({ data: { userId: user.id, functionKey: k } });
+      }
+    },
+    onSuccess: (_data, vars) => {
+      toast.success(vars.grant ? "Módulo delegado." : "Módulo revogado.");
+      qc.invalidateQueries({ queryKey: qk.users });
+      qc.invalidateQueries({ queryKey: qk.session });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Falha na delegação em lote."),
+  });
+
   const groups = roles
     .map((role) => ({
       role,
@@ -179,6 +237,38 @@ function UserFunctionsDialog({
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
+          {/* Delegação rápida por módulo */}
+          <div className="rounded-xl border border-brand/20 bg-brand-soft/10 p-3">
+            <p className="text-xs font-semibold text-foreground">Delegação rápida por módulo</p>
+            <p className="mt-0.5 text-[11px] text-muted-foreground">
+              Conceda em 1 clique todas as funções necessárias para Wiki, Tarefas, Diário, Compliance e Mapa de Riscos.
+            </p>
+            <div className="mt-3 grid gap-2">
+              {moduleDelegation.map((m) => {
+                const hasAll = m.keys.every((k) => granted.has(k));
+                const hasSome = !hasAll && m.keys.some((k) => granted.has(k));
+                return (
+                  <div key={m.label} className="flex items-center justify-between rounded-lg border border-border bg-card px-3 py-2">
+                    <div>
+                      <p className="text-xs font-medium text-foreground">
+                        {m.icon} {m.label} {hasAll ? "· concedido" : hasSome ? "· parcial" : ""}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground">{m.description}</p>
+                      <p className="font-mono text-[10px] text-muted-foreground">{m.keys.join(", ")}</p>
+                    </div>
+                    <button
+                      disabled={bulkM.isPending}
+                      onClick={() => bulkM.mutate({ keys: m.keys, grant: !hasAll })}
+                      className={`shrink-0 rounded-md px-3 py-1.5 text-xs font-medium disabled:opacity-50 ${hasAll ? "bg-brand text-brand-foreground" : "border border-input"}`}
+                    >
+                      {hasAll ? "Revogar" : "Conceder"}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
           {groups.map((g) => (
             <section key={g.role}>
               <p className="mb-2 text-xs font-semibold text-foreground">{roleLabel[g.role]}</p>
@@ -523,6 +613,11 @@ function AdminPage() {
   const [newCol, setNewCol] = useState("");
   const [newMod, setNewMod] = useState("");
   const [functionTarget, setFunctionTarget] = useState<PublicUser | null>(null);
+  const techStack = state?.techStack ?? [];
+  const [stackName, setStackName] = useState("");
+  const [stackCategory, setStackCategory] = useState("");
+  const [stackDesc, setStackDesc] = useState("");
+  const [stackIcon, setStackIcon] = useState("");
 
   const setRoleM = useMutation({
     mutationFn: (v: { userId: string; role: Role }) => setUserRoleFn({ data: v }),
@@ -559,6 +654,38 @@ function AdminPage() {
     mutationFn: (v: { name: string }) => deleteColumnFn({ data: v }),
     onSuccess: () => qc.invalidateQueries({ queryKey: qk.portal }),
     onError: (e) => toast.error(e instanceof Error ? e.message : "Falha ao remover coluna."),
+  });
+  const createStackM = useMutation({
+    mutationFn: (v: { name: string; category: string; description: string; icon?: string }) =>
+      createTechStackFn({ data: v }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.portal });
+      setStackName("");
+      setStackCategory("");
+      setStackDesc("");
+      setStackIcon("");
+      toast.success("Stack adicionada.");
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Falha ao adicionar stack."),
+  });
+  const deleteStackM = useMutation({
+    mutationFn: (v: { name: string }) => deleteTechStackFn({ data: v }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.portal });
+      toast.success("Stack removida.");
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Falha ao remover stack."),
+  });
+  const autoRiskM = useMutation({
+    mutationFn: () => generateAutoRisksFn(),
+    onSuccess: (r) => {
+      if (!r.ok) toast.error(r.error);
+      else {
+        toast.success(`${r.data.created} risco(s) gerado(s) automaticamente.`);
+        qc.invalidateQueries({ queryKey: qk.portal });
+      }
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Falha ao gerar riscos."),
   });
   const [nuName, setNuName] = useState("");
   const [nuEmail, setNuEmail] = useState("");
@@ -662,6 +789,7 @@ function AdminPage() {
           <TabsTrigger value="convites">Convites</TabsTrigger>
           <TabsTrigger value="modulos">Módulos</TabsTrigger>
           <TabsTrigger value="board">Colunas do board</TabsTrigger>
+          <TabsTrigger value="stacks">Stacks</TabsTrigger>
           <TabsTrigger value="docs">Documentos</TabsTrigger>
           <TabsTrigger value="perfis">Perfis & funções</TabsTrigger>
           <TabsTrigger value="validacao">Validação</TabsTrigger>
@@ -856,6 +984,85 @@ function AdminPage() {
                 <li className="py-2.5 text-sm text-muted-foreground">Nenhuma coluna cadastrada.</li>
               ) : null}
             </ul>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="stacks" className="mt-4">
+          <div className="rounded-xl border border-border bg-card p-4">
+            <h3 className="text-sm font-semibold text-foreground">Stacks de Tecnologia</h3>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Cadastre tecnologias usadas no projeto. Visível em Engenharia; gerenciado apenas pelo admin.
+            </p>
+            <div className="mt-4 grid gap-2 md:grid-cols-4">
+              <input
+                value={stackName}
+                onChange={(e) => setStackName(e.target.value)}
+                placeholder="Nome (ex: React)"
+                className="rounded-md border border-input bg-card px-3 py-2 text-xs"
+              />
+              <input
+                value={stackCategory}
+                onChange={(e) => setStackCategory(e.target.value)}
+                placeholder="Categoria (ex: Frontend)"
+                className="rounded-md border border-input bg-card px-3 py-2 text-xs"
+              />
+              <input
+                value={stackIcon}
+                onChange={(e) => setStackIcon(e.target.value)}
+                placeholder="Ícone (opcional, URL)"
+                className="rounded-md border border-input bg-card px-3 py-2 text-xs"
+              />
+              <input
+                value={stackDesc}
+                onChange={(e) => setStackDesc(e.target.value)}
+                placeholder="Descrição curta"
+                className="rounded-md border border-input bg-card px-3 py-2 text-xs md:col-span-4"
+              />
+            </div>
+            <button
+              onClick={() =>
+                stackName.trim() &&
+                stackCategory.trim() &&
+                stackDesc.trim() &&
+                createStackM.mutate({
+                  name: stackName.trim(),
+                  category: stackCategory.trim(),
+                  description: stackDesc.trim(),
+                  ...(stackIcon.trim() ? { icon: stackIcon.trim() } : {}),
+                })
+              }
+              disabled={createStackM.isPending || !stackName.trim() || !stackCategory.trim() || stackDesc.trim().length < 5}
+              className="mt-3 inline-flex items-center gap-1 rounded-md bg-brand px-4 py-2 text-xs font-medium text-brand-foreground disabled:opacity-50"
+            >
+              <Plus className="size-4" /> {createStackM.isPending ? "Adicionando..." : "Adicionar stack"}
+            </button>
+            <ul className="mt-4 divide-y divide-border">
+              {techStack.map((t) => (
+                <li key={t.name} className="flex items-center justify-between py-2.5">
+                  <div>
+                    <p className="text-sm font-medium text-foreground">{t.name} <span className="text-xs text-muted-foreground">· {t.category}</span></p>
+                    <p className="text-xs text-muted-foreground">{t.description}</p>
+                  </div>
+                  <DeleteButton label={t.name} onConfirm={() => deleteStackM.mutate({ name: t.name })} />
+                </li>
+              ))}
+              {techStack.length === 0 ? (
+                <li className="py-2.5 text-sm text-muted-foreground">Nenhuma stack cadastrada.</li>
+              ) : null}
+            </ul>
+          </div>
+          <div className="mt-4 rounded-xl border border-border bg-card p-4">
+            <h3 className="text-sm font-semibold text-foreground">Mapa de Riscos — Geração Automática</h3>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Gera riscos automaticamente a partir de tarefas atrasadas e controles vencidos. Evita duplicatas por título.
+            </p>
+            <button
+              onClick={() => autoRiskM.mutate()}
+              disabled={autoRiskM.isPending}
+              className="mt-3 rounded-md bg-brand px-4 py-2 text-xs font-medium text-brand-foreground disabled:opacity-50"
+            >
+              {autoRiskM.isPending ? "Gerando..." : "Gerar riscos automaticamente"}
+            </button>
           </div>
         </TabsContent>
 

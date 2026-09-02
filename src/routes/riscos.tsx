@@ -10,7 +10,7 @@ import { severityLabel, severityTone } from "@/lib/portal-utils";
 import { userCan, roleLabel, roles } from "@/lib/rbac";
 import type { Role } from "@/lib/rbac";
 import { usePortalData, useSession, qk } from "@/lib/api-hooks";
-import { createRiskFn, deleteRiskFn } from "@/lib/portal-api";
+import { createRiskFn, deleteRiskFn, generateAutoRisksFn } from "@/lib/portal-api";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/riscos")({
@@ -98,6 +98,17 @@ function RiscosPage() {
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Falha ao remover."),
   });
+  const autoM = useMutation({
+    mutationFn: () => generateAutoRisksFn(),
+    onSuccess: (r) => {
+      if (!r.ok) toast.error(r.error);
+      else {
+        toast.success(r.data.created ? `${r.data.created} risco(s) gerado(s).` : "Nenhum novo risco — sistema limpo.");
+        qc.invalidateQueries({ queryKey: qk.portal });
+      }
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Falha ao gerar."),
+  });
 
   return (
     <>
@@ -114,6 +125,13 @@ function RiscosPage() {
             className="flex items-center gap-1 rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-brand-foreground"
           >
             <Plus className="size-3" /> Novo risco
+          </button>
+          <button
+            onClick={() => autoM.mutate()}
+            disabled={autoM.isPending}
+            className="flex items-center gap-1 rounded-md border border-input px-3 py-1.5 text-xs disabled:opacity-50"
+          >
+            {autoM.isPending ? "Gerando..." : "↻ Gerar automaticamente"}
           </button>
           <span className="text-xs text-muted-foreground">
             Dados persistidos no backend com auditoria.

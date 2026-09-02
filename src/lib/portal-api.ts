@@ -1135,6 +1135,70 @@ export const deleteRiskFn = createServerFn({ method: "POST" })
     }
   });
 
+export const generateAutoRisksFn = createServerFn({ method: "POST" }).handler(
+  async (): Promise<ApiResult<{ created: number }>> => {
+    try {
+      const c = await ctx();
+      const user = await c.auth.requirePermission(c.storage, "risk.manage");
+      const tasks = await c.storage.listTasks();
+      const controls = await c.storage.listControls();
+      const risks = await c.storage.listRisks();
+      const existingTitles = new Set(risks.map((r) => r.title));
+      const now = new Date();
+      let created = 0;
+      const mkRisk = async (title: string, category: string, mitigation: string) => {
+        if (existingTitles.has(title)) return;
+        const id = c.newId("rsk");
+        await c.storage.insertRisk({
+          id,
+          title,
+          category,
+          owner: user.name,
+          role: user.role,
+          probability: 3,
+          impact: 4,
+          mitigation,
+        } as Parameters<typeof c.storage.insertRisk>[0]);
+        existingTitles.add(title);
+        created++;
+        await c.logAudit(
+          c.storage,
+          { id: user.id, name: user.name, role: user.role },
+          { action: "Risco auto-gerado", entity: "risco", entityId: id, after: title },
+        );
+      };
+      for (const t of tasks) {
+        if (!t.due) continue;
+        const due = new Date(t.due);
+        if (due < now && t.column !== "Concluído") {
+          await mkRisk(
+            `Atraso: ${t.title}`,
+            "Operacional",
+            `Tarefa "${t.title}" vencida em ${t.due} na coluna ${t.column}. Verificar impedimentos.`,
+          );
+        }
+      }
+      for (const ctrl of controls) {
+        if (ctrl.status === "Vencido" || ctrl.overdue) {
+          await mkRisk(`Controle vencido: ${ctrl.control}`, "Compliance", `Controle "${ctrl.control}" (${ctrl.norm}) vencido. Revisão necessária.`);
+        } else if (ctrl.nextReview) {
+          const nr = new Date(ctrl.nextReview);
+          if (nr < now) {
+            await mkRisk(
+              `Revisão pendente: ${ctrl.control}`,
+              "Compliance",
+              `Revisão do controle "${ctrl.control}" expirou em ${ctrl.nextReview}.`,
+            );
+          }
+        }
+      }
+      return { ok: true, data: { created } };
+    } catch (e) {
+      return { ok: false, error: errorMsg(e) };
+    }
+  },
+);
+
 /* ------------------------------------------------------------------ */
 /* 12. WIKI                                                             */
 /* ------------------------------------------------------------------ */
@@ -1868,7 +1932,26 @@ export const deleteTechStackFn = createServerFn({ method: "POST" })
 export const getN8nInfoFn = createServerFn({ method: "GET" }).handler(
   async (): Promise<{ url: string; publicUrl: string; hasApiKey: boolean }> => {
     const { n8nBaseUrl, n8nPublicUrl, n8nApiKey } = await import("@/server/n8n");
-    return { url: n8nBaseUrl(), publicUrl: n8nPublicUrl(), hasApiKey: !!n8nApiKey() };
+    let publicUrl = n8nPublicUrl();
+    const base = n8nBaseUrl();
+    // Auto-detecção de IP público quando N8N_PUBLIC_URL não foi configurado
+    if (publicUrl === base) {
+      try {
+        const controller = new AbortController();
+        const t = setTimeout(() => controller.abort(), 2000);
+        const r = await fetch("https://api.ipify.org?format=text", { signal: controller.signal });
+        clearTimeout(t);
+        if (r.ok) {
+          const ip = (await r.text()).trim();
+          if (/^\d{1,3}(\.\d{1,3}){3}$/.test(ip)) {
+            publicUrl = `https://${ip.replace(/\./g, "-")}.sslip.io`;
+          }
+        }
+      } catch {
+        // mantém fallback local
+      }
+    }
+    return { url: base, publicUrl, hasApiKey: !!n8nApiKey() };
   },
 );
 
