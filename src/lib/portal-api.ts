@@ -280,6 +280,70 @@ export const meFn = createServerFn({ method: "GET" }).handler(
   },
 );
 
+/**
+ * Diagnóstico de persistência — expõe o estado real do storage no runtime
+ * atual (Vercel). Retorna env vars presentes, qual storage está ativo, e o
+ * erro real de abertura do Postgres/Neon se houver. Use em produção para
+ * depurar por que cadastro/login não persistem.
+ */
+export const storageDiagnosticFn = createServerFn({ method: "GET" }).handler(
+  async (): Promise<
+    Record<string, unknown>
+  > => {
+    const { getStorage, isStoragePersistent, getStorageInitError, getActiveDatabasePath } =
+      await import("@/server/storage");
+    const { PostgresStorage } = await import("@/server/postgres-storage");
+    const { TursoStorage } = await import("@/server/turso-storage");
+
+    const hasPgUrl =
+      typeof process !== "undefined" && process.env
+        ? Boolean(
+            (process.env["POSTGRES_URL"] ??
+              process.env["POSTGRES_PRISMA_URL"] ??
+              process.env["DATABASE_URL"] ??
+              process.env["POSTGRES_URL_NON_POOLING"] ?? "").trim(),
+          )
+        : false;
+
+    let storageState: Record<string, unknown> = {};
+    try {
+      const storage = await getStorage();
+      const path = getActiveDatabasePath();
+      storageState = {
+        storageKind: storage.kind,
+        activePath: path,
+        persistent: isStoragePersistent(),
+        initError: getStorageInitError(),
+      };
+    } catch (e) {
+      storageState = { initError: e instanceof Error ? e.message : String(e) };
+    }
+
+    return {
+      timing: new Date().toISOString(),
+      runtime: typeof process !== "undefined" ? process.env["NITRO_PRESET"] ?? "unknown" : "edge",
+      env: {
+        hasPostgresUrl: hasPgUrl,
+        hasTursoUrl:
+          typeof process !== "undefined" && process.env
+            ? Boolean(
+                (process.env["TURSO_DATABASE_URL"] ??
+                  process.env["LIBSQL_URL"] ??
+                  "").trim(),
+              )
+            : false,
+        hasPrismaUrl:
+          typeof process !== "undefined" && process.env
+            ? Boolean((process.env["POSTGRES_PRISMA_URL"] ?? "").trim())
+            : false,
+      },
+      postgresOpenError: PostgresStorage.lastOpenError,
+      tursoOpenError: TursoStorage.lastOpenError ?? null,
+      storage: storageState,
+    };
+  },
+);
+
 /* ------------------------------------------------------------------ */
 /* 5. PORTAL STATE (leitura única para o cliente)                     */
 /* ------------------------------------------------------------------ */
