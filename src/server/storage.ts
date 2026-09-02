@@ -2939,7 +2939,46 @@ export async function getStorage(): Promise<Storage> {
 async function initStorage(): Promise<Storage> {
   const requirePersistent = isRequirePersistent();
 
-  // 0) Turso/libSQL remoto — persiste na Vercel (SQLite compatível, ideal para serverless)
+  // 0) Neon/Postgres — persiste na Vercel (Vercel Postgres / Neon)
+  const postgresUrl =
+    typeof process !== "undefined" && process.env
+      ? (
+          process.env["POSTGRES_URL"] ??
+          process.env["POSTGRES_PRISMA_URL"] ??
+          process.env["DATABASE_URL"] ??
+          process.env["POSTGRES_URL_NON_POOLING"] ??
+          ""
+        ).trim()
+      : "";
+  const isPostgres = postgresUrl.startsWith("postgres://") || postgresUrl.startsWith("postgresql://");
+  if (isPostgres) {
+    console.info(`[portal] Tentando PostgresStorage (Neon)`);
+    try {
+      const { PostgresStorage } = await import("./postgres-storage");
+      const pgStore = await PostgresStorage.open(postgresUrl);
+      if (pgStore) {
+        await seedIfEmpty(pgStore);
+        activePersistent = true;
+        activeDatabasePath = `postgres:${postgresUrl.split("@").pop()?.split("?")[0] ?? "neon"}`;
+        storageInitError = null;
+        console.info(`[portal] PostgresStorage ativo (Neon)`);
+        return pgStore;
+      }
+      const err = PostgresStorage.lastOpenError ?? "erro desconhecido";
+      if (requirePersistent) {
+        storageInitError = `STORAGE_REQUIRE_PERSISTENT=1 e Postgres falhou — ${err}`;
+        console.error(`[portal] ${storageInitError}`);
+        throw new Error(storageInitError);
+      }
+      console.warn(`[portal] Postgres falhou: ${err}`);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.warn(`[portal] PostgresStorage erro import/open: ${msg}`);
+      if (requirePersistent) throw e;
+    }
+  }
+
+  // 0b) Turso/libSQL remoto — alternativa SQLite na nuvem
   const tursoUrl =
     typeof process !== "undefined" && process.env
       ? (
