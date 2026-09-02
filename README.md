@@ -14,13 +14,28 @@ Continue developing this project in the [Lovable editor](https://lovable.dev/pro
 - **Stay in sync**: every change made in Lovable is committed straight to this repository.
 - **Full ownership**: this code is yours. Push to `main` on GitHub and your changes sync back into Lovable, ready for your next prompt.
 
+## Deploy na Vercel (Fork LucasBorges4)
+
+> Repositório forkado de `TecnoCAF-ufv/recipe-plan-studio` para deploy na Vercel: **https://github.com/LucasBorges4/recipe-plan-studio**
+
+### 1-click Deploy
+
+1. Acesse https://vercel.com/new
+2. Importe `LucasBorges4/recipe-plan-studio`
+3. Framework: **Vite** | Build: `npm run build` | Output: `.output/public`
+4. Env var obrigatória: `NITRO_PRESET=vercel` (já em `vercel.json`)
+5. Opcional: `AUTH_PEPPER` (`openssl rand -base64 32`), `REGISTRATION_CODE` (`openssl rand -hex 8`), `DATABASE_PATH=/tmp/portal.db`
+6. Deploy — na Vercel o SQLite roda em **memória** (sem disco persistente). Para persistência use Postgres/Neon/Turso.
+
+Clique em Deploy e pronto!
+
 ## Development
 
 Prefer working locally? You need Node.js and npm — [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating).
 
 ```sh
-git clone <this-repository-url>
-cd <repository-name>
+git clone https://github.com/LucasBorges4/recipe-plan-studio.git
+cd recipe-plan-studio
 npm i
 npm run dev
 ```

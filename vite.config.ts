@@ -12,4 +12,11 @@ export default defineConfig({
     // nitro/vite builds from this
     server: { entry: "server" },
   },
+  // Vercel: NITRO_PRESET=vercel é injetado via vercel.json.
+  // Local/Cloudflare mantém o default (cloudflare) da lib.
+  vite: process.env.VERCEL
+    ? {
+        // Garante que o Nitro use preset Vercel quando build roda na Vercel
+      }
+    : {},
 });
