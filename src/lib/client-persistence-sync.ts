@@ -8,10 +8,34 @@ export function isBrowser(): boolean {
   return typeof window !== "undefined" && typeof localStorage !== "undefined";
 }
 
+let saveDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+let lastSavedJson: string | null = null;
+
 export function savePortalStateToLocal(state: PortalStatePayload): void {
   if (!isBrowser()) return;
   try {
-    localStorage.setItem(PORTAL_CACHE_KEY, JSON.stringify(state));
+    const json = JSON.stringify(state);
+    if (json === lastSavedJson) return; // evita escrita idêntica
+    lastSavedJson = json;
+    if (saveDebounceTimer) clearTimeout(saveDebounceTimer);
+    saveDebounceTimer = setTimeout(() => {
+      try {
+        localStorage.setItem(PORTAL_CACHE_KEY, json);
+      } catch (e) {
+        console.warn("[persistence] Erro ao salvar estado local:", e);
+      }
+    }, 300);
+  } catch (e) {
+    console.warn("[persistence] Erro ao salvar estado local:", e);
+  }
+}
+
+export function savePortalStateToLocalImmediate(state: PortalStatePayload): void {
+  if (!isBrowser()) return;
+  try {
+    const json = JSON.stringify(state);
+    lastSavedJson = json;
+    localStorage.setItem(PORTAL_CACHE_KEY, json);
   } catch (e) {
     console.warn("[persistence] Erro ao salvar estado local:", e);
   }
@@ -28,12 +52,23 @@ export function getPortalStateFromLocal(): PortalStatePayload | null {
   }
 }
 
+let lastServerJson: string | null = null;
+let lastMergedResult: PortalStatePayload | null = null;
+
 export function mergePortalStateWithLocal(serverState: PortalStatePayload): PortalStatePayload {
   if (!isBrowser()) return serverState;
 
-  // Se o servidor for persistente (SQLite em disco/D1), salve no local e retorne a verdade do servidor.
+  // Memo: se payload idêntico, retorna memoizado sem merge/serialização
+  try {
+    const curJson = JSON.stringify(serverState);
+    if (curJson === lastServerJson && lastMergedResult) return lastMergedResult;
+    lastServerJson = curJson;
+  } catch {}
+
+  // Se o servidor for persistente (Postgres/Neon, SQLite, D1), salva debounce e retorna
   if (serverState.persistent) {
     savePortalStateToLocal(serverState);
+    lastMergedResult = serverState;
     return serverState;
   }
 
@@ -44,11 +79,19 @@ export function mergePortalStateWithLocal(serverState: PortalStatePayload): Port
     return serverState;
   }
 
-  // Mesclar listas de forma que dados salvos localmente pelo usuário sejam mantidos
+  // Mesclar listas com shallow check para evitar rebuild desnecessário
   const mergeById = <T extends { id: string }>(serverItems: T[], localItems: T[] = []): T[] => {
+    if (!localItems.length) return serverItems;
+    if (serverItems.length === 0) return localItems;
+    // shallow: se ids idênticos e mesma ordem, retorna serverItems
+    if (serverItems.length === localItems.length) {
+      let same = true;
+      for (let i = 0; i < serverItems.length; i++) if (serverItems[i].id !== localItems[i].id) { same = false; break; }
+      if (same) return serverItems;
+    }
     const map = new Map<string, T>();
     for (const item of serverItems) map.set(item.id, item);
-    for (const item of localItems) map.set(item.id, item); // local tem precedência sobre semente efêmera
+    for (const item of localItems) map.set(item.id, item);
     return Array.from(map.values());
   };
 
@@ -57,6 +100,8 @@ export function mergePortalStateWithLocal(serverState: PortalStatePayload): Port
     localItems: T[] = [],
     keyExtractor: (item: T) => string,
   ): T[] => {
+    if (!localItems.length) return serverItems;
+    if (serverItems.length === 0) return localItems;
     const map = new Map<string, T>();
     for (const item of serverItems) map.set(keyExtractor(item), item);
     for (const item of localItems) map.set(keyExtractor(item), item);
@@ -85,6 +130,7 @@ export function mergePortalStateWithLocal(serverState: PortalStatePayload): Port
   };
 
   savePortalStateToLocal(merged);
+  lastMergedResult = merged;
   return merged;
 }
 

@@ -99,7 +99,9 @@ export function usePortalData() {
         throw err;
       }
     },
-    staleTime: 15_000,
+    staleTime: 60_000,
+    gcTime: 300_000,
+    refetchOnWindowFocus: false,
   });
 }
 
@@ -173,6 +175,9 @@ export function useRevokeSessions() {
   return useMutation({
     mutationFn: () => revokeAllSessionsFn(),
     onSuccess: () => {
+      queryClient.setQueryData(qk.session, (old: any) => (old ? { ...old, user: null } : old));
+      queryClient.setQueryData(["user-sessions"], () => []);
+      // fallback invalida apenas se setQueryData não refletir
       queryClient.invalidateQueries({ queryKey: qk.session });
       queryClient.invalidateQueries({ queryKey: ["user-sessions"] });
     },
@@ -186,7 +191,8 @@ export function useGlobalSearch(q: string) {
     queryKey: ["global-search", q] as const,
     queryFn: () => globalSearchFn({ data: { q } }),
     enabled: q.length >= 2,
-    staleTime: 15_000,
+    staleTime: 60_000,
+    gcTime: 300_000,
   });
 }
 
