@@ -2970,9 +2970,13 @@ async function initStorage(): Promise<Storage> {
         console.error(`[portal] ${storageInitError}`);
         throw new Error(storageInitError);
       }
+      // Postgres URL está configurado mas não abriu: registra o erro real para
+      // diagnóstico em vez de cair silenciosamente no fallback volátil.
+      storageInitError = `Postgres/Neon configurado mas falhou ao abrir: ${err}`;
       console.warn(`[portal] Postgres falhou: ${err}`);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
+      storageInitError = `Postgres/Neon configurado mas falhou (import/open): ${msg}`;
       console.warn(`[portal] PostgresStorage erro import/open: ${msg}`);
       if (requirePersistent) throw e;
     }
