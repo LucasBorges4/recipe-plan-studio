@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { loginFn, registerFn } from "@/lib/portal-api";
 import { qk, useSession } from "@/lib/api-hooks";
+import { saveLocalUser } from "@/lib/client-persistence-sync";
 
 function LoginPage() {
   const navigate = useNavigate();
@@ -52,6 +53,7 @@ function LoginPage() {
         return;
       }
 
+      saveLocalUser(res.data);
       queryClient.setQueryData(qk.session, {
         user: res.data,
         persistent: session?.persistent ?? true,

@@ -8,6 +8,8 @@
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
+    "build:vm": "STORAGE_REQUIRE_PERSISTENT=1 NITRO_PRESET=node-server vite build",
+    "start:vm": "STORAGE_REQUIRE_PERSISTENT=1 node .output/server/index.mjs",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",

@@ -27,6 +27,7 @@ import { roleLabel } from "@/lib/rbac";
 import { useGlobalSearch } from "@/lib/api-hooks";
 import { useSession, qk } from "@/lib/api-hooks";
 import { logoutFn } from "@/lib/portal-api";
+import { saveLocalUser } from "@/lib/client-persistence-sync";
 
 const mainNav = [
   { to: "/", label: "Painel Executivo", icon: LayoutDashboard },
@@ -55,6 +56,7 @@ function SessionBox() {
   const logout = useMutation({
     mutationFn: () => logoutFn(),
     onSuccess: async () => {
+      saveLocalUser(null);
       queryClient.setQueryData(qk.session, { user: null, persistent: session?.persistent ?? true });
       await queryClient.invalidateQueries({ queryKey: qk.portal });
       await queryClient.invalidateQueries({ queryKey: qk.audit });

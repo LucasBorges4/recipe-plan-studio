@@ -1889,8 +1889,12 @@ export class SqliteStorage extends SqliteBackend {
         if (dir && dir !== ".") mkdirSync(dir, { recursive: true });
       }
       const mod = (await import("node:sqlite")) as unknown as {
-        DatabaseSync: new (path: string, opts?: object) => SqlDatabase;
+        DatabaseSync?: new (path: string, opts?: object) => SqlDatabase;
       };
+      if (!mod || typeof mod.DatabaseSync !== "function") {
+        SqliteBackend.lastOpenError = "node:sqlite DatabaseSync não suportado neste runtime";
+        return null;
+      }
       const db = new mod.DatabaseSync(path);
       const storage = new SqliteStorage(db);
       await ensureSqliteSchema((sql) => storage.exec(sql));

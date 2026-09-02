@@ -18,6 +18,12 @@ import type { PublicUser } from "@/lib/rbac";
 import type { AuditEntry, PortalStatePayload } from "@/lib/records";
 import type { N8nWorkflow } from "@/server/n8n";
 
+import {
+  mergePortalStateWithLocal,
+  saveLocalUser,
+  getLocalUser,
+} from "@/lib/client-persistence-sync";
+
 /** Chaves de cache compartilhadas entre loader e componentes. */
 export const qk = {
   session: ["session"] as const,
@@ -35,7 +41,28 @@ export interface SessionInfo {
 export function useSession() {
   return useQuery({
     queryKey: qk.session,
-    queryFn: () => meFn(),
+    queryFn: async () => {
+      try {
+        const res = await meFn();
+        if (res.user) {
+          saveLocalUser(res.user);
+          return res;
+        }
+        if (!res.persistent) {
+          const localUser = getLocalUser();
+          if (localUser) {
+            return { user: localUser, persistent: false };
+          }
+        }
+        return res;
+      } catch (err) {
+        const localUser = getLocalUser();
+        if (localUser) {
+          return { user: localUser, persistent: false };
+        }
+        throw err;
+      }
+    },
     staleTime: 30_000,
   });
 }
@@ -43,7 +70,35 @@ export function useSession() {
 export function usePortalData() {
   return useQuery({
     queryKey: qk.portal,
-    queryFn: () => getPortalStateFn(),
+    queryFn: async () => {
+      try {
+        const raw = await getPortalStateFn();
+        return mergePortalStateWithLocal(raw);
+      } catch (err) {
+        const fallback = mergePortalStateWithLocal({
+          persistent: false,
+          storageInitError: "Modo offline/local ativo.",
+          tasks: [],
+          columns: ["A Fazer", "Em Andamento", "Concluído"],
+          controls: [],
+          comments: [],
+          evidences: [],
+          modules: [],
+          risks: [],
+          wiki: [],
+          milestones: [],
+          releases: [],
+          patentStages: [],
+          techStack: [],
+          nextSteps: [],
+          legalDocs: [],
+          auditCount: 0,
+          docs: [],
+        });
+        if (fallback) return fallback;
+        throw err;
+      }
+    },
     staleTime: 15_000,
   });
 }

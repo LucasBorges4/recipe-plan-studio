@@ -1,11 +1,26 @@
 import { existsSync, writeFileSync } from "node:fs";
 const p = "node_modules/unenv/dist/runtime/node/sqlite.mjs";
 if (existsSync(p)) {
-  writeFileSync(
-    p,
-    'import { createRequire } from "node:module";\nconst require = createRequire(import.meta.url || "file:///");\nconst { DatabaseSync } = require("node:sqlite");\nexport { DatabaseSync };\nexport const StatementSync = undefined;\nexport const constants = {};\nexport default {\n\tDatabaseSync,\n\tStatementSync,\n\tconstants\n};\n',
-  );
-  console.log("[patch] unenv sqlite.mjs patched");
+  const code = `let DatabaseSyncImpl;
+try {
+  const { createRequire } = await import("node:module");
+  const require = createRequire(import.meta.url || "file:///");
+  DatabaseSyncImpl = require("node:sqlite")?.DatabaseSync;
+} catch {
+  DatabaseSyncImpl = undefined;
+}
+export const DatabaseSync = DatabaseSyncImpl;
+export const StatementSync = undefined;
+export const constants = {};
+export default {
+  DatabaseSync: DatabaseSyncImpl,
+  StatementSync,
+  constants
+};
+`;
+  writeFileSync(p, code);
+  console.log("[patch] unenv sqlite.mjs safely patched");
 } else {
   console.log("[patch] unenv sqlite.mjs not found, skipping");
 }
+
