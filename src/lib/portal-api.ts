@@ -290,55 +290,57 @@ export const storageDiagnosticFn = createServerFn({ method: "GET" }).handler(
   async (): Promise<
     Record<string, unknown>
   > => {
-    const { getStorage, isStoragePersistent, getStorageInitError, getActiveDatabasePath } =
-      await import("@/server/storage");
-    const { PostgresStorage } = await import("@/server/postgres-storage");
-    const { TursoStorage } = await import("@/server/turso-storage");
+    let storageMod: typeof import("@/server/storage") | null = null;
+    let pgOpenError: string | null = null;
+    let tursoOpenError: string | null = null;
+    try {
+      storageMod = await import("@/server/storage");
+    } catch (e) {
+      return { fatal: `Falha ao importar storage: ${e instanceof Error ? e.message : String(e)}` };
+    }
+    try {
+      const { PostgresStorage } = await import("@/server/postgres-storage");
+      pgOpenError = PostgresStorage.lastOpenError;
+    } catch (e) {
+      pgOpenError = `falha ao importar postgres-storage: ${e instanceof Error ? e.message : String(e)}`;
+    }
+    try {
+      const { TursoStorage } = await import("@/server/turso-storage");
+      tursoOpenError = TursoStorage.lastOpenError ?? null;
+    } catch (e) {
+      tursoOpenError = `falha ao importar turso-storage: ${e instanceof Error ? e.message : String(e)}`;
+    }
 
-    const hasPgUrl =
-      typeof process !== "undefined" && process.env
-        ? Boolean(
-            (process.env["POSTGRES_URL"] ??
-              process.env["POSTGRES_PRISMA_URL"] ??
-              process.env["DATABASE_URL"] ??
-              process.env["POSTGRES_URL_NON_POOLING"] ?? "").trim(),
-          )
-        : false;
+    const env: Record<string, boolean> = {};
+    const envNames = ["POSTGRES_URL", "POSTGRES_PRISMA_URL", "POSTGRES_URL_NON_POOLING", "DATABASE_URL", "TURSO_DATABASE_URL", "LIBSQL_URL", "STORAGE_REQUIRE_PERSISTENT"];
+    for (const n of envNames) {
+      env[n] =
+        typeof process !== "undefined" && process.env
+          ? Boolean((process.env[n] ?? "").trim())
+          : false;
+    }
 
     let storageState: Record<string, unknown> = {};
-    try {
-      const storage = await getStorage();
-      const path = getActiveDatabasePath();
-      storageState = {
-        storageKind: storage.kind,
-        activePath: path,
-        persistent: isStoragePersistent(),
-        initError: getStorageInitError(),
-      };
-    } catch (e) {
-      storageState = { initError: e instanceof Error ? e.message : String(e) };
+    if (storageMod) {
+      try {
+        const storage = await storageMod.getStorage();
+        storageState = {
+          storageKind: storage.kind,
+          activePath: storageMod.getActiveDatabasePath(),
+          persistent: storageMod.isStoragePersistent(),
+          initError: storageMod.getStorageInitError(),
+        };
+      } catch (e) {
+        storageState = { initError: e instanceof Error ? e.message : String(e) };
+      }
     }
 
     return {
       timing: new Date().toISOString(),
       runtime: typeof process !== "undefined" ? process.env["NITRO_PRESET"] ?? "unknown" : "edge",
-      env: {
-        hasPostgresUrl: hasPgUrl,
-        hasTursoUrl:
-          typeof process !== "undefined" && process.env
-            ? Boolean(
-                (process.env["TURSO_DATABASE_URL"] ??
-                  process.env["LIBSQL_URL"] ??
-                  "").trim(),
-              )
-            : false,
-        hasPrismaUrl:
-          typeof process !== "undefined" && process.env
-            ? Boolean((process.env["POSTGRES_PRISMA_URL"] ?? "").trim())
-            : false,
-      },
-      postgresOpenError: PostgresStorage.lastOpenError,
-      tursoOpenError: TursoStorage.lastOpenError ?? null,
+      env,
+      postgresOpenError: pgOpenError,
+      tursoOpenError,
       storage: storageState,
     };
   },
@@ -394,6 +396,28 @@ export const getPortalStateFn = createServerFn({ method: "GET" }).handler(
       persistent: isStoragePersistent(),
       storagePath: info?.path ?? undefined,
       storageInitError: getStorageInitError(),
+      storageEnv: {
+        postgresUrl: Boolean(
+          typeof process !== "undefined" && process.env
+            ? (process.env["POSTGRES_URL"] ?? "").trim()
+            : "",
+        ),
+        postgresNonPooling: Boolean(
+          typeof process !== "undefined" && process.env
+            ? (process.env["POSTGRES_URL_NON_POOLING"] ?? "").trim()
+            : "",
+        ),
+        tursoUrl: Boolean(
+          typeof process !== "undefined" && process.env
+            ? (process.env["TURSO_DATABASE_URL"] ?? "").trim()
+            : "",
+        ),
+        databaseUrl: Boolean(
+          typeof process !== "undefined" && process.env
+            ? (process.env["DATABASE_URL"] ?? "").trim()
+            : "",
+        ),
+      },
       lastBackupAt: info?.lastBackupAt ?? undefined,
       tasks,
       columns,

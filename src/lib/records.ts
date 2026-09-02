@@ -84,6 +84,12 @@ export interface PortalStatePayload {
   persistent: boolean;
   storagePath?: string | undefined;
   storageInitError?: string | null | undefined;
+  storageEnv?: {
+    postgresUrl: boolean;
+    postgresNonPooling: boolean;
+    tursoUrl: boolean;
+    databaseUrl: boolean;
+  } | undefined;
   lastBackupAt?: string | null | undefined;
   tasks: Task[];
   columns: string[];

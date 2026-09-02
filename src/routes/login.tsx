@@ -17,6 +17,9 @@ function StorageStatus() {
   if (!state) return null;
   const persistent = state.persistent ?? false;
   const err = state.storageInitError;
+  const env = state.storageEnv;
+  const pgPresent =
+    (env?.postgresUrl || env?.postgresNonPooling || env?.databaseUrl) ? true : false;
   return (
     <div
       className={`mb-6 rounded-lg border px-4 py-2 text-xs ${
@@ -33,6 +36,19 @@ function StorageStatus() {
           <>Volátil (memória) — dados não persistirão</>
         )}
       </p>
+      {env ? (
+        <p className="mt-1 opacity-90">
+          Env: POSTGRES_URL={env.postgresUrl ? "✓" : "✗"} · DATABASE_URL=
+          {env.databaseUrl ? "✓" : "✗"} · POSTGRES_URL_NON_POOLING=
+          {env.postgresNonPooling ? "✓" : "✗"} · TURSO={env.tursoUrl ? "✓" : "✗"}
+        </p>
+      ) : null}
+      {!persistent && !pgPresent ? (
+        <p className="mt-1 font-medium">
+          ⚠ Nenhuma URL de banco Postgres configurada no Vercel (env vars ausentes). Configure
+          POSTGRES_URL no Vercel para persistir.
+        </p>
+      ) : null}
       {err ? <p className="mt-1 break-all">Erro: {err}</p> : null}
     </div>
   );
