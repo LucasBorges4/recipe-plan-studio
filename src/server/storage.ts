@@ -340,7 +340,7 @@ interface SqlDatabase {
   prepare(sql: string): SqlStatement;
 }
 
-const SCHEMA = `
+export const SCHEMA = `
 CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
@@ -2938,6 +2938,47 @@ export async function getStorage(): Promise<Storage> {
 
 async function initStorage(): Promise<Storage> {
   const requirePersistent = isRequirePersistent();
+
+  // 0) Turso/libSQL remoto — persiste na Vercel (SQLite compatível, ideal para serverless)
+  const tursoUrl =
+    typeof process !== "undefined" && process.env
+      ? (
+          process.env["TURSO_DATABASE_URL"] ??
+          process.env["LIBSQL_URL"] ??
+          (process.env["DATABASE_URL"]?.startsWith("libsql://") ? process.env["DATABASE_URL"] : "") ??
+          ""
+        ).trim()
+      : "";
+  if (tursoUrl) {
+    const tursoToken =
+      typeof process !== "undefined" && process.env
+        ? (process.env["TURSO_AUTH_TOKEN"] ?? process.env["LIBSQL_AUTH_TOKEN"] ?? "").trim()
+        : "";
+    console.info(`[portal] Tentando TursoStorage em ${tursoUrl}`);
+    try {
+      const { TursoStorage } = await import("./turso-storage");
+      const turso = await TursoStorage.open(tursoUrl, tursoToken || undefined);
+      if (turso) {
+        await seedIfEmpty(turso);
+        activePersistent = true;
+        activeDatabasePath = `turso:${tursoUrl}`;
+        storageInitError = null;
+        console.info(`[portal] TursoStorage ativo`);
+        return turso;
+      }
+      const err = TursoStorage.lastOpenError ?? "erro desconhecido";
+      if (requirePersistent) {
+        storageInitError = `STORAGE_REQUIRE_PERSISTENT=1 e Turso falhou — ${err}`;
+        console.error(`[portal] ${storageInitError}`);
+        throw new Error(storageInitError);
+      }
+      console.warn(`[portal] Turso falhou: ${err}`);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.warn(`[portal] TursoStorage erro import/open: ${msg}`);
+      if (requirePersistent) throw e;
+    }
+  }
 
   const d1 = resolveD1Binding();
   if (d1) {
