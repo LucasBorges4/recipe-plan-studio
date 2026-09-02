@@ -10,7 +10,33 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { loginFn, registerFn } from "@/lib/portal-api";
-import { qk, useSession } from "@/lib/api-hooks";
+import { qk, useSession, usePortalData } from "@/lib/api-hooks";
+
+function StorageStatus() {
+  const { data: state } = usePortalData();
+  if (!state) return null;
+  const persistent = state.persistent ?? false;
+  const err = state.storageInitError;
+  return (
+    <div
+      className={`mb-6 rounded-lg border px-4 py-2 text-xs ${
+        persistent
+          ? "border-success/20 bg-success-soft text-success"
+          : "border-danger/25 bg-danger-soft text-danger"
+      }`}
+    >
+      <p>
+        <strong>Persistência:</strong>{" "}
+        {persistent ? (
+          <>Ativa{state.storagePath ? ` · ${state.storagePath}` : ""}</>
+        ) : (
+          <>Volátil (memória) — dados não persistirão</>
+        )}
+      </p>
+      {err ? <p className="mt-1 break-all">Erro: {err}</p> : null}
+    </div>
+  );
+}
 
 function LoginPage() {
   const navigate = useNavigate();
@@ -82,6 +108,8 @@ function LoginPage() {
             Acesso restrito. Autentique-se para continuar.
           </p>
         </div>
+
+        <StorageStatus />
 
         <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
           <div className="mb-5 grid grid-cols-2 gap-2">
