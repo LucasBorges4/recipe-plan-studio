@@ -1888,14 +1888,42 @@ export class SqliteStorage extends SqliteBackend {
         const dir = nodePath.dirname(path);
         if (dir && dir !== ".") mkdirSync(dir, { recursive: true });
       }
-      const mod = (await import("node:sqlite")) as unknown as {
-        DatabaseSync?: new (path: string, opts?: object) => SqlDatabase;
-      };
-      if (!mod || typeof mod.DatabaseSync !== "function") {
+      let DatabaseSyncImpl: (new (path: string, opts?: object) => SqlDatabase) | undefined;
+      try {
+        const mod = (await import("node:sqlite")) as unknown as {
+          DatabaseSync?: new (path: string, opts?: object) => SqlDatabase;
+        };
+        if (mod && typeof mod.DatabaseSync === "function") {
+          DatabaseSyncImpl = mod.DatabaseSync;
+        }
+      } catch {
+        // ignore
+      }
+
+      if (typeof DatabaseSyncImpl !== "function") {
+        try {
+          const { createRequire } = await import("node:module");
+          const req = createRequire(
+            typeof process !== "undefined" && process.cwd
+              ? `${process.cwd()}/index.js`
+              : "file:///",
+          );
+          const nativeSqlite = req("node:sqlite") as {
+            DatabaseSync?: new (path: string, opts?: object) => SqlDatabase;
+          };
+          if (typeof nativeSqlite?.DatabaseSync === "function") {
+            DatabaseSyncImpl = nativeSqlite.DatabaseSync;
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      if (typeof DatabaseSyncImpl !== "function") {
         SqliteBackend.lastOpenError = "node:sqlite DatabaseSync não suportado neste runtime";
         return null;
       }
-      const db = new mod.DatabaseSync(path);
+      const db = new DatabaseSyncImpl(path);
       const storage = new SqliteStorage(db);
       await ensureSqliteSchema((sql) => storage.exec(sql));
       SqliteBackend.lastOpenError = null;

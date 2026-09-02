@@ -239,7 +239,7 @@ function UserFunctionsDialog({
 }
 
 /** Seção "Perfis" — funções vindas do banco (fonte de verdade);
- *  usa roleProfiles apenas para position/department/permissions. */
+ *  usa roleProfiles apenas para position/department/permissions e exibe a matriz de permissões de alteração do ambiente. */
 function PerfisSection() {
   const { data: rf, isLoading } = useRoleFunctions();
   const funcsByRole = new Map<Role, string[]>();
@@ -249,32 +249,106 @@ function PerfisSection() {
     funcsByRole.set(item.role as Role, cur);
   });
 
+  const environmentPermissions = [
+    {
+      action: "Configurar Módulos do Sistema",
+      permission: "modules.configure / record.manage",
+      roles: "Admin, Diretor, Gestor",
+      grantable: "Sim (Aba Usuários > Funções)",
+    },
+    {
+      action: "Adicionar / Remover Colunas do Board",
+      permission: "admin.manage / task.create",
+      roles: "Admin, Gestor",
+      grantable: "Sim (Aba Usuários > Funções)",
+    },
+    {
+      action: "Políticas de Segurança e Acesso",
+      permission: "security.policy / admin.manage",
+      roles: "Admin",
+      grantable: "Sim (Aba Usuários > Funções)",
+    },
+    {
+      action: "Gerenciar Automações & Webhooks n8n",
+      permission: "automations.manage / automation.admin",
+      roles: "Admin",
+      grantable: "Sim (Aba Usuários > Funções)",
+    },
+    {
+      action: "Backup e Restauração do Banco de Dados",
+      permission: "backup.manage / admin.manage",
+      roles: "Admin",
+      grantable: "Sim (Aba Usuários > Funções)",
+    },
+  ];
+
   return (
-    <div className="grid gap-4 md:grid-cols-2">
-      {Object.values(roleProfiles).map((p) => {
-        const fns = funcsByRole.get(p.role) ?? roleProfiles[p.role].functions ?? [];
-        return (
-          <div key={p.role} className="rounded-xl border border-border bg-card p-5">
-            <div className="flex items-center justify-between">
-              <p className="text-sm font-semibold text-foreground">{p.label}</p>
-              <StatusBadge tone="brand">{p.position}</StatusBadge>
+    <div className="space-y-6">
+      <div className="grid gap-4 md:grid-cols-2">
+        {Object.values(roleProfiles).map((p) => {
+          const fns = funcsByRole.get(p.role) ?? roleProfiles[p.role].functions ?? [];
+          return (
+            <div key={p.role} className="rounded-xl border border-border bg-card p-5">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold text-foreground">{p.label}</p>
+                <StatusBadge tone="brand">{p.position}</StatusBadge>
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">{p.department}</p>
+              {isLoading ? (
+                <p className="mt-3 text-xs text-muted-foreground">Carregando funções…</p>
+              ) : (
+                <ul className="mt-3 space-y-1 text-xs text-muted-foreground">
+                  {fns.map((f) => (
+                    <li key={f}>• {f}</li>
+                  ))}
+                </ul>
+              )}
+              <p className="mt-3 text-[11px] text-muted-foreground">
+                Permissões: {p.permissions.join(", ")}
+              </p>
             </div>
-            <p className="mt-1 text-xs text-muted-foreground">{p.department}</p>
-            {isLoading ? (
-              <p className="mt-3 text-xs text-muted-foreground">Carregando funções…</p>
-            ) : (
-              <ul className="mt-3 space-y-1 text-xs text-muted-foreground">
-                {fns.map((f) => (
-                  <li key={f}>• {f}</li>
-                ))}
-              </ul>
-            )}
-            <p className="mt-3 text-[11px] text-muted-foreground">
-              Permissões: {p.permissions.join(", ")}
-            </p>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
+
+      {/* Matriz de Permissões para Alteração do Ambiente */}
+      <div className="rounded-xl border border-border bg-card p-5">
+        <div className="mb-3">
+          <h3 className="text-sm font-semibold text-foreground">
+            Matriz de Permissões para Alteração do Ambiente
+          </h3>
+          <p className="text-xs text-muted-foreground">
+            O Administrador pode configurar e atribuir qualquer uma destas permissões individualmente a usuários de qualquer papel através do botão <strong>"Funções"</strong> na aba Usuários.
+          </p>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead className="bg-muted/40 text-muted-foreground font-semibold border-b border-border/80">
+              <tr>
+                <th className="px-3 py-2">Alteração do Ambiente</th>
+                <th className="px-3 py-2">Permissão Técnica</th>
+                <th className="px-3 py-2">Papéis Nativos</th>
+                <th className="px-3 py-2">Atribuição pelo Admin</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border/40">
+              {environmentPermissions.map((row, idx) => (
+                <tr key={idx} className="hover:bg-muted/20">
+                  <td className="px-3 py-2.5 font-medium text-foreground">{row.action}</td>
+                  <td className="px-3 py-2.5 font-mono text-[11px] text-brand">{row.permission}</td>
+                  <td className="px-3 py-2.5 text-muted-foreground">{row.roles}</td>
+                  <td className="px-3 py-2.5">
+                    <span className="inline-flex items-center rounded-md bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
+                      {row.grantable}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }

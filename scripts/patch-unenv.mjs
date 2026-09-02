@@ -4,7 +4,7 @@ if (existsSync(p)) {
   const code = `let DatabaseSyncImpl;
 try {
   const { createRequire } = await import("node:module");
-  const require = createRequire(import.meta.url || "file:///");
+  const require = createRequire(typeof process !== "undefined" && process.cwd ? process.cwd() + "/index.js" : (import.meta.url || "file:///"));
   DatabaseSyncImpl = require("node:sqlite")?.DatabaseSync;
 } catch {
   DatabaseSyncImpl = undefined;
