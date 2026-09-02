@@ -18,12 +18,6 @@ import type { PublicUser } from "@/lib/rbac";
 import type { AuditEntry, PortalStatePayload } from "@/lib/records";
 import type { N8nWorkflow } from "@/server/n8n";
 
-import {
-  mergePortalStateWithLocal,
-  saveLocalUser,
-  getLocalUser,
-} from "@/lib/client-persistence-sync";
-
 /** Chaves de cache compartilhadas entre loader e componentes. */
 export const qk = {
   session: ["session"] as const,
@@ -42,26 +36,8 @@ export function useSession() {
   return useQuery({
     queryKey: qk.session,
     queryFn: async () => {
-      try {
-        const res = await meFn();
-        if (res.user) {
-          saveLocalUser(res.user);
-          return res;
-        }
-        if (!res.persistent) {
-          const localUser = getLocalUser();
-          if (localUser) {
-            return { user: localUser, persistent: false };
-          }
-        }
-        return res;
-      } catch (err) {
-        const localUser = getLocalUser();
-        if (localUser) {
-          return { user: localUser, persistent: false };
-        }
-        throw err;
-      }
+      // Sessão 100% no servidor (Vercel + Neon). Sem fallback local.
+      return meFn();
     },
     staleTime: 30_000,
   });
@@ -71,33 +47,8 @@ export function usePortalData() {
   return useQuery({
     queryKey: qk.portal,
     queryFn: async () => {
-      try {
-        const raw = await getPortalStateFn();
-        return mergePortalStateWithLocal(raw);
-      } catch (err) {
-        const fallback = mergePortalStateWithLocal({
-          persistent: false,
-          storageInitError: "Modo offline/local ativo.",
-          tasks: [],
-          columns: ["A Fazer", "Em Andamento", "Concluído"],
-          controls: [],
-          comments: [],
-          evidences: [],
-          modules: [],
-          risks: [],
-          wiki: [],
-          milestones: [],
-          releases: [],
-          patentStages: [],
-          techStack: [],
-          nextSteps: [],
-          legalDocs: [],
-          auditCount: 0,
-          docs: [],
-        });
-        if (fallback) return fallback;
-        throw err;
-      }
+      // Dados 100% do servidor (Vercel + Neon). Sem merge local.
+      return getPortalStateFn();
     },
     staleTime: 60_000,
     gcTime: 300_000,
