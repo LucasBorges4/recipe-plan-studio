@@ -62,20 +62,13 @@ export class PostgresStorage extends SqliteBackend {
     let idx = 0;
     let pgSql = sql.replace(/\?/g, () => `$${++idx}`);
     // INSERT OR IGNORE -> INSERT ... ON CONFLICT DO NOTHING
+    const hadOrIgnore = /OR IGNORE/i.test(sql);
     pgSql = pgSql.replace(/INSERT OR IGNORE INTO/gi, "INSERT INTO");
-    // Adiciona ON CONFLICT DO NOTHING se era OR IGNORE e não tem ON CONFLICT
-    if (/INSERT INTO/i.test(sql) && /OR IGNORE/i.test(sql) && !/ON CONFLICT/i.test(pgSql)) {
-      // Detecta tabela para ON CONFLICT — genérico DO NOTHING funciona se houver unique constraint
-      pgSql = pgSql.replace(/VALUES\s*\(/i, (m) => m) + "";
-      // Anexa no final antes de ; se não tiver
-      if (!pgSql.toUpperCase().includes("ON CONFLICT")) {
-        pgSql = pgSql.replace(/;?\s*$/, " ON CONFLICT DO NOTHING");
-      }
+    if (hadOrIgnore && !pgSql.toUpperCase().includes("ON CONFLICT")) {
+      pgSql = pgSql.replace(/;?\s*$/, " ON CONFLICT DO NOTHING");
     }
-    // COLLATE NOCASE -> remove (já tratado) e WHERE email = ? COLLATE NOCASE -> WHERE LOWER(email)=LOWER($n)
-    pgSql = pgSql.replace(/(\w+)\s*=\s*\$(\d+)\s+COLLATE NOCASE/gi, "LOWER($1)=LOWER($$2)");
-    // Corrige $$ -> $
-    pgSql = pgSql.replace(/\$\$/g, "$");
+    // COLLATE NOCASE -> LOWER() para case-insensitive (Postgres)
+    pgSql = pgSql.replace(/(\w+)\s*=\s*\$(\d+)\s+COLLATE NOCASE/gi, "LOWER($1)=LOWER($$$2)");
     // Normaliza COLLATE restante
     pgSql = pgSql.replace(/COLLATE NOCASE/gi, "");
     return pgSql;
