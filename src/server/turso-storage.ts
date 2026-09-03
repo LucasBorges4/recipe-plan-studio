@@ -8,8 +8,8 @@ import type { StorageInfo } from "./storage";
  * Usa EXATAMENTE o mesmo DDL e queries do SqliteBackend, mas via HTTP.
  */
 export class TursoStorage extends SqliteBackend {
-  static lastOpenError: string | null = null;
-  readonly kind: StorageInfo["kind"] = "sqlite" as const;
+  static override lastOpenError: string | null = null;
+  override readonly kind: StorageInfo["kind"] = "sqlite" as const;
   private client: Client;
   private dbUrl: string;
 
@@ -21,7 +21,7 @@ export class TursoStorage extends SqliteBackend {
 
   static async open(url: string, authToken?: string): Promise<TursoStorage | null> {
     try {
-      const client = createClient({ url, authToken });
+      const client = createClient({ url, authToken: authToken ?? "" } as unknown as Parameters<typeof createClient>[0]);
       // testa conexão
       await client.execute("SELECT 1");
       const store = new TursoStorage(client, url);
@@ -41,7 +41,7 @@ export class TursoStorage extends SqliteBackend {
     await this.exec(SCHEMA);
   }
 
-  protected async one(sql: string, ...params: (string | number | null | Uint8Array)[]): Promise<Record<string, any> | undefined> {
+  protected override async one(sql: string, ...params: (string | number | null | Uint8Array)[]): Promise<Record<string, any> | undefined> {
     const r = await this.client.execute({ sql, args: params as any });
     const row: any = r.rows[0];
     if (!row) return undefined;
@@ -53,7 +53,7 @@ export class TursoStorage extends SqliteBackend {
     return row as Record<string, any>;
   }
 
-  protected async many(sql: string, ...params: any[]): Promise<Record<string, any>[]> {
+  protected override async many(sql: string, ...params: any[]): Promise<Record<string, any>[]> {
     const r = await this.client.execute({ sql, args: params });
     return r.rows.map((row: any) => {
       if (Array.isArray(row)) {
@@ -65,12 +65,12 @@ export class TursoStorage extends SqliteBackend {
     });
   }
 
-  protected async run(sql: string, ...params: any[]): Promise<{ changes: number }> {
+  protected override async run(sql: string, ...params: any[]): Promise<{ changes: number }> {
     const r = await this.client.execute({ sql, args: params });
     return { changes: r.rowsAffected ?? 0 };
   }
 
-  protected async exec(sql: string): Promise<void> {
+  protected override async exec(sql: string): Promise<void> {
     // libsql não suporta multi-statement em um execute, quebra por ;
     const statements = sql
       .split(";")
@@ -86,7 +86,8 @@ export class TursoStorage extends SqliteBackend {
       kind: "sqlite",
       persistent: true,
       path: `turso:${this.dbUrl}`,
-      initError: null,
+      lastBackupAt: await this.getMeta("last_backup_at").catch(() => null),
+      requirePersistent: false,
     };
   }
 }
