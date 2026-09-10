@@ -201,7 +201,8 @@
         throw new Error('not logged in');
       })
       .then(function(d) {
-        if (d && d.data && d.data.id) {
+        var u = d && (d.data || d);
+        if (u && u.id) {
           if (bg) bg.style.display = 'none';
           if (app) app.style.display = '';
         }
@@ -243,7 +244,8 @@
     })
     .then(function(r) { return r.json().then(function(d) { return { ok: r.ok, data: d }; }); })
     .then(function(r) {
-      if (r.ok && r.data && r.data.id) {
+      var u = r.data && (r.data.data || r.data);
+      if (r.ok && u && u.id) {
         window.location.href = basePath + '/';
       } else {
         loginMsg.textContent = (r.data && r.data.message) || 'Credenciais inválidas.';
