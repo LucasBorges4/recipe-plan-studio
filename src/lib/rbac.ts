@@ -155,6 +155,7 @@ const matrix: Record<Role, Permission[]> = {
     "wiki.write",
     "wiki.delete",
     "journal.manage",
+    "patent.manage",
     "automation.read",
     "automation.create",
     "automation.share",

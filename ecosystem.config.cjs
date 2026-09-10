@@ -9,6 +9,7 @@ module.exports = {
       NODE_ENV: "production",
       PORT: "3001",
       STORAGE_REQUIRE_PERSISTENT: "1",
+      NITRO_PRESET: "node-server",
     },
     autorestart: true,
     watch: false,

@@ -132,6 +132,22 @@ function TarefasPage() {
   const [dragging, setDragging] = useState<string | null>(null);
   const [dragOverCol, setDragOverCol] = useState<string | null>(null);
   const ghostRef = useRef<HTMLElement | null>(null);
+  const boardContainerRef = useRef<HTMLDivElement | null>(null);
+
+  function handleBoardDragOver(e: React.DragEvent<HTMLDivElement>) {
+    e.preventDefault();
+    if (!dragging || !boardContainerRef.current) return;
+    const rect = boardContainerRef.current.getBoundingClientRect();
+    const mouseX = e.clientX;
+    const edgeThreshold = 140;
+    const speed = 20;
+
+    if (mouseX - rect.left < edgeThreshold) {
+      boardContainerRef.current.scrollLeft -= speed;
+    } else if (rect.right - mouseX < edgeThreshold) {
+      boardContainerRef.current.scrollLeft += speed;
+    }
+  }
   const [commentDraft, setCommentDraft] = useState("");
   const [creating, setCreating] = useState(false);
   const [quickAddCol, setQuickAddCol] = useState<string | null>(null);
@@ -244,10 +260,22 @@ function TarefasPage() {
     });
   }
 
-  // Card Estilo ClickUp
+  // Card Estilo ClickUp Profissional (Redesign Completo + Drag Sólido Sem Transparência)
   function ClickUpTaskCard({ t }: { t: Task }) {
     const count = comments.filter((c) => c.taskId === t.id).length + (t.comments ?? 0);
     const pConf = priorityConfig[t.priority];
+    const todayIso = new Date().toISOString().slice(0, 10);
+    const dueIso = t.due ? t.due.split("/").reverse().join("-") : null;
+    const isOverdue = !!dueIso && dueIso < todayIso && t.column !== "Concluído";
+
+    if (dragging === t.id) {
+      return (
+        <div className="h-[96px] w-full rounded-xl border-2 border-dashed border-brand/60 bg-brand-soft/10 p-3.5 flex flex-col items-center justify-center text-center transition-all animate-pulse">
+          <span className="text-xs font-bold text-brand uppercase tracking-wider">Espaço Reservado</span>
+          <span className="text-[10px] text-muted-foreground mt-0.5">Mova para a coluna de destino</span>
+        </div>
+      );
+    }
 
     return (
       <article
@@ -260,13 +288,13 @@ function TarefasPage() {
             const src = e.currentTarget as HTMLElement;
             const rect = src.getBoundingClientRect();
             const ghost = src.cloneNode(true) as HTMLElement;
-            ghost.style.cssText = `position:fixed;top:-2000px;left:-2000px;width:${rect.width}px;pointer-events:none;transform:rotate(3deg) scale(1.03);filter:drop-shadow(0 24px 32px rgba(0,0,0,0.35));opacity:0.95;border-radius:12px;`;
+            ghost.style.cssText = `position:fixed;top:-2000px;left:-2000px;width:${rect.width}px;pointer-events:none;transform:rotate(2deg) scale(1.02);box-shadow:0 25px 35px -5px rgba(0,0,0,0.35), 0 10px 15px -5px rgba(0,0,0,0.2);opacity:1;background:var(--card);border-radius:12px;z-index:9999;border:1.5px solid var(--brand);`;
             document.body.appendChild(ghost);
             ghostRef.current = ghost;
             e.dataTransfer.setDragImage(ghost, e.clientX - rect.left, e.clientY - rect.top);
             window.setTimeout(() => ghost.remove(), 0);
           } catch {
-            /* usa o fantasma nativo do navegador */
+            /* fallback nativo */
           }
         }}
         onDragEnd={() => {
@@ -277,68 +305,88 @@ function TarefasPage() {
         }}
         onClick={() => setDetailId(t.id)}
         className={cn(
-          "group relative cursor-grab rounded-lg border border-border border-l-4 bg-card p-3 shadow-xs transition-all hover:border-brand/40 hover:shadow-md active:cursor-grabbing",
+          "group relative cursor-grab rounded-xl border border-border/80 border-l-[4px] bg-card p-3.5 shadow-xs transition-all duration-200 hover:border-brand/50 hover:shadow-md active:cursor-grabbing active:scale-[0.99]",
           pConf.borderColor,
-          dragging === t.id && "scale-[0.97] -rotate-1 border-dashed opacity-30 saturate-50",
         )}
       >
-        <div className="flex items-start justify-between gap-1.5">
-          <div className="flex items-start gap-1.5 min-w-0">
-            <GripVertical className="size-3.5 shrink-0 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors mt-0.5" />
-            <h3 className="line-clamp-2 text-sm font-semibold text-foreground group-hover:text-brand transition-colors">
+        {/* Header do Cartão: Grip Handle + Título + Flag de Prioridade */}
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex items-start gap-1.5 min-w-0 flex-1">
+            <GripVertical className="size-3.5 shrink-0 text-muted-foreground/30 group-hover:text-muted-foreground transition-colors mt-0.5 cursor-grab" />
+            <h3 className="line-clamp-2 text-xs md:text-sm font-semibold text-foreground leading-snug group-hover:text-brand transition-colors">
               {t.title}
             </h3>
           </div>
-          <div title={pConf.label} className="shrink-0 pt-0.5">
-            <Flag className={cn("size-4", pConf.flagColor)} />
-          </div>
+          <span
+            title={`Prioridade ${pConf.label}`}
+            className={cn("inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider", pConf.bgColor)}
+          >
+            <Flag className="size-3" />
+            {pConf.label}
+          </span>
         </div>
 
+        {/* Descrição curta */}
         {t.description ? (
-          <p className="mt-1.5 line-clamp-2 text-xs text-muted-foreground">{t.description}</p>
+          <p className="mt-1.5 line-clamp-2 text-xs text-muted-foreground leading-relaxed pl-5">
+            {t.description}
+          </p>
         ) : null}
 
-        <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-          {t.tags.map((tag) => (
-            <span
-              key={tag}
-              className="rounded-md bg-secondary/60 px-2 py-0.5 text-[10px] font-medium text-secondary-foreground"
-            >
-              {tag}
-            </span>
-          ))}
-        </div>
+        {/* Tags / Módulos */}
+        {t.tags && t.tags.length > 0 ? (
+          <div className="mt-2.5 flex flex-wrap items-center gap-1 pl-5">
+            {t.tags.map((tag) => (
+              <span
+                key={tag}
+                className="inline-flex items-center gap-1 rounded-md bg-brand-soft/40 px-2 py-0.5 text-[10px] font-medium text-brand"
+              >
+                <TagIcon className="size-2.5" />
+                {tag}
+              </span>
+            ))}
+          </div>
+        ) : null}
 
-        <div className="mt-3 flex items-center justify-between border-t border-border/50 pt-2.5 text-xs text-muted-foreground">
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1.5 font-medium text-foreground">
-              <Initials name={t.assignee} />
-              <span className="max-w-[100px] truncate">{t.assignee}</span>
-            </div>
+        {/* Rodapé do Cartão: Avatar + Data + Comentários */}
+        <div className="mt-3 flex items-center justify-between border-t border-border/50 pt-2.5 text-xs text-muted-foreground pl-1">
+          <div className="flex items-center gap-1.5">
+            <Initials name={t.assignee} className="size-5 text-[10px] font-bold" />
+            <span className="max-w-[110px] truncate text-xs font-medium text-foreground">{t.assignee}</span>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             {t.due ? (
-              <span className="flex items-center gap-1 text-[11px] font-medium text-red-500 bg-red-500/10 px-1.5 py-0.5 rounded">
-                <Clock className="size-3" /> {t.due}
+              <span
+                className={cn(
+                  "inline-flex items-center gap-1 text-[11px] font-medium rounded-md px-1.5 py-0.5",
+                  isOverdue
+                    ? "bg-red-500/10 text-red-600 dark:text-red-400 font-semibold"
+                    : "bg-muted text-muted-foreground",
+                )}
+              >
+                <Calendar className="size-3" />
+                {t.due}
               </span>
             ) : null}
             {count > 0 ? (
-              <span className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
-                <MessageSquare className="size-3" /> {count}
+              <span className="inline-flex items-center gap-1 text-[11px] font-medium bg-muted/60 px-1.5 py-0.5 rounded-md text-muted-foreground">
+                <MessageSquare className="size-3" />
+                {count}
               </span>
             ) : null}
           </div>
         </div>
 
+        {/* Barra de Ação Rápida (Em Aprovação) */}
         {t.column === "Em Aprovação" ? (
-          <div className="mt-3 flex gap-2 pt-1 border-t border-border/40">
+          <div className="mt-3 flex gap-2 pt-2 border-t border-border/40">
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 move(t.id, "Concluído");
               }}
-              className="flex flex-1 items-center justify-center gap-1 rounded-md bg-emerald-600 hover:bg-emerald-700 px-2 py-1.5 text-xs font-semibold text-white transition-colors"
+              className="flex flex-1 items-center justify-center gap-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 px-2 py-1.5 text-xs font-semibold text-white transition-colors shadow-xs"
             >
               <Check className="size-3.5" /> Aprovar
             </button>
@@ -347,9 +395,9 @@ function TarefasPage() {
                 e.stopPropagation();
                 move(t.id, "Em Progresso");
               }}
-              className="flex flex-1 items-center justify-center gap-1 rounded-md bg-red-600 hover:bg-red-700 px-2 py-1.5 text-xs font-semibold text-white transition-colors"
+              className="flex flex-1 items-center justify-center gap-1 rounded-lg border border-border bg-card hover:bg-muted px-2 py-1.5 text-xs font-medium text-muted-foreground transition-colors"
             >
-              <X className="size-3.5" /> Rejeitar
+              <X className="size-3.5" /> Devolver
             </button>
           </div>
         ) : null}
@@ -485,9 +533,13 @@ function TarefasPage() {
         </div>
       ) : null}
 
-      {/* Visão de Quadro (Board View - Estilo ClickUp) */}
+      {/* Visão de Quadro (Board View - Estilo ClickUp com Drag & Drop de alta precisão) */}
       {view === "board" ? (
-        <div className="flex gap-4 overflow-x-auto pb-4 pt-1">
+        <div
+          ref={boardContainerRef}
+          onDragOver={handleBoardDragOver}
+          className="flex gap-4 overflow-x-auto pb-6 pt-1 select-none scroll-smooth"
+        >
           {columns.map((col) => {
             const colTasks = filtered.filter((t) => t.column === col);
             const style = columnColors[col] ?? {
@@ -518,9 +570,9 @@ function TarefasPage() {
                   setDragOverCol(null);
                 }}
                 className={cn(
-                  "flex w-80 shrink-0 flex-col rounded-xl border border-border/80 bg-muted/20 p-3 transition-all duration-200",
+                  "flex w-80 shrink-0 flex-col rounded-xl border border-border/80 bg-muted/20 p-3 transition-all duration-200 ease-out",
                   isDockTarget &&
-                    "scale-[1.01] border-2 border-dashed border-brand bg-brand/10 shadow-lg ring-4 ring-brand/15",
+                    "scale-[1.02] border-2 border-brand bg-brand-soft/20 shadow-xl ring-4 ring-brand/20",
                 )}
               >
                 {/* Header da Coluna */}
