@@ -258,7 +258,6 @@ function UserFunctionsDialog({
     { key: "wiki.write", label: "Escrever/Editar Artigos na Wiki", group: "Wiki" },
     { key: "wiki.delete", label: "Excluir Artigos da Wiki", group: "Wiki" },
     { key: "journal.manage", label: "Gerenciar Diário de Bordo", group: "Diário" },
-    { key: "patent.manage", label: "Gerenciar Etapas de Patente", group: "Patentes" },
     { key: "automation.read", label: "Visualizar Automações n8n", group: "Automações" },
     { key: "automation.create", label: "Criar Automações n8n", group: "Automações" },
     { key: "automation.share", label: "Compartlhar Automações por Role", group: "Automações" },

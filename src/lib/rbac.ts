@@ -53,7 +53,6 @@ export const roleFunctionsData: Record<Role, RoleFunction[]> = {
     { key: "audit.read", description: "Acessar trilha de auditoria completa do sistema" },
     { key: "automations.manage", description: "Gerenciar automações e integrações (n8n)" },
     { key: "wiki.maintain", description: "Configurar e manter a Wiki corporativa" },
-    { key: "patent.stages", description: "Aprovar e gerenciar etapas de patentes" },
     { key: "security.policy", description: "Definir políticas de segurança e acesso" },
     { key: "backup.manage", description: "Gerenciar backup e restauração do banco de dados" },
   ],
@@ -61,7 +60,6 @@ export const roleFunctionsData: Record<Role, RoleFunction[]> = {
     { key: "tasks.approve", description: "Aprovar tarefas concluídas pelo time" },
     { key: "evidence.review", description: "Revisar e aprovar/rejeitar evidências de compliance" },
     { key: "risks.manage", description: "Gerenciar mapa de riscos e planos de mitigação" },
-    { key: "patent.track", description: "Acompanhar etapas de patente junto ao INPI" },
     { key: "audit.read", description: "Consultar trilha de auditoria" },
     { key: "modules.prioritize", description: "Definir escopo e prioridades de módulos" },
     { key: "architecture.approve", description: "Aprovar alterações estratégicas de arquitetura" },
@@ -136,7 +134,6 @@ export type Permission =
   | "wiki.write"
   | "wiki.delete"
   | "journal.manage"
-  | "patent.manage"
   | "automation.read"
   | "automation.create"
   | "automation.share"
@@ -158,7 +155,6 @@ const matrix: Record<Role, Permission[]> = {
     "wiki.write",
     "wiki.delete",
     "journal.manage",
-    "patent.manage",
     "automation.read",
     "automation.create",
     "automation.share",
@@ -173,7 +169,6 @@ const matrix: Record<Role, Permission[]> = {
     "audit.read",
     "risk.manage",
     "wiki.write",
-    "patent.manage",
     "automation.read",
     "automation.create",
     "automation.share",
@@ -288,13 +283,11 @@ export const FUNCTION_PERMISSIONS: Record<string, Permission[]> = {
     "automation.admin",
   ],
   "wiki.maintain": ["wiki.write", "wiki.delete"],
-  "patent.stages": ["patent.manage"],
   "security.policy": ["admin.manage"],
   "backup.manage": ["admin.manage"],
   "tasks.approve": ["task.approve"],
   "evidence.review": ["evidence.review"],
   "risks.manage": ["risk.manage"],
-  "patent.track": ["patent.manage"],
   "modules.prioritize": ["record.manage"],
   "architecture.approve": [],
   "metrics.review": [],

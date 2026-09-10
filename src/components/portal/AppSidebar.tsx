@@ -10,7 +10,6 @@ import {
   User,
   FileText,
   Lock,
-  BadgeCheck,
   Settings,
   PanelLeft,
   ScrollText,
@@ -44,7 +43,6 @@ const legalNav = [
   { to: "/auditoria", label: "Auditoria", icon: ScrollText },
   { to: "/termos", label: "Termos de Uso", icon: FileText },
   { to: "/lgpd", label: "Política LGPD", icon: Lock },
-  { to: "/patente", label: "Patente", icon: BadgeCheck },
   { to: "/admin", label: "Administração", icon: Settings },
 ] as const;
 
