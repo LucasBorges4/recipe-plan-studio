@@ -130,6 +130,7 @@
 </style>
 <div class="geos-bg">
   <div class="geos-card">
+    <div class="geos-msg" id="net-warn" style="margin-bottom:16px"></div>
     <div class="geos-brand">
       <div class="geos-logo"><img src="assets/logo.jpg" alt="Grupo W. Geotec CAFUFV" /></div>
       <h1>Grupo W. Geotec CAFUFV</h1>
@@ -208,6 +209,20 @@
   function netError(e) {
     return 'Erro de conexão (' + ((e && e.message) || 'rede indisponível') + ').';
   }
+
+  /* Sonda de conectividade: se o próprio navegador bloqueia requisições
+     (extensão, antivírus, proxy), avisa na hora em vez de falhar no login. */
+  fetch(basePath + '/rest/login', { method: 'GET', cache: 'no-store' })
+    .then(function() {})
+    .catch(function(e) {
+      if (e && e.message === 'Failed to fetch') {
+        var w = document.getElementById('net-warn');
+        if (w) {
+          w.textContent = 'Seu navegador ou antivírus está bloqueando as requisições deste site. Tente aba anônima ou libere este endereço no bloqueador/antivírus.';
+          w.className = 'geos-msg error';
+        }
+      }
+    });
 
   if (document.cookie.indexOf('n8n-auth=') !== -1) {
     fetch(basePath + '/rest/login', {credentials: 'include'})
