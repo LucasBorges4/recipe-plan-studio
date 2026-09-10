@@ -23,7 +23,7 @@ function inject(editorDir, loginPath) {
   }
 
   let content = fs.readFileSync(indexPath, 'utf-8');
-  if (content.includes('geos-login-bg')) {
+  if (content.includes('geos-login-form')) {
     console.log('Login already injected, skipping.');
     return;
   }

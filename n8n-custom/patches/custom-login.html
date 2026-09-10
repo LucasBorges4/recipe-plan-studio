@@ -194,15 +194,27 @@
   var basePath = (typeof window.BASE_PATH !== 'undefined' ? window.BASE_PATH : '') || '';
   var registerUrl = basePath.replace(/\/$/, '') + '/rest/register';
 
+  function readJson(r) {
+    return r.text().then(function(t) {
+      var d = null;
+      try { d = t ? JSON.parse(t) : null; } catch (e) { d = null; }
+      return { ok: r.ok, status: r.status, data: d };
+    });
+  }
+  function apiError(r, fallback) {
+    var d = r.data;
+    return (d && (d.message || d.error)) || (r.status ? ('HTTP ' + r.status) : fallback);
+  }
+  function netError(e) {
+    return 'Erro de conexão (' + ((e && e.message) || 'rede indisponível') + ').';
+  }
+
   if (document.cookie.indexOf('n8n-auth=') !== -1) {
     fetch(basePath + '/rest/login', {credentials: 'include'})
+      .then(readJson)
       .then(function(r) {
-        if (r.ok) return r.json();
-        throw new Error('not logged in');
-      })
-      .then(function(d) {
-        var u = d && (d.data || d);
-        if (u && u.id) {
+        var u = r.data && (r.data.data || r.data);
+        if (r.ok && u && u.id) {
           if (bg) bg.style.display = 'none';
           if (app) app.style.display = '';
         }
@@ -242,20 +254,20 @@
       credentials: 'include',
       body: JSON.stringify({ emailOrLdapLoginId: email, password: password })
     })
-    .then(function(r) { return r.json().then(function(d) { return { ok: r.ok, data: d }; }); })
+    .then(readJson)
     .then(function(r) {
       var u = r.data && (r.data.data || r.data);
       if (r.ok && u && u.id) {
         window.location.href = basePath + '/';
       } else {
-        loginMsg.textContent = (r.data && r.data.message) || 'Credenciais inválidas.';
+        loginMsg.textContent = apiError(r, 'Credenciais inválidas.');
         loginMsg.className = 'geos-msg error';
       }
       loginBtn.disabled = false;
       loginBtn.textContent = 'Entrar';
     })
-    .catch(function() {
-      loginMsg.textContent = 'Erro de conexão.';
+    .catch(function(e) {
+      loginMsg.textContent = netError(e);
       loginMsg.className = 'geos-msg error';
       loginBtn.disabled = false;
       loginBtn.textContent = 'Entrar';
@@ -283,7 +295,7 @@
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: email, password: password, firstName: firstName, lastName: lastName })
     })
-    .then(function(r) { return r.json().then(function(d) { return { ok: r.ok, data: d }; }); })
+    .then(readJson)
     .then(function(r) {
       if (r.ok && r.data && r.data.ok) {
         regMsg.textContent = r.data.message || 'Conta criada! Faça login.';
@@ -295,14 +307,14 @@
           document.getElementById('login-password').focus();
         }, 1500);
       } else {
-        regMsg.textContent = (r.data && r.data.error) || 'Erro ao criar conta.';
+        regMsg.textContent = apiError(r, 'Erro ao criar conta.');
         regMsg.className = 'geos-msg error';
       }
       regBtn.disabled = false;
       regBtn.textContent = 'Criar Conta';
     })
-    .catch(function() {
-      regMsg.textContent = 'Erro de conexão.';
+    .catch(function(e) {
+      regMsg.textContent = netError(e);
       regMsg.className = 'geos-msg error';
       regBtn.disabled = false;
       regBtn.textContent = 'Criar Conta';
