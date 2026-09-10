@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -27,6 +27,7 @@ import {
   Sparkles,
   ArrowRight,
   GripVertical,
+  ArrowDownToLine,
 } from "lucide-react";
 import { PageHeader } from "@/components/portal/PageHeader";
 import { StatusBadge } from "@/components/portal/StatusBadge";
@@ -130,6 +131,7 @@ function TarefasPage() {
   const [detailId, setDetailId] = useState<string | null>(null);
   const [dragging, setDragging] = useState<string | null>(null);
   const [dragOverCol, setDragOverCol] = useState<string | null>(null);
+  const ghostRef = useRef<HTMLElement | null>(null);
   const [commentDraft, setCommentDraft] = useState("");
   const [creating, setCreating] = useState(false);
   const [quickAddCol, setQuickAddCol] = useState<string | null>(null);
@@ -254,8 +256,22 @@ function TarefasPage() {
           e.dataTransfer.effectAllowed = "move";
           e.dataTransfer.setData("text/plain", t.id);
           setDragging(t.id);
+          try {
+            const src = e.currentTarget as HTMLElement;
+            const rect = src.getBoundingClientRect();
+            const ghost = src.cloneNode(true) as HTMLElement;
+            ghost.style.cssText = `position:fixed;top:-2000px;left:-2000px;width:${rect.width}px;pointer-events:none;transform:rotate(3deg) scale(1.03);filter:drop-shadow(0 24px 32px rgba(0,0,0,0.35));opacity:0.95;border-radius:12px;`;
+            document.body.appendChild(ghost);
+            ghostRef.current = ghost;
+            e.dataTransfer.setDragImage(ghost, e.clientX - rect.left, e.clientY - rect.top);
+            window.setTimeout(() => ghost.remove(), 0);
+          } catch {
+            /* usa o fantasma nativo do navegador */
+          }
         }}
         onDragEnd={() => {
+          ghostRef.current?.remove();
+          ghostRef.current = null;
           setDragging(null);
           setDragOverCol(null);
         }}
@@ -263,7 +279,7 @@ function TarefasPage() {
         className={cn(
           "group relative cursor-grab rounded-lg border border-border border-l-4 bg-card p-3 shadow-xs transition-all hover:border-brand/40 hover:shadow-md active:cursor-grabbing",
           pConf.borderColor,
-          dragging === t.id && "scale-[0.98] rotate-1 opacity-50 shadow-lg",
+          dragging === t.id && "scale-[0.97] -rotate-1 border-dashed opacity-30 saturate-50",
         )}
       >
         <div className="flex items-start justify-between gap-1.5">
@@ -478,6 +494,7 @@ function TarefasPage() {
               badge: "bg-secondary text-secondary-foreground",
               dot: "bg-primary",
             };
+            const isDockTarget = dragOverCol === col && !!dragging;
 
             return (
               <section
@@ -501,8 +518,9 @@ function TarefasPage() {
                   setDragOverCol(null);
                 }}
                 className={cn(
-                  "flex w-80 shrink-0 flex-col rounded-xl border border-border/80 bg-muted/20 p-3 transition-colors",
-                  dragOverCol === col && dragging ? "border-brand border-dashed bg-brand/5" : "",
+                  "flex w-80 shrink-0 flex-col rounded-xl border border-border/80 bg-muted/20 p-3 transition-all duration-200",
+                  isDockTarget &&
+                    "scale-[1.01] border-2 border-dashed border-brand bg-brand/10 shadow-lg ring-4 ring-brand/15",
                 )}
               >
                 {/* Header da Coluna */}
@@ -575,8 +593,20 @@ function TarefasPage() {
                   {colTasks.map((t) => (
                     <ClickUpTaskCard key={t.id} t={t} />
                   ))}
-                  {colTasks.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-border/80 py-12 text-center text-xs text-muted-foreground">
+                  {isDockTarget ? (
+                    <div className="flex flex-col items-center justify-center gap-1.5 rounded-lg border-2 border-dashed border-brand/60 bg-brand/10 py-8 text-center">
+                      <ArrowDownToLine className="size-5 animate-bounce text-brand" />
+                      <span className="text-xs font-semibold text-brand">Acoplar tarefa aqui</span>
+                      <span className="text-[11px] text-muted-foreground">{col}</span>
+                    </div>
+                  ) : null}
+                  {colTasks.length === 0 && !isDockTarget ? (
+                    <div
+                      className={cn(
+                        "flex flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-border/80 py-12 text-center text-xs text-muted-foreground",
+                        dragging && "border-brand/40 text-brand/70",
+                      )}
+                    >
                       <Inbox className="size-5 opacity-40" />
                       <span>{dragging ? "Solte aqui para mover" : "Coluna vazia"}</span>
                     </div>
