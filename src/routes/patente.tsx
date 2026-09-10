@@ -23,16 +23,16 @@ import { formatBR } from "@/lib/doc-schemas";
 export const Route = createFileRoute("/patente")({
   head: () => ({
     meta: [
-      { title: "Patente do Sistema — Portal de Governança Grupo Geos" },
+      { title: "Patente do Sistema — Portal de Governança Grupo W. Geotec CAFUFV" },
       {
         name: "description",
         content:
           "Acompanhamento das 7 etapas do processo de patenteamento do sistema junto ao INPI.",
       },
-      { property: "og:title", content: "Patente do Sistema — Grupo Geos" },
+      { property: "og:title", content: "Patente do Sistema — Grupo W. Geotec CAFUFV" },
       {
         property: "og:description",
-        content: "Progresso do pedido de patente do ERP do Grupo Geos no INPI.",
+        content: "Progresso do pedido de patente do ERP do Grupo W. Geotec CAFUFV no INPI.",
       },
     ],
   }),

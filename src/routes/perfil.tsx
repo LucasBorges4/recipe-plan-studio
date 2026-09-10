@@ -13,7 +13,7 @@ import { roleLabel } from "@/lib/rbac";
 export const Route = createFileRoute("/perfil")({
   head: () => ({
     meta: [
-      { title: "Meu Perfil — Portal de Governança Grupo Geos" },
+      { title: "Meu Perfil — Portal de Governança Grupo W. Geotec CAFUFV" },
       { name: "description", content: "Edite seu nome, cargo, departamento e bio." },
     ],
   }),

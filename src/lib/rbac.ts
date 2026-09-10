@@ -114,7 +114,7 @@ export const roleLabel: Record<Role, string> = {
   admin: "Administrador",
   diretor: "Diretor",
   gestor: "Gestor",
-  desenvolvedor: "Desenvolvedor",
+  desenvolvedor: "Colaborador",
   auditor: "Auditor",
 };
 
@@ -207,6 +207,16 @@ export function can(role: Role, permission: Permission) {
   return matrix[role].includes(permission);
 }
 
+export function getRoleBasePermissions(role: Role): Permission[] {
+  return matrix[role] ?? [];
+}
+
+export function getEffectivePermissions(user: { role: Role; functions?: string[] }): Permission[] {
+  const base = matrix[user.role] ?? [];
+  const extra = permissionsForFunctions(user.functions ?? []);
+  return Array.from(new Set([...base, ...extra]));
+}
+
 export const roleProfiles: Record<Role, RoleProfile> = {
   admin: {
     role: "admin",
@@ -234,7 +244,7 @@ export const roleProfiles: Record<Role, RoleProfile> = {
   },
   desenvolvedor: {
     role: "desenvolvedor",
-    label: "Desenvolvedor",
+    label: "Colaborador",
     position: "Engenharia",
     department: "Tecnologia",
     functions: roleFunctionsData.desenvolvedor.map((f) => f.description),

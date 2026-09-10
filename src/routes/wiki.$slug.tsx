@@ -6,7 +6,7 @@ import { usePortalData } from "@/lib/api-hooks";
 
 export const Route = createFileRoute("/wiki/$slug")({
   head: () => ({
-    meta: [{ title: "Wiki — Grupo Geos" }],
+    meta: [{ title: "Wiki — Grupo W. Geotec CAFUFV" }],
   }),
   component: WikiArticlePage,
 });

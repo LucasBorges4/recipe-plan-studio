@@ -10,49 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { loginFn, registerFn } from "@/lib/portal-api";
-import { qk, useSession, usePortalData } from "@/lib/api-hooks";
-
-function StorageStatus() {
-  const { data: state } = usePortalData();
-  if (!state) return null;
-  const persistent = state.persistent ?? false;
-  const err = state.storageInitError;
-  const env = state.storageEnv;
-  const pgPresent =
-    (env?.postgresUrl || env?.postgresNonPooling || env?.databaseUrl) ? true : false;
-  return (
-    <div
-      className={`mb-6 rounded-lg border px-4 py-2 text-xs ${
-        persistent
-          ? "border-success/20 bg-success-soft text-success"
-          : "border-danger/25 bg-danger-soft text-danger"
-      }`}
-    >
-      <p>
-        <strong>Persistência:</strong>{" "}
-        {persistent ? (
-          <>Ativa{state.storagePath ? ` · ${state.storagePath}` : ""}</>
-        ) : (
-          <>Volátil (memória) — dados não persistirão</>
-        )}
-      </p>
-      {env ? (
-        <p className="mt-1 opacity-90">
-          Env: POSTGRES_URL={env.postgresUrl ? "✓" : "✗"} · DATABASE_URL=
-          {env.databaseUrl ? "✓" : "✗"} · POSTGRES_URL_NON_POOLING=
-          {env.postgresNonPooling ? "✓" : "✗"} · TURSO={env.tursoUrl ? "✓" : "✗"}
-        </p>
-      ) : null}
-      {!persistent && !pgPresent ? (
-        <p className="mt-1 font-medium">
-          ⚠ Nenhuma URL de banco Postgres configurada no Vercel (env vars ausentes). Configure
-          POSTGRES_URL no Vercel para persistir.
-        </p>
-      ) : null}
-      {err ? <p className="mt-1 break-all">Erro: {err}</p> : null}
-    </div>
-  );
-}
+import { qk, useSession } from "@/lib/api-hooks";
 
 function LoginPage() {
   const navigate = useNavigate();
@@ -118,14 +76,12 @@ function LoginPage() {
             <ShieldCheck className="h-6 w-6" />
           </div>
           <h1 className="text-xl font-semibold tracking-tight text-foreground">
-            Portal de Governança — Grupo Geos
+            Portal de Governança — Grupo W. Geotec CAFUFV
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Acesso restrito. Autentique-se para continuar.
           </p>
         </div>
-
-        <StorageStatus />
 
         <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
           <div className="mb-5 grid grid-cols-2 gap-2">
@@ -148,7 +104,7 @@ function LoginPage() {
           {mode === "signup" && (
             <p className="mb-4 rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
               A primeira conta criada no portal torna-se <strong>Administrador</strong>. As demais
-              começam como Desenvolvedor e podem ser promovidas depois.
+              começam como Colaborador e podem ser promovidas depois.
             </p>
           )}
 
@@ -242,7 +198,7 @@ function LoginPage() {
         </div>
 
         <p className="mt-4 text-center text-xs text-muted-foreground">
-          Problemas de acesso? Procure o administrador de governança do Grupo Geos.
+          Problemas de acesso? Procure o administrador de governança do Grupo W. Geotec CAFUFV.
         </p>
       </div>
     </div>

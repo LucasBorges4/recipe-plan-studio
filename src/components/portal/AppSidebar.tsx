@@ -150,9 +150,9 @@ function NavList({ onNavigate }: { onNavigate?: () => void }) {
 function Brand() {
   return (
     <div className="flex items-center gap-3 border-b border-sidebar-border px-5 py-4">
-      <img src="/logo.jpg" alt="Grupo Geos" className="size-9 shrink-0 rounded-md bg-white object-contain p-0.5" />
+      <img src="/logo.jpg" alt="Grupo W. Geotec CAFUFV" className="size-9 shrink-0 rounded-md bg-white object-contain p-0.5" />
       <div className="min-w-0">
-        <p className="truncate text-sm font-semibold text-sidebar-primary-foreground">Grupo Geos</p>
+        <p className="truncate text-sm font-semibold text-sidebar-primary-foreground">Grupo W. Geotec CAFUFV</p>
         <p className="truncate text-[11px] text-sidebar-foreground/60">Portal de Governança</p>
       </div>
     </div>
@@ -171,7 +171,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <NavList />
         <SessionBox />
         <p className="border-t border-sidebar-border px-5 py-3 text-[11px] text-sidebar-foreground/40">
-          © 2026 Grupo Geos
+          © 2026 Grupo W. Geotec CAFUFV
         </p>
       </aside>
 

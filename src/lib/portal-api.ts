@@ -7,6 +7,7 @@ import type { DatabaseDump } from "@/server/storage";
 import type { AuditEntry, JsonObject, PortalStatePayload, PublicInvite } from "@/lib/records";
 import { docKinds, docKindLabel, docSchemas } from "@/lib/doc-schemas";
 import type { Priority } from "@/data/types";
+import { logLoginAttempt } from "@/server/login-logger";
 
 /* ------------------------------------------------------------------ */
 /* Convenção de retorno: { ok: true, data: T } | { ok: false, error }  */
@@ -123,14 +124,16 @@ export const registerFn = createServerFn({ method: "POST" })
 
       if (count > 0) {
         const code = (data.code ?? "").trim();
+        const isRegistrationCode = expected !== null && code === expected;
         if (!code) {
           if (hasAdmin) {
             c.registerFailure(key);
             return { ok: false, error: "Cadastro apenas por convite. Informe o código secreto." };
           }
           // Sem admin no sistema e sem código → auto-heal como admin
-        } else if (hasAdmin) {
-          // Quando já existe admin, o código deve ser um convite válido.
+        } else if (hasAdmin && !isRegistrationCode) {
+          // Quando já existe admin, o código deve ser um convite válido
+          // OU o REGISTRATION_CODE do .env (já validado acima).
           const hash = await sha256Hex(code);
           const invite = await c.storage.getInviteByHash(hash);
           if (!invite || invite.usedAt) {
@@ -210,8 +213,15 @@ export const loginFn = createServerFn({ method: "POST" })
   .handler(async ({ data }): Promise<ApiResult<PublicUser>> => {
     try {
       const c = await ctx();
+      let ip: string | null = null;
+      try {
+        const { getRequestIP } = await import("@tanstack/react-start/server");
+        ip = getRequestIP({ xForwardedFor: true }) ?? null;
+      } catch {}
+
       const key = await c.requestKey("login", data.email);
       if (c.isRateLimited(key)) {
+        logLoginAttempt({ ts: new Date().toISOString(), email: data.email, ip, outcome: "rate_limited" });
         return {
           ok: false,
           error: "Muitas tentativas de login. Tente novamente em alguns minutos.",
@@ -221,7 +231,29 @@ export const loginFn = createServerFn({ method: "POST" })
       const email = data.email.toLowerCase().trim();
       const user = await c.storage.getUserByEmail(email);
       const targetHash = user?.passwordHash ?? c.pw.getDummyPasswordHash();
-      const valid = await c.pw.verifyPassword(data.password, c.pepper, targetHash);
+      const pepperLen = c.pepper.length;
+      const pepperSource = pepperLen > 0 ? "env/meta" : "none";
+
+      let valid = false;
+      let verifyError: string | null = null;
+      try {
+        valid = c.pw.verifyPassword(data.password, c.pepper, targetHash);
+      } catch (ve) {
+        verifyError = ve instanceof Error ? ve.message : String(ve);
+      }
+
+      logLoginAttempt({
+        ts: new Date().toISOString(),
+        email,
+        ip,
+        outcome: !user || !valid ? "failure" : "success",
+        reason: !user ? "user_not_found" : !valid ? (verifyError ?? "invalid_password") : undefined,
+        userFound: !!user,
+        passwordValid: valid,
+        pepperSource: pepperSource as "env" | "meta",
+        passwordHashPrefix: user?.passwordHash?.slice(0, 40) ?? "N/A",
+        error: verifyError ?? undefined,
+      });
 
       if (!user || !valid) {
         c.registerFailure(key);
@@ -229,7 +261,7 @@ export const loginFn = createServerFn({ method: "POST" })
           action: "Falha de autenticação",
           entity: "sessão",
           entityId: email,
-          reason: "Credenciais inválidas",
+          reason: verifyError ?? "Credenciais inválidas",
         });
         return { ok: false, error: "E-mail ou senha inválidos." };
       }
@@ -240,6 +272,7 @@ export const loginFn = createServerFn({ method: "POST" })
       const row = await c.storage.getUserById(user.id);
       return { ok: true, data: await c.auth.publicUserWithFunctions(c.storage, row!) };
     } catch (e) {
+      logLoginAttempt({ ts: new Date().toISOString(), email: data.email, ip: null, outcome: "error", error: e instanceof Error ? e.message : String(e) });
       return { ok: false, error: errorMsg(e) };
     }
   });
@@ -2875,6 +2908,62 @@ export const revokeInviteFn = createServerFn({ method: "POST" })
         { action: "Convite revogado", entity: "convite", entityId: data.id },
       );
       return { ok: true, data: null };
+    } catch (e) {
+      return { ok: false, error: errorMsg(e) };
+    }
+  });
+
+/* ------------------------------------------------------------------ */
+/* DEBUG: diagnóstico de login (apenas admin)                           */
+/* ------------------------------------------------------------------ */
+
+export const debugLoginFn = createServerFn({ method: "POST" })
+  .validator(
+    z.object({ email: z.string().min(1), password: z.string().min(1) }).strict(),
+  )
+  .handler(async ({ data }): Promise<ApiResult<Record<string, unknown>>> => {
+    try {
+      const c = await ctx();
+      const email = data.email.toLowerCase().trim();
+
+      const pepperEnv =
+        typeof process !== "undefined" && process.env
+          ? process.env["AUTH_PEPPER"] ?? ""
+          : "";
+      const metaPepper = await c.storage.getMeta("auth_pepper");
+      const pepperUsed = c.pepper;
+      const pepperSource = pepperEnv.trim().length > 0 ? "ENV" : "META";
+
+      const user = await c.storage.getUserByEmail(email);
+      const hash = user?.passwordHash ?? null;
+      const salt = user?.passwordSalt ?? null;
+      const targetHash = hash ?? c.pw.getDummyPasswordHash();
+
+      let valid = false;
+      let verifyError: string | null = null;
+      try {
+        valid = c.pw.verifyPassword(data.password, pepperUsed, targetHash);
+      } catch (ve) {
+        verifyError = ve instanceof Error ? ve.message : String(ve);
+      }
+
+      return {
+        ok: true,
+        data: {
+          email,
+          userFound: !!user,
+          pepperSource,
+          pepperEnvLen: pepperEnv.length,
+          pepperMetaLen: metaPepper?.length ?? 0,
+          pepperUsedLen: pepperUsed.length,
+          pepperUsedPrefix: pepperUsed.slice(0, 8),
+          hashPrefix: hash?.slice(0, 50) ?? "N/A",
+          saltPrefix: salt?.slice(0, 16) ?? "N/A",
+          hashLen: hash?.length ?? 0,
+          passwordValid: valid,
+          verifyError,
+        },
+      };
     } catch (e) {
       return { ok: false, error: errorMsg(e) };
     }

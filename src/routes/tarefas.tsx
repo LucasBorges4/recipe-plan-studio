@@ -52,13 +52,13 @@ import { Badge } from "@/components/ui/badge";
 export const Route = createFileRoute("/tarefas")({
   head: () => ({
     meta: [
-      { title: "Tarefas — Portal de Governança Grupo Geos" },
+      { title: "Tarefas — Portal de Governança Grupo W. Geotec CAFUFV" },
       {
         name: "description",
         content:
           "ClickUp-style Task Board: backlog, execução, aprovações e entregas concluídas.",
       },
-      { property: "og:title", content: "Tarefas — Grupo Geos" },
+      { property: "og:title", content: "Tarefas — Grupo W. Geotec CAFUFV" },
       {
         property: "og:description",
         content: "Board de tarefas no estilo ClickUp com visões em Board, Lista e Tabela.",
@@ -238,7 +238,7 @@ function TarefasPage() {
     createM.mutate({
       title: quickTitle.trim(),
       priority: "Média",
-      assignee: user?.name || "Desenvolvedor",
+      assignee: user?.name || "Colaborador",
     });
   }
 

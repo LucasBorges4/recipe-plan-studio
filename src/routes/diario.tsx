@@ -14,12 +14,12 @@ import { cn } from "@/lib/utils";
 export const Route = createFileRoute("/diario")({
   head: () => ({
     meta: [
-      { title: "Diário de Bordo — Portal de Governança Grupo Geos" },
+      { title: "Diário de Bordo — Portal de Governança Grupo W. Geotec CAFUFV" },
       {
         name: "description",
-        content: "Marcos, entregas e evolução do projeto ERP do Grupo Geos, com release notes.",
+        content: "Marcos, entregas e evolução do projeto ERP do Grupo W. Geotec CAFUFV, com release notes.",
       },
-      { property: "og:title", content: "Diário de Bordo — Grupo Geos" },
+      { property: "og:title", content: "Diário de Bordo — Grupo W. Geotec CAFUFV" },
       {
         property: "og:description",
         content: "Histórico de marcos, integrações e decisões do projeto.",

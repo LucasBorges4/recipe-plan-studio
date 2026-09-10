@@ -2,23 +2,23 @@ import type { LegalDoc } from "./types";
 
 export const termsDoc: LegalDoc = {
   title: "Termos de Uso",
-  subtitle: "Portal de Governança Corporativa — Grupo Geos",
+  subtitle: "Portal de Governança Corporativa — Grupo W. Geotec CAFUFV",
   updatedAt: "Fev 2026",
   version: "v1.2",
   intro:
-    "Estes Termos de Uso regulam as condições gerais de uso do Portal de Governança Corporativa do Grupo Geos. A utilização do Portal implica na aceitação plena e irrestrita de todas as cláusulas e condições aqui descritas. Recomendamos a leitura atenta antes de prosseguir.",
+    "Estes Termos de Uso regulam as condições gerais de uso do Portal de Governança Corporativa do Grupo W. Geotec CAFUFV. A utilização do Portal implica na aceitação plena e irrestrita de todas as cláusulas e condições aqui descritas. Recomendamos a leitura atenta antes de prosseguir.",
   clauses: [
     {
       title: "Objeto",
-      body: 'Estes Termos de Uso regulam o acesso e a utilização do Portal de Governança Corporativa do Grupo Geos ("Portal"), uma plataforma digital destinada à gestão integrada de processos de governança, compliance, gestão de riscos e operações de engenharia. Ao acessar o Portal, o usuário declara ter lido e concordado integralmente com os termos aqui dispostos.',
+      body: 'Estes Termos de Uso regulam o acesso e a utilização do Portal de Governança Corporativa do Grupo W. Geotec CAFUFV ("Portal"), uma plataforma digital destinada à gestão integrada de processos de governança, compliance, gestão de riscos e operações de engenharia. Ao acessar o Portal, o usuário declara ter lido e concordado integralmente com os termos aqui dispostos.',
     },
     {
       title: "Acesso e Credenciais",
-      body: "O acesso ao Portal é restrito a colaboradores, gestores e parceiros devidamente autorizados pelo Grupo Geos. Cada usuário receberá credenciais individuais e intransferíveis. O compartilhamento de senhas ou o uso indevido de credenciais de terceiros constitui infração grave, sujeita a sanções disciplinares e legais. O usuário é integralmente responsável por todas as ações realizadas sob suas credenciais.",
+      body: "O acesso ao Portal é restrito a colaboradores, gestores e parceiros devidamente autorizados pelo Grupo W. Geotec CAFUFV. Cada usuário receberá credenciais individuais e intransferíveis. O compartilhamento de senhas ou o uso indevido de credenciais de terceiros constitui infração grave, sujeita a sanções disciplinares e legais. O usuário é integralmente responsável por todas as ações realizadas sob suas credenciais.",
     },
     {
       title: "Propriedade Intelectual",
-      body: "Todo o conteúdo do Portal — incluindo código-fonte, layout, marcas, logotipos, textos, imagens, bases de dados e documentação técnica — é de propriedade exclusiva do Grupo Geos, sendo vedada qualquer reprodução, distribuição ou engenharia reversa sem autorização expressa por escrito.",
+      body: "Todo o conteúdo do Portal — incluindo código-fonte, layout, marcas, logotipos, textos, imagens, bases de dados e documentação técnica — é de propriedade exclusiva do Grupo W. Geotec CAFUFV, sendo vedada qualquer reprodução, distribuição ou engenharia reversa sem autorização expressa por escrito.",
     },
     {
       title: "Uso Aceitável",
@@ -30,7 +30,7 @@ export const termsDoc: LegalDoc = {
     },
     {
       title: "Disponibilidade e Manutenção",
-      body: "O Grupo Geos empreenderá esforços razoáveis para manter o Portal disponível, podendo suspender o serviço para manutenções programadas ou emergenciais, com comunicação prévia sempre que possível.",
+      body: "O Grupo W. Geotec CAFUFV empreenderá esforços razoáveis para manter o Portal disponível, podendo suspender o serviço para manutenções programadas ou emergenciais, com comunicação prévia sempre que possível.",
     },
     {
       title: "Alterações destes Termos",
@@ -38,18 +38,18 @@ export const termsDoc: LegalDoc = {
     },
     {
       title: "Foro e Legislação Aplicável",
-      body: "Estes Termos são regidos pela legislação brasileira. Fica eleito o foro da comarca da sede do Grupo Geos para dirimir eventuais controvérsias, com renúncia a qualquer outro, por mais privilegiado que seja.",
+      body: "Estes Termos são regidos pela legislação brasileira. Fica eleito o foro da comarca da sede do Grupo W. Geotec CAFUFV para dirimir eventuais controvérsias, com renúncia a qualquer outro, por mais privilegiado que seja.",
     },
   ],
 };
 
 export const lgpdDoc: LegalDoc = {
   title: "Política LGPD",
-  subtitle: "Proteção de dados pessoais — Grupo Geos",
+  subtitle: "Proteção de dados pessoais — Grupo W. Geotec CAFUFV",
   updatedAt: "Fev 2026",
   version: "v1.1",
   intro:
-    "Esta Política descreve como o Grupo Geos trata dados pessoais no âmbito do Portal de Governança Corporativa, em conformidade com a Lei nº 13.709/2018 (Lei Geral de Proteção de Dados Pessoais).",
+    "Esta Política descreve como o Grupo W. Geotec CAFUFV trata dados pessoais no âmbito do Portal de Governança Corporativa, em conformidade com a Lei nº 13.709/2018 (Lei Geral de Proteção de Dados Pessoais).",
   clauses: [
     {
       title: "Dados Tratados",
@@ -81,7 +81,7 @@ export const lgpdDoc: LegalDoc = {
     },
     {
       title: "Encarregado de Dados (DPO)",
-      body: "As solicitações e dúvidas relativas a esta Política devem ser encaminhadas ao Encarregado de Dados do Grupo Geos pelo canal interno de privacidade.",
+      body: "As solicitações e dúvidas relativas a esta Política devem ser encaminhadas ao Encarregado de Dados do Grupo W. Geotec CAFUFV pelo canal interno de privacidade.",
     },
   ],
 };

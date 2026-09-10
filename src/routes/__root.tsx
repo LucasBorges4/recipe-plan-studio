@@ -89,17 +89,17 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Portal de Governança — Grupo Geos" },
+      { title: "Portal de Governança — Grupo W. Geotec CAFUFV" },
       {
         name: "description",
         content:
-          "Portal de Governança Corporativa do Grupo Geos: painel executivo, tarefas, compliance, riscos e documentos.",
+          "Portal de Governança Corporativa do Grupo W. Geotec CAFUFV: painel executivo, tarefas, compliance, riscos e documentos.",
       },
-      { name: "author", content: "Grupo Geos" },
-      { property: "og:title", content: "Portal de Governança — Grupo Geos" },
+      { name: "author", content: "Grupo W. Geotec CAFUFV" },
+      { property: "og:title", content: "Portal de Governança — Grupo W. Geotec CAFUFV" },
       {
         property: "og:description",
-        content: "Gestão integrada de governança, compliance e engenharia do Grupo Geos.",
+        content: "Gestão integrada de governança, compliance e engenharia do Grupo W. Geotec CAFUFV.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },

@@ -52,8 +52,22 @@ export class PostgresStorage extends SqliteBackend {
         };
       } else {
         const { Pool } = await import("pg");
-        const pool = new Pool({ connectionString, ssl: connectionString.includes("sslmode=require") ? { rejectUnauthorized: false } : undefined, max: 5 });
-        await pool.query("SELECT 1");
+        const pool = new Pool({ connectionString, ssl: connectionString.includes("sslmode=require") ? { rejectUnauthorized: false } : undefined, max: 5, idleTimeoutMillis: 30000, connectionTimeoutMillis: 10000, keepAlive: true });
+        pool.on("error", (err) => console.error(`[portal] pg pool error: ${err.message}`));
+        pool.on("connect", (client) => {
+          (client as unknown as { on: (e: string, h: (err: Error) => void) => void }).on("error", (err) => console.error(`[portal] pg client error: ${err.message}`));
+        });
+        if (typeof process !== "undefined" && !(process as unknown as { _pgHandler?: boolean })._pgHandler) {
+          (process as unknown as { _pgHandler?: boolean })._pgHandler = true;
+          process.on("uncaughtException", (err) => {
+            if (err.message.includes("terminating connection due to administrator command")) {
+              console.error(`[portal] pg uncaught suppressed: ${err.message}`);
+              return;
+            }
+            console.error("[portal] uncaughtException", err);
+            process.exit(1);
+          });
+        }
         store.pgPool = pool;
         store.queryRunner = async (sqlStr: string, params: unknown[] = []) => {
           const pgSql = store.toPg(sqlStr);

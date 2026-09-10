@@ -9,16 +9,16 @@ import { roleLabel } from "@/lib/rbac";
 export const Route = createFileRoute("/engenharia")({
   head: () => ({
     meta: [
-      { title: "Engenharia e Equipe — Portal de Governança Grupo Geos" },
+      { title: "Engenharia e Equipe — Portal de Governança Grupo W. Geotec CAFUFV" },
       {
         name: "description",
         content:
-          "Stack tecnológica do ERP do Grupo Geos e o time de engenharia responsável pelo projeto.",
+          "Stack tecnológica do ERP do Grupo W. Geotec CAFUFV e o time de engenharia responsável pelo projeto.",
       },
-      { property: "og:title", content: "Engenharia e Equipe — Grupo Geos" },
+      { property: "og:title", content: "Engenharia e Equipe — Grupo W. Geotec CAFUFV" },
       {
         property: "og:description",
-        content: "Tecnologias utilizadas e quem constrói o ERP do Grupo Geos.",
+        content: "Tecnologias utilizadas e quem constrói o ERP do Grupo W. Geotec CAFUFV.",
       },
     ],
   }),

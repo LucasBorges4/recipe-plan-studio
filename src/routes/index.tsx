@@ -10,13 +10,13 @@ import { formatBR } from "@/lib/doc-schemas";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Painel Executivo — Portal de Governança Grupo Geos" },
+      { title: "Painel Executivo — Portal de Governança Grupo W. Geotec CAFUFV" },
       {
         name: "description",
         content:
-          "Visão geral do progresso do projeto ERP do Grupo Geos: termômetro do projeto, status dos módulos e próximos passos.",
+          "Visão geral do progresso do projeto ERP do Grupo W. Geotec CAFUFV: termômetro do projeto, status dos módulos e próximos passos.",
       },
-      { property: "og:title", content: "Painel Executivo — Grupo Geos" },
+      { property: "og:title", content: "Painel Executivo — Grupo W. Geotec CAFUFV" },
       {
         property: "og:description",
         content: "Progresso consolidado dos módulos do ERP e próximos passos do projeto.",

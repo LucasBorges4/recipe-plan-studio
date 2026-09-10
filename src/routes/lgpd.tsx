@@ -6,13 +6,13 @@ import { formatBR } from "@/lib/doc-schemas";
 export const Route = createFileRoute("/lgpd")({
   head: () => ({
     meta: [
-      { title: "Política LGPD — Portal de Governança Grupo Geos" },
+      { title: "Política LGPD — Portal de Governança Grupo W. Geotec CAFUFV" },
       {
         name: "description",
         content:
-          "Como o Grupo Geos trata dados pessoais no Portal de Governança, conforme a Lei 13.709/2018.",
+          "Como o Grupo W. Geotec CAFUFV trata dados pessoais no Portal de Governança, conforme a Lei 13.709/2018.",
       },
-      { property: "og:title", content: "Política LGPD — Grupo Geos" },
+      { property: "og:title", content: "Política LGPD — Grupo W. Geotec CAFUFV" },
       {
         property: "og:description",
         content: "Finalidades, bases legais, retenção e direitos do titular de dados.",

@@ -16,13 +16,13 @@ import { cn } from "@/lib/utils";
 export const Route = createFileRoute("/riscos")({
   head: () => ({
     meta: [
-      { title: "Mapa de Riscos — Portal de Governança Grupo Geos" },
+      { title: "Mapa de Riscos — Portal de Governança Grupo W. Geotec CAFUFV" },
       {
         name: "description",
         content:
           "Matriz de probabilidade e impacto dos riscos do projeto ERP, com donos e planos de mitigação.",
       },
-      { property: "og:title", content: "Mapa de Riscos — Grupo Geos" },
+      { property: "og:title", content: "Mapa de Riscos — Grupo W. Geotec CAFUFV" },
       {
         property: "og:description",
         content: "Riscos técnicos, legais e de prazo com severidade calculada.",

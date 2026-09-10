@@ -213,6 +213,7 @@ export interface Storage {
   getInviteByHash(codeHash: string): Promise<InviteRow | null>;
   markInviteUsed(codeHash: string, usedAt: string, usedBy: string): Promise<void>;
   deleteInvite(id: string): Promise<boolean>;
+  updateUserPasswordHash(userId: string, hash: string, salt: string): Promise<void>;
 }
 
 export interface NextStep {
@@ -747,6 +748,15 @@ export abstract class SqliteBackend implements Storage {
   async deleteUser(id: string) {
     await this.run("DELETE FROM sessions WHERE user_id = ?", id);
     await this.run("DELETE FROM users WHERE id = ?", id);
+  }
+  async updateUserPasswordHash(userId: string, hash: string, salt: string) {
+    await this.run(
+      "UPDATE users SET password_hash = ?, password_salt = ?, updated_at = ? WHERE id = ?",
+      hash,
+      salt,
+      new Date().toISOString(),
+      userId,
+    );
   }
   async clearAllUsers() {
     const n = await this.num("SELECT COUNT(*) AS n FROM users");
@@ -2201,6 +2211,14 @@ export class MemoryStorage implements Storage {
     this.users = this.users.filter((u) => u.id !== id);
     this.sessions = this.sessions.filter((s) => s.userId !== id);
     this.userFunctions = this.userFunctions.filter((f) => f.userId !== id);
+  }
+  async updateUserPasswordHash(userId: string, hash: string, salt: string) {
+    const user = this.users.find((u) => u.id === userId);
+    if (user) {
+      user.passwordHash = hash;
+      user.passwordSalt = salt;
+      user.updatedAt = new Date().toISOString();
+    }
   }
   async clearAllUsers() {
     const n = this.users.length;

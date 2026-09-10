@@ -22,7 +22,7 @@ import { toast } from "sonner";
 
 export const Route = createFileRoute("/automacoes")({
   head: () => ({
-    meta: [{ title: "Automações — Portal Grupo Geos" }],
+    meta: [{ title: "Automações — Portal Grupo W. Geotec CAFUFV" }],
   }),
   component: AutomacoesPage,
 });

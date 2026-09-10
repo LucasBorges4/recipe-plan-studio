@@ -13,13 +13,13 @@ import { cn } from "@/lib/utils";
 export const Route = createFileRoute("/wiki/")({
   head: () => ({
     meta: [
-      { title: "Wiki — Portal de Governança Grupo Geos" },
+      { title: "Wiki — Portal de Governança Grupo W. Geotec CAFUFV" },
       {
         name: "description",
         content:
-          "Base de conhecimento técnica do Grupo Geos: arquitetura, padrões de código, DevOps e governança de dados.",
+          "Base de conhecimento técnica do Grupo W. Geotec CAFUFV: arquitetura, padrões de código, DevOps e governança de dados.",
       },
-      { property: "og:title", content: "Wiki — Grupo Geos" },
+      { property: "og:title", content: "Wiki — Grupo W. Geotec CAFUFV" },
       {
         property: "og:description",
         content: "Documentação de padrões, processos e decisões técnicas do ERP.",

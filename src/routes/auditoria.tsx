@@ -10,13 +10,13 @@ import { useAuditList, useSession } from "@/lib/api-hooks";
 export const Route = createFileRoute("/auditoria")({
   head: () => ({
     meta: [
-      { title: "Auditoria — Portal de Governança Grupo Geos" },
+      { title: "Auditoria — Portal de Governança Grupo W. Geotec CAFUFV" },
       {
         name: "description",
         content:
           "Trilha de auditoria do portal: quem fez, quando fez, o que mudou e por quê, em registro somente-inserção.",
       },
-      { property: "og:title", content: "Auditoria — Grupo Geos" },
+      { property: "og:title", content: "Auditoria — Grupo W. Geotec CAFUFV" },
       {
         property: "og:description",
         content: "Histórico imutável de ações sobre tarefas, controles e evidências.",

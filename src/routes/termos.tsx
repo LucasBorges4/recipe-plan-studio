@@ -6,13 +6,13 @@ import { formatBR } from "@/lib/doc-schemas";
 export const Route = createFileRoute("/termos")({
   head: () => ({
     meta: [
-      { title: "Termos de Uso — Portal de Governança Grupo Geos" },
+      { title: "Termos de Uso — Portal de Governança Grupo W. Geotec CAFUFV" },
       {
         name: "description",
         content:
-          "Termos e condições gerais de uso do Portal de Governança Corporativa do Grupo Geos.",
+          "Termos e condições gerais de uso do Portal de Governança Corporativa do Grupo W. Geotec CAFUFV.",
       },
-      { property: "og:title", content: "Termos de Uso — Grupo Geos" },
+      { property: "og:title", content: "Termos de Uso — Grupo W. Geotec CAFUFV" },
       {
         property: "og:description",
         content: "Regras de acesso, uso aceitável e propriedade intelectual do Portal.",

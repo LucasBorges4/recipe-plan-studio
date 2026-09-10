@@ -12,6 +12,13 @@ import {
   X,
   Download,
   Upload,
+  Search,
+  Filter,
+  ShieldCheck,
+  Eye,
+  RefreshCw,
+  Users,
+  CheckCircle2,
 } from "lucide-react";
 import { PageHeader } from "@/components/portal/PageHeader";
 import { NoticeBanner } from "@/components/portal/NoticeBanner";
@@ -25,8 +32,16 @@ import {
   qk,
   useInvites,
 } from "@/lib/api-hooks";
-import { roles, roleLabel, roleFunctionsData } from "@/lib/rbac";
-import type { Role, PublicUser } from "@/lib/rbac";
+import {
+  roles,
+  roleLabel,
+  roleFunctionsData,
+  getRoleBasePermissions,
+  getEffectivePermissions,
+  permissionsForFunctions,
+  userCan,
+} from "@/lib/rbac";
+import type { Role, PublicUser, Permission } from "@/lib/rbac";
 import {
   setUserRoleFn,
   deleteUserFn,
@@ -72,16 +87,16 @@ import { InvitesPanel } from "@/components/portal/InvitesPanel";
 export const Route = createFileRoute("/admin")({
   head: () => ({
     meta: [
-      { title: "Administração — Portal de Governança Grupo Geos" },
+      { title: "Administração — Portal de Governança Grupo W. Geotec CAFUFV" },
       {
         name: "description",
         content:
           "Gestão de usuários e papéis, módulos do sistema, colunas do board e versões dos documentos institucionais.",
       },
-      { property: "og:title", content: "Administração — Grupo Geos" },
+      { property: "og:title", content: "Administração — Grupo W. Geotec CAFUFV" },
       {
         property: "og:description",
-        content: "Configuração do Portal de Governança do Grupo Geos.",
+        content: "Configuração do Portal de Governança do Grupo W. Geotec CAFUFV.",
       },
     ],
   }),
@@ -182,6 +197,7 @@ function UserFunctionsDialog({
   const qc = useQueryClient();
   const granted = new Set(user.functions ?? []);
   const [pendingKey, setPendingKey] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"functions" | "effective">("functions");
 
   const toggleM = useMutation({
     mutationFn: async (v: { functionKey: string; grant: boolean }) => {
@@ -203,7 +219,7 @@ function UserFunctionsDialog({
     onError: (e) => toast.error(e instanceof Error ? e.message : "Falha ao alterar função."),
   });
 
-  // Mutação em lote para delegação rápida por módulo
+  // Mutação em lote para delegação rápida por módulo ou reset
   const bulkM = useMutation({
     mutationFn: async (v: { keys: string[]; grant: boolean }) => {
       for (const k of v.keys) {
@@ -212,7 +228,7 @@ function UserFunctionsDialog({
       }
     },
     onSuccess: (_data, vars) => {
-      toast.success(vars.grant ? "Módulo delegado." : "Módulo revogado.");
+      toast.success(vars.grant ? "Módulo delegado." : "Funções atualizadas.");
       qc.invalidateQueries({ queryKey: qk.users });
       qc.invalidateQueries({ queryKey: qk.session });
     },
@@ -226,103 +242,215 @@ function UserFunctionsDialog({
     }))
     .filter((g) => g.items.length > 0);
 
+  const basePermissions = new Set(getRoleBasePermissions(user.role));
+  const effectivePermissions = new Set(getEffectivePermissions(user));
+
+  const allSystemPermissions: Array<{ key: Permission; label: string; group: string }> = [
+    { key: "task.create", label: "Criar Tarefas no Kanban", group: "Tarefas" },
+    { key: "task.move", label: "Mover Tarefas entre Colunas", group: "Tarefas" },
+    { key: "task.approve", label: "Aprovar Tarefas Concluídas", group: "Tarefas" },
+    { key: "task.comment", label: "Comentar em Tarefas", group: "Tarefas" },
+    { key: "evidence.attach", label: "Anexar Evidências Técnicas", group: "Compliance" },
+    { key: "evidence.review", label: "Revisar/Aprovar Evidências", group: "Compliance" },
+    { key: "audit.read", label: "Consultar Trilha de Auditoria", group: "Auditoria" },
+    { key: "admin.manage", label: "Gestão Administrativa do Sistema", group: "Administração" },
+    { key: "risk.manage", label: "Gerenciar Mapa de Riscos", group: "Riscos" },
+    { key: "wiki.write", label: "Escrever/Editar Artigos na Wiki", group: "Wiki" },
+    { key: "wiki.delete", label: "Excluir Artigos da Wiki", group: "Wiki" },
+    { key: "journal.manage", label: "Gerenciar Diário de Bordo", group: "Diário" },
+    { key: "patent.manage", label: "Gerenciar Etapas de Patente", group: "Patentes" },
+    { key: "automation.read", label: "Visualizar Automações n8n", group: "Automações" },
+    { key: "automation.create", label: "Criar Automações n8n", group: "Automações" },
+    { key: "automation.share", label: "Compartlhar Automações por Role", group: "Automações" },
+    { key: "automation.admin", label: "Administração Completa do n8n", group: "Automações" },
+    { key: "record.manage", label: "Configurar Módulos do Sistema", group: "Administração" },
+    { key: "invite.manage", label: "Gerenciar Convites de Cadastro", group: "Administração" },
+  ];
+
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-h-[85vh] overflow-y-auto">
+      <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Funções de {user.name}</DialogTitle>
-          <DialogDescription>
-            Conceda ao usuário funções além do papel base ({roleLabel[user.role]}). As funções
-            desbloqueiam permissões correspondentes; o papel continua sendo a base de acesso.
+          <div className="flex items-center justify-between">
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <BadgeCheck className="size-5 text-brand" /> Gestão de Funções — {user.name}
+            </DialogTitle>
+            <StatusBadge tone={roleTone[user.role]}>{roleLabel[user.role]}</StatusBadge>
+          </div>
+          <DialogDescription className="text-xs">
+            Papel base: <strong>{roleLabel[user.role]}</strong>. Atribua funções específicas ou inspecione a matriz final de permissões efetivas do usuário.
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-4">
-          {/* Delegação rápida por módulo */}
-          <div className="rounded-xl border border-brand/20 bg-brand-soft/10 p-3">
-            <p className="text-xs font-semibold text-foreground">Delegação rápida por módulo</p>
-            <p className="mt-0.5 text-[11px] text-muted-foreground">
-              Conceda em 1 clique todas as funções necessárias para Wiki, Tarefas, Diário, Compliance e Mapa de Riscos.
-            </p>
-            <div className="mt-3 grid gap-2">
-              {moduleDelegation.map((m) => {
-                const hasAll = m.keys.every((k) => granted.has(k));
-                const hasSome = !hasAll && m.keys.some((k) => granted.has(k));
-                return (
-                  <div key={m.label} className="flex items-center justify-between rounded-lg border border-border bg-card px-3 py-2">
-                    <div>
-                      <p className="text-xs font-medium text-foreground">
-                        {m.icon} {m.label} {hasAll ? "· concedido" : hasSome ? "· parcial" : ""}
-                      </p>
-                      <p className="text-[11px] text-muted-foreground">{m.description}</p>
-                      <p className="font-mono text-[10px] text-muted-foreground">{m.keys.join(", ")}</p>
-                    </div>
-                    <button
-                      disabled={bulkM.isPending}
-                      onClick={() => bulkM.mutate({ keys: m.keys, grant: !hasAll })}
-                      className={`shrink-0 rounded-md px-3 py-1.5 text-xs font-medium disabled:opacity-50 ${hasAll ? "bg-brand text-brand-foreground" : "border border-input"}`}
-                    >
-                      {hasAll ? "Revogar" : "Conceder"}
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
 
-          {groups.map((g) => (
-            <section key={g.role}>
-              <p className="mb-2 text-xs font-semibold text-foreground">{roleLabel[g.role]}</p>
-              <ul className="space-y-1.5">
-                {g.items.map((f) => {
-                  const isGranted = granted.has(f.key);
-                  const pending = pendingKey === f.key;
+        <div className="flex border-b border-border text-xs font-medium">
+          <button
+            onClick={() => setActiveTab("functions")}
+            className={`border-b-2 px-4 py-2.5 transition-colors ${
+              activeTab === "functions"
+                ? "border-brand font-semibold text-brand"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Funções & Módulos ({granted.size} concedida{granted.size !== 1 ? "s" : ""})
+          </button>
+          <button
+            onClick={() => setActiveTab("effective")}
+            className={`border-b-2 px-4 py-2.5 transition-colors ${
+              activeTab === "effective"
+                ? "border-brand font-semibold text-brand"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Permissões Efetivas ({effectivePermissions.size} ativa{effectivePermissions.size !== 1 ? "s" : ""})
+          </button>
+        </div>
+
+        {activeTab === "functions" ? (
+          <div className="space-y-4 pt-2">
+            {/* Delegação rápida por módulo */}
+            <div className="rounded-xl border border-brand/20 bg-brand-soft/10 p-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-semibold text-foreground">Delegação rápida por módulo</p>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">
+                    Conceda em 1 clique todas as funções necessárias para os módulos do sistema.
+                  </p>
+                </div>
+                {granted.size > 0 && (
+                  <button
+                    disabled={bulkM.isPending}
+                    onClick={() => bulkM.mutate({ keys: Array.from(granted), grant: false })}
+                    className="flex items-center gap-1 rounded-md border border-danger/30 bg-danger-soft px-2.5 py-1 text-[11px] font-medium text-danger hover:bg-danger-soft/80"
+                  >
+                    <RefreshCw className="size-3" /> Revogar Todas
+                  </button>
+                )}
+              </div>
+              <div className="mt-3 grid gap-2">
+                {moduleDelegation.map((m) => {
+                  const hasAll = m.keys.every((k) => granted.has(k));
+                  const hasSome = !hasAll && m.keys.some((k) => granted.has(k));
                   return (
-                    <li
-                      key={f.key}
-                      className={`flex items-start justify-between gap-3 rounded-lg border px-3 py-2 text-sm ${
-                        isGranted ? "border-brand/40 bg-brand-soft/30" : "border-border"
-                      }`}
-                    >
+                    <div key={m.label} className="flex items-center justify-between rounded-lg border border-border bg-card px-3 py-2">
                       <div>
-                        <p className="text-xs font-medium text-foreground">{f.description}</p>
-                        <p className="mt-0.5 font-mono text-[10px] text-muted-foreground">
-                          {f.key}
+                        <p className="text-xs font-medium text-foreground">
+                          {m.icon} {m.label} {hasAll ? "· concedido" : hasSome ? "· parcial" : ""}
                         </p>
+                        <p className="text-[11px] text-muted-foreground">{m.description}</p>
+                        <p className="font-mono text-[10px] text-muted-foreground">{m.keys.join(", ")}</p>
                       </div>
                       <button
-                        disabled={pending}
-                        onClick={() => toggleM.mutate({ functionKey: f.key, grant: !isGranted })}
-                        aria-pressed={isGranted}
-                        className={`flex shrink-0 items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium disabled:opacity-50 ${
-                          isGranted
-                            ? "bg-brand text-brand-foreground"
-                            : "border border-input text-muted-foreground hover:text-foreground"
-                        }`}
+                        disabled={bulkM.isPending}
+                        onClick={() => bulkM.mutate({ keys: m.keys, grant: !hasAll })}
+                        className={`shrink-0 rounded-md px-3 py-1.5 text-xs font-medium disabled:opacity-50 ${hasAll ? "bg-brand text-brand-foreground" : "border border-input"}`}
                       >
-                        {pending ? (
-                          "…"
-                        ) : isGranted ? (
-                          <>
-                            <Check className="size-3" /> Concedida
-                          </>
-                        ) : (
-                          <>
-                            <X className="size-3" /> Conceder
-                          </>
-                        )}
+                        {hasAll ? "Revogar" : "Conceder"}
                       </button>
-                    </li>
+                    </div>
                   );
                 })}
-              </ul>
-            </section>
-          ))}
-          {granted.size > 0 ? (
+              </div>
+            </div>
+
+            {groups.map((g) => (
+              <section key={g.role}>
+                <p className="mb-2 text-xs font-semibold text-foreground">Funções do Perfil {roleLabel[g.role]}</p>
+                <ul className="space-y-1.5">
+                  {g.items.map((f) => {
+                    const isGranted = granted.has(f.key);
+                    const pending = pendingKey === f.key;
+                    return (
+                      <li
+                        key={f.key}
+                        className={`flex items-start justify-between gap-3 rounded-lg border px-3 py-2 text-sm ${
+                          isGranted ? "border-brand/40 bg-brand-soft/30" : "border-border"
+                        }`}
+                      >
+                        <div>
+                          <p className="text-xs font-medium text-foreground">{f.description}</p>
+                          <p className="mt-0.5 font-mono text-[10px] text-muted-foreground">
+                            {f.key}
+                          </p>
+                        </div>
+                        <button
+                          disabled={pending}
+                          onClick={() => toggleM.mutate({ functionKey: f.key, grant: !isGranted })}
+                          aria-pressed={isGranted}
+                          className={`flex shrink-0 items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium disabled:opacity-50 ${
+                            isGranted
+                              ? "bg-brand text-brand-foreground"
+                              : "border border-input text-muted-foreground hover:text-foreground"
+                          }`}
+                        >
+                          {pending ? (
+                            "…"
+                          ) : isGranted ? (
+                            <>
+                              <Check className="size-3" /> Concedida
+                            </>
+                          ) : (
+                            <>
+                              <X className="size-3" /> Conceder
+                            </>
+                          )}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+            ))}
+          </div>
+        ) : (
+          <div className="space-y-3 pt-2">
             <p className="text-xs text-muted-foreground">
-              {granted.size} função(ões) concedida(s) além do papel base.
+              Esta lista consolida as permissões ativas de <strong>{user.name}</strong>, separadas por origem (papel base vs funções concedidas especificamente ao usuário).
             </p>
-          ) : null}
-        </div>
+            <div className="rounded-xl border border-border bg-card overflow-hidden">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-muted/40 text-muted-foreground font-semibold border-b border-border">
+                  <tr>
+                    <th className="px-3 py-2">Permissão do Sistema</th>
+                    <th className="px-3 py-2">Categoria</th>
+                    <th className="px-3 py-2 text-right">Status & Origem</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/40">
+                  {allSystemPermissions.map((p) => {
+                    const isBase = basePermissions.has(p.key);
+                    const isEffective = effectivePermissions.has(p.key);
+                    const isGrantedFunc = isEffective && !isBase;
+
+                    return (
+                      <tr key={p.key} className="hover:bg-muted/20">
+                        <td className="px-3 py-2 font-medium text-foreground">
+                          {p.label}
+                          <span className="block font-mono text-[10px] text-muted-foreground">{p.key}</span>
+                        </td>
+                        <td className="px-3 py-2 text-muted-foreground">{p.group}</td>
+                        <td className="px-3 py-2 text-right">
+                          {isBase ? (
+                            <span className="inline-flex items-center gap-1 rounded-md bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
+                              <Check className="size-3" /> Papel Base ({roleLabel[user.role]})
+                            </span>
+                          ) : isGrantedFunc ? (
+                            <span className="inline-flex items-center gap-1 rounded-md bg-brand-soft px-2 py-0.5 text-[10px] font-medium text-brand">
+                              <Plus className="size-3" /> Função Concedida
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
+                              Sem Acesso
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );
@@ -691,6 +819,9 @@ function AdminPage() {
   const [nuEmail, setNuEmail] = useState("");
   const [nuPass, setNuPass] = useState("");
   const [nuRole, setNuRole] = useState<Role>("desenvolvedor");
+  const [userSearch, setUserSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState<Role | "all">("all");
+
   const createUserM = useMutation({
     mutationFn: (v: { name: string; email: string; password: string; role: Role }) =>
       createUserWithRoleFn({ data: v }),
@@ -759,6 +890,27 @@ function AdminPage() {
     );
   }
 
+  // Filtragem e estatísticas dos usuários
+  const roleCounts = roles.reduce(
+    (acc, r) => {
+      acc[r] = users.filter((u) => u.role === r).length;
+      return acc;
+    },
+    {} as Record<Role, number>,
+  );
+
+  const filteredUsers = users.filter((u) => {
+    const matchesRole = roleFilter === "all" || u.role === roleFilter;
+    const q = userSearch.toLowerCase().trim();
+    const matchesSearch =
+      !q ||
+      u.name.toLowerCase().includes(q) ||
+      u.email.toLowerCase().includes(q) ||
+      (u.jobTitle ?? "").toLowerCase().includes(q) ||
+      (u.department ?? "").toLowerCase().includes(q);
+    return matchesRole && matchesSearch;
+  });
+
   return (
     <>
       <PageHeader
@@ -796,9 +948,53 @@ function AdminPage() {
           <TabsTrigger value="perigo">Perigo</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="usuarios" className="mt-4">
-          <div className="mb-4 rounded-xl border border-border bg-card p-4">
-            <h3 className="text-xs font-semibold text-foreground">Cadastro limpo por role</h3>
+        <TabsContent value="usuarios" className="mt-4 space-y-4">
+          {/* Dashboard Resumo de Distribuição de Papéis */}
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+            <button
+              onClick={() => setRoleFilter("all")}
+              className={`rounded-xl border p-3 text-left transition-all ${
+                roleFilter === "all"
+                  ? "border-brand bg-brand-soft/20 shadow-sm"
+                  : "border-border bg-card hover:border-border/80"
+              }`}
+            >
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>Total de Usuários</span>
+                <Users className="size-3.5" />
+              </div>
+              <p className="mt-1 text-xl font-bold text-foreground">{users.length}</p>
+              <p className="mt-0.5 text-[10px] text-muted-foreground">Todos cadastrados</p>
+            </button>
+
+            {roles.map((r) => {
+              const count = roleCounts[r];
+              const isSelected = roleFilter === r;
+              return (
+                <button
+                  key={r}
+                  onClick={() => setRoleFilter(isSelected ? "all" : r)}
+                  className={`rounded-xl border p-3 text-left transition-all ${
+                    isSelected
+                      ? "border-brand bg-brand-soft/20 shadow-sm"
+                      : "border-border bg-card hover:border-border/80"
+                  }`}
+                >
+                  <div className="flex items-center justify-between text-xs">
+                    <StatusBadge tone={roleTone[r]}>{roleLabel[r]}</StatusBadge>
+                  </div>
+                  <p className="mt-2 text-lg font-semibold text-foreground">{count}</p>
+                  <p className="mt-0.5 text-[10px] text-muted-foreground">
+                    {count === 1 ? "1 usuário" : `${count} usuários`}
+                  </p>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Form de Criação de Usuário */}
+          <div className="rounded-xl border border-border bg-card p-4">
+            <h3 className="text-xs font-semibold text-foreground">Cadastro limpo por papel</h3>
             <p className="mt-1 text-xs text-muted-foreground">
               Crie 1 usuário para cada papel. Primeiro acesso pode usar o seed de 5 contas demo.
             </p>
@@ -858,59 +1054,140 @@ function AdminPage() {
               </button>
             </div>
           </div>
-          <ul className="divide-y divide-border rounded-xl border border-border bg-card">
-            {users.map((u) => (
-              <li key={u.id} className="flex flex-wrap items-center gap-3 p-4">
-                <Initials name={u.name} className="size-8 text-xs" />
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-foreground">{u.name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {u.email} {u.jobTitle ? `· ${u.jobTitle}` : ""}{" "}
-                    {u.department ? `· ${u.department}` : ""}
-                  </p>
-                </div>
-                <select
-                  value={u.role}
-                  aria-label={`Papel de ${u.name}`}
-                  disabled={u.id === session?.user?.id}
-                  onChange={(e) => setRoleM.mutate({ userId: u.id, role: e.target.value as Role })}
-                  className="rounded-md border border-input bg-card px-2 py-1.5 text-xs disabled:opacity-60"
-                >
-                  {roles.map((r) => (
-                    <option key={r} value={r}>
-                      {roleLabel[r]}
-                    </option>
-                  ))}
-                </select>
-                <StatusBadge tone={roleTone[u.role]}>{roleLabel[u.role]}</StatusBadge>
+
+          {/* Barra de Busca e Filtro de Usuários */}
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card p-3">
+            <div className="relative flex-1 min-w-[240px]">
+              <Search className="absolute left-3 top-2.5 size-3.5 text-muted-foreground" />
+              <input
+                value={userSearch}
+                onChange={(e) => setUserSearch(e.target.value)}
+                placeholder="Buscar usuário por nome, email, cargo ou departamento..."
+                className="w-full rounded-md border border-input bg-card pl-9 pr-8 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-brand"
+              />
+              {userSearch && (
                 <button
-                  onClick={() => setFunctionTarget(u)}
-                  className="flex items-center gap-1.5 rounded-md border border-input px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
+                  onClick={() => setUserSearch("")}
+                  className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground"
                 >
-                  <BadgeCheck className="size-4" />
-                  Funções
-                  {u.functions?.length ? (
-                    <span className="rounded-full bg-brand px-1.5 text-[10px] font-semibold text-brand-foreground">
-                      {u.functions.length}
-                    </span>
-                  ) : null}
+                  <X className="size-3.5" />
                 </button>
-                <DeleteButton
-                  label={u.name}
-                  onConfirm={() => {
-                    if (u.id === session?.user?.id) {
-                      toast.error("Você não pode remover a própria conta.");
-                      return;
-                    }
-                    deleteUserM.mutate({ userId: u.id });
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-1 text-xs">
+              <span className="mr-1 flex items-center gap-1 text-muted-foreground text-[11px]">
+                <Filter className="size-3" /> Filtrar:
+              </span>
+              <button
+                onClick={() => setRoleFilter("all")}
+                className={`rounded-md px-2.5 py-1 text-xs transition-colors ${
+                  roleFilter === "all"
+                    ? "bg-brand text-brand-foreground font-medium"
+                    : "bg-surface text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Todos ({users.length})
+              </button>
+              {roles.map((r) => (
+                <button
+                  key={r}
+                  onClick={() => setRoleFilter(r)}
+                  className={`rounded-md px-2.5 py-1 text-xs transition-colors ${
+                    roleFilter === r
+                      ? "bg-brand text-brand-foreground font-medium"
+                      : "bg-surface text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {roleLabel[r]} ({roleCounts[r]})
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Tabela / Lista de Usuários */}
+          <div className="rounded-xl border border-border bg-card overflow-hidden">
+            <div className="px-4 py-2.5 bg-muted/30 border-b border-border flex items-center justify-between text-xs text-muted-foreground">
+              <span>
+                Exibindo <strong>{filteredUsers.length}</strong> de <strong>{users.length}</strong> usuários
+              </span>
+              {roleFilter !== "all" || userSearch ? (
+                <button
+                  onClick={() => {
+                    setRoleFilter("all");
+                    setUserSearch("");
                   }}
-                />
-              </li>
-            ))}
-            {users.length === 0 ? (
-              <li className="p-4 text-sm text-muted-foreground">Nenhum usuário cadastrado.</li>
-            ) : null}
-          </ul>
+                  className="text-brand hover:underline text-[11px]"
+                >
+                  Limpar filtros
+                </button>
+              ) : null}
+            </div>
+
+            <ul className="divide-y divide-border">
+              {filteredUsers.map((u) => (
+                <li key={u.id} className="flex flex-wrap items-center gap-3 p-4 hover:bg-muted/10 transition-colors">
+                  <Initials name={u.name} className="size-9 text-xs font-semibold" />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium text-foreground">{u.name}</p>
+                      {u.id === session?.user?.id && (
+                        <span className="rounded-md bg-brand-soft px-1.5 py-0.5 text-[10px] font-semibold text-brand">
+                          Você
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {u.email} {u.jobTitle ? `· ${u.jobTitle}` : ""}{" "}
+                      {u.department ? `· ${u.department}` : ""}
+                    </p>
+                  </div>
+                  <select
+                    value={u.role}
+                    aria-label={`Papel de ${u.name}`}
+                    disabled={u.id === session?.user?.id}
+                    onChange={(e) => setRoleM.mutate({ userId: u.id, role: e.target.value as Role })}
+                    className="rounded-md border border-input bg-card px-2.5 py-1.5 text-xs disabled:opacity-60 font-medium"
+                  >
+                    {roles.map((r) => (
+                      <option key={r} value={r}>
+                        {roleLabel[r]}
+                      </option>
+                    ))}
+                  </select>
+                  <StatusBadge tone={roleTone[u.role]}>{roleLabel[u.role]}</StatusBadge>
+                  <button
+                    onClick={() => setFunctionTarget(u)}
+                    className="flex items-center gap-1.5 rounded-md border border-input px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground hover:border-brand/40"
+                  >
+                    <BadgeCheck className="size-4 text-brand" />
+                    Funções
+                    {u.functions?.length ? (
+                      <span className="rounded-full bg-brand px-1.5 text-[10px] font-semibold text-brand-foreground">
+                        {u.functions.length}
+                      </span>
+                    ) : null}
+                  </button>
+                  <DeleteButton
+                    label={u.name}
+                    onConfirm={() => {
+                      if (u.id === session?.user?.id) {
+                        toast.error("Você não pode remover a própria conta.");
+                        return;
+                      }
+                      deleteUserM.mutate({ userId: u.id });
+                    }}
+                  />
+                </li>
+              ))}
+              {filteredUsers.length === 0 ? (
+                <li className="p-8 text-center text-sm text-muted-foreground">
+                  Nenhum usuário encontrado para os filtros selecionados.
+                </li>
+              ) : null}
+            </ul>
+          </div>
+
           {functionTarget ? (
             <UserFunctionsDialog
               user={functionTarget}
