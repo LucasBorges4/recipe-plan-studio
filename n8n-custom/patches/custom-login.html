@@ -210,9 +210,10 @@
     return 'Erro de conexão (' + ((e && e.message) || 'rede indisponível') + ').';
   }
 
-  /* Sonda de conectividade: se o próprio navegador bloqueia requisições
-     (extensão, antivírus, proxy), avisa na hora em vez de falhar no login. */
-  fetch(basePath + '/rest/login', { method: 'GET', cache: 'no-store' })
+  /* Sonda de conectividade (endpoint anônimo 200, sem erro falso no console):
+     se o próprio navegador bloqueia requisições (extensão, antivírus, proxy),
+     avisa na hora em vez de falhar no login. */
+  fetch(basePath + '/healthz', { method: 'GET', cache: 'no-store' })
     .then(function() {})
     .catch(function(e) {
       if (e && e.message === 'Failed to fetch') {
