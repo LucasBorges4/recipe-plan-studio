@@ -59,4 +59,13 @@ if (!fs.existsSync(loginPath)) {
   process.exit(1);
 }
 
+/* Static logo served alongside the editor (referenced as <img src="logo.jpg">) */
+const logoPath = '/tmp/logo.jpg';
+if (fs.existsSync(logoPath)) {
+  fs.copyFileSync(logoPath, path.join(editorDir, 'logo.jpg'));
+  console.log('OK: logo.jpg copied into', editorDir);
+} else {
+  console.error('WARNING:', logoPath, 'not found, login logo will be broken');
+}
+
 inject(editorDir, loginPath);
