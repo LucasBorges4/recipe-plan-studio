@@ -150,7 +150,7 @@ function NavList({ onNavigate }: { onNavigate?: () => void }) {
 function Brand() {
   return (
     <div className="flex items-center gap-3 border-b border-sidebar-border px-5 py-4">
-      <img src="/logo.jpg" alt="Grupo Geos" className="size-9 shrink-0 rounded-full object-cover" />
+      <img src="/logo.jpg" alt="Grupo Geos" className="size-9 shrink-0 rounded-md bg-white object-contain p-0.5" />
       <div className="min-w-0">
         <p className="truncate text-sm font-semibold text-sidebar-primary-foreground">Grupo Geos</p>
         <p className="truncate text-[11px] text-sidebar-foreground/60">Portal de Governança</p>
