@@ -1,0 +1,53 @@
+# Graph / Dependências
+
+## Módulo → Dependências
+
+### src/server/storage.ts
+  - `@/data/types` (Task, Module, etc.)
+  - `@/lib/records` (AuditEntry, CommentRecord, etc.)
+  - `@/lib/rbac` (Role, RoleFunction)
+  - `node:sqlite` (DatabaseSync)
+  - `node:fs` / `node:path` (SqliteStorage.open)
+
+### src/server/auth.ts
+  - `@tanstack/react-start/server` (getCookie, setCookie, deleteCookie, getRequestHeader)
+  - `@/lib/rbac` (PublicUser, userCan, Permission)
+  - `./storage` (Storage, UserRow)
+
+### src/server/n8n.ts
+  - Nenhuma dependência interna (apenas `fetch` global, `process.env`)
+
+### src/server/postgres-storage.ts
+  - `./storage` (SqliteBackend, SCHEMA, StorageInfo)
+  - `pg` (Pool) / `@neondatabase/serverless` (neon)
+
+### src/lib/portal-api.ts
+  - `@tanstack/react-start` (createServerFn)
+  - `zod` (z)
+  - `@/lib/rbac` (userCan, roleLabel, defaultRoleForNewUser, movePermission)
+  - `@/lib/portal-utils` (addMonthsBR, fmtBR)
+  - `@/lib/doc-schemas` (docKinds, docKindLabel, docSchemas)
+  - `@/lib/records` (AuditEntry, JsonObject, PortalStatePayload, PublicInvite)
+  - `@/data/types` (Priority)
+  - `@/server/login-logger` (logLoginAttempt)
+  - `@/server/context` (serverCtx, requestKey, isRateLimited, registerFailure, clearFailures, logAudit, newId)
+  - `@/server/auth` (publicUser, publicUserWithFunctions, AuthError)
+  - `@/server/storage` (getStorage, isStoragePersistent, getStorageInitError)
+
+### src/server/login-logger.ts
+  - `node:fs` (appendFileSync, mkdirSync, existsSync)
+  - `node:path` (join)
+
+### src/server/passwords-helpers.ts
+  - `./storage` (Storage)
+  - `./passwords` (não lido diretamente; assume hashPassword, verifyPassword, generateSaltHex)
+
+### src/lib/rbac.ts
+  - Nenhuma dependência interna (apenas tipos)
+
+### src/routes/*.tsx
+  - `@tanstack/react-router` (createFileRoute, Link, useNavigate)
+  - `@tanstack/react-query` (useQueryClient)
+  - `sonner` (toast)
+  - Componentes internos (`@/components/ui/*`)
+  - Hooks internos (`@/lib/api-hooks`)

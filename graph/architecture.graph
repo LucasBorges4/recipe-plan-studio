@@ -1,0 +1,96 @@
+# Graph / Arquitetura
+
+```
+REQ-001 (Auth)
+  → Component: auth.ts (createSession, getCurrentUser, requireUser)
+  → Component: storage.ts (Storage.insertSession, getSessionByTokenHash)
+  → Component: login-logger.ts (logLoginAttempt)
+  → Component: portal-api.ts (loginFn, registerFn, meFn)
+  → Tests: auth.test.ts, login-flow.test.ts, n8n-login-flow.test.ts
+
+REQ-002 (Cadastro)
+  → Component: storage.ts (Storage.insertUser, getInviteByHash, insertInvite)
+  → Component: portal-api.ts (registerFn, expectedRegistrationCode)
+  → Component: auth.ts (publicUser, publicUserWithFunctions)
+  → Tests: storage-extended.test.ts, storage.test.ts
+
+REQ-003 (RBAC)
+  → Component: storage.ts (Storage.listRoleFunctions, grantUserFunction)
+  → Component: lib/rbac.ts (userCan, roleLabel)
+  → Component: portal-api.ts (grantUserFunctionFn, revokeUserFunctionFn, listRoleFunctionsFn)
+  → Tests: rbac.test.ts, rbac-profiles.test.ts
+
+REQ-004 (Tarefas)
+  → Component: storage.ts (Storage.insertTask, updateTaskColumn, listTasks)
+  → Component: portal-api.ts (createTaskFn, moveTaskFn, deleteTaskFn)
+  → Component: routes/index.tsx, routes/admin.tsx
+  → Tests: Nenhum específico para tarefas (órfão detectado)
+
+REQ-005 (Comentários)
+  → Component: storage.ts (Storage.insertComment, listComments)
+  → Component: portal-api.ts (addCommentFn)
+  → Tests: Nenhum específico para comentários (órfão detectado)
+
+REQ-006 (Compliance / Evidências)
+  → Component: storage.ts (Storage.insertControl, reviewControl, insertEvidence, reviewEvidence)
+  → Component: portal-api.ts (attachEvidenceFn, reviewEvidenceFn, reviewControlFn)
+  → Component: routes/compliance.tsx
+  → Tests: Nenhum específico para compliance (órfão detectado)
+
+REQ-007 (Wiki / Docs / Legal)
+  → Component: storage.ts (Storage.insertWiki, insertLegalDoc, upsertDoc)
+  → Component: portal-api.ts (createWikiFn, updateWikiFn, deleteWikiFn)
+  → Component: routes/wiki.tsx, routes/legal.tsx
+  → Tests: Nenhum específico para wiki (órfão detectado)
+
+REQ-008 (Riscos)
+  → Component: storage.ts (Storage.insertRisk, updateRisk, listRisks)
+  → Component: portal-api.ts (createRiskFn, updateRiskFn, deleteRiskFn, generateAutoRisksFn)
+  → Component: routes/riscos.tsx
+  → Tests: Nenhum específico para riscos (órfão detectado)
+
+REQ-009 (Módulos / Milestones / Releases / Patentes / Stack)
+  → Component: storage.ts (Storage.insertModule, insertMilestone, insertRelease, insertPatentStage, insertTechStack)
+  → Component: data/*.ts (seed data)
+  → Tests: Nenhum específico (órfão detectado)
+
+REQ-010 (Automação / Próximos Passos)
+  → Component: storage.ts (Storage.upsertAutomationShare, insertNextStep, reorderNextSteps)
+  → Component: portal-api.ts (não exposto diretamente no trecho lido; verificação necessária)
+  → Tests: Nenhum específico (órfão detectado)
+
+REQ-011 (Convites / Reset)
+  → Component: storage.ts (Storage.insertInvite, getInviteByHash, insertResetToken, getResetTokenByHash)
+  → Component: portal-api.ts (register com invite, reset flow via login-logger?)
+  → Tests: Nenhum específico para reset tokens (órfão detectado)
+
+REQ-012 (Auditoria)
+  → Component: storage.ts (Storage.insertAudit, listAudit, countAudit)
+  → Component: portal-api.ts (listAuditFn, taskHistoryFn, logAudit)
+  → Component: server/context.ts (logAudit)
+  → Tests: Nenhum específico para auditoria (órfão detectado)
+
+REQ-013 (N8n)
+  → Component: n8n.ts (n8nFetch, listN8nWorkflows, createN8nWorkflow, updateN8nWorkflow, deleteN8nWorkflow, provisionN8nUser)
+  → Component: portal-api.ts (não exposto diretamente no trecho lido; verificação necessária)
+  → Component: routes/automacoes.tsx (provavelmente consome n8n)
+  → Tests: n8n-login-flow.test.ts (login, não integração direta com n8nFetch)
+  → Nota: Nenhum teste de `n8nFetch` diretamente (órfão detectado)
+
+REQ-014 (Persistência / Diagnóstico)
+  → Component: storage.ts (getStorage, initStorage, getStorageInfo, isStoragePersistent, getStorageInitError)
+  → Component: server/context.ts (serverCtx retorna storage)
+  → Component: portal-api.ts (storageDiagnosticFn)
+  → Component: postgres-storage.ts (PostgresStorage.open, execSchema)
+  → Component: turso-storage.ts (não lido; verificar se existe)
+  → Tests: storage.test.ts, storage-extended.test.ts
+
+REQ-015 (Login Logger)
+  → Component: server/login-logger.ts (logLoginAttempt, LoginLogEntry)
+  → Component: portal-api.ts (loginFn chama logLoginAttempt)
+  → Tests: Nenhum específico para login-logger (órfão detectado)
+
+REQ-016 (Diagnóstico Runtime)
+  → Component: portal-api.ts (storageDiagnosticFn)
+  → Component: server/storage.ts (getStorageInitError, getActiveDatabasePath)
+  → Tests: Nenhum específico (órfão detectado)

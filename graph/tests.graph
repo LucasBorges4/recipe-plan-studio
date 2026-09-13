@@ -1,0 +1,23 @@
+# Graph / Testes → Componente
+
+| Arquivo de Teste | Componentes Testados | Cobertura | Órfão? |
+|------------------|----------------------|-----------|--------|
+| `auth.test.ts` | `auth.ts` | Login, sessão, cookie | Não |
+| `context.test.ts` | `server/context.ts` | Contexto de servidor | Não |
+| `login-flow.test.ts` | `portal-api.ts`, `auth.ts` | Login, registro básico | Não |
+| `n8n-login-flow.test.ts` | `n8n-login-flow` (simulado), `passwords` | Login n8n, argon2id, bcrypt | Não |
+| `passwords.test.ts` | `passwords` (hash, verify, salt) | Hashing, verificação | Não |
+| `storage-extended.test.ts` | `storage.ts` (SqliteStorage, MemoryStorage) | Perfil de usuário, limpeza, persistência | Não |
+| `storage.test.ts` | `storage.ts` | Operações básicas (insert, get, list) | Não |
+| `portal-utils-extended.test.ts` | `lib/portal-utils` | Funções utilitárias | Não |
+| `portal-utils.test.ts` | `lib/portal-utils` | Funções utilitárias | Não |
+| `rbac-profiles.test.ts` | `lib/rbac` | Perfis RBAC | Não |
+| `rbac.test.ts` | `lib/rbac` | Funções de permissão | Não |
+| `registration-code.test.ts` | `portal-api.ts` (expectedRegistrationCode) | Código de registro | Não |
+
+## Órfãos Detectados (sem teste direto)
+- `n8n.ts`: Nenhum teste de `n8nFetch`, `safeFetch`, `isBlockedIp`, `validateN8nUrl`.
+- `login-logger.ts`: Nenhum teste de `logLoginAttempt`.
+- `postgres-storage.ts`: Nenhum teste de `PostgresStorage.open` ou `toPg`.
+- `portal-api.ts` (muitos handlers): Nenhum teste de `createTaskFn`, `addCommentFn`, `attachEvidenceFn`, `createWikiFn`, `createRiskFn`, `generateAutoRisksFn`, `addModuleFn`, `createMilestoneFn`, `storageDiagnosticFn`.
+- `routes/*.tsx`: Nenhum teste de componente UI (não obrigatório para esta análise).

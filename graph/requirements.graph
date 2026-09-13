@@ -1,0 +1,20 @@
+# Graph / Rastreabilidade REQ → Componente → Teste
+
+| REQ | Componente | Teste | Status |
+|-----|-----------|-------|--------|
+| REQ-001 | auth.ts, storage.ts | auth.test.ts, login-flow.test.ts, n8n-login-flow.test.ts | Coberto |
+| REQ-002 | storage.ts, portal-api.ts | storage-extended.test.ts, storage.test.ts | Coberto |
+| REQ-003 | storage.ts, portal-api.ts, lib/rbac.ts | rbac.test.ts, rbac-profiles.test.ts | Coberto |
+| REQ-004 | storage.ts, portal-api.ts | Nenhum específico | Órfão |
+| REQ-005 | storage.ts, portal-api.ts | Nenhum específico | Órfão |
+| REQ-006 | storage.ts, portal-api.ts | Nenhum específico | Órfão |
+| REQ-007 | storage.ts, portal-api.ts | Nenhum específico | Órfão |
+| REQ-008 | storage.ts, portal-api.ts | Nenhum específico | Órfão |
+| REQ-009 | storage.ts, data/*.ts | Nenhum específico | Órfão |
+| REQ-010 | storage.ts, portal-api.ts | Nenhum específico | Órfão |
+| REQ-011 | storage.ts, portal-api.ts | Nenhum específico | Órfão |
+| REQ-012 | storage.ts, portal-api.ts, server/context.ts | Nenhum específico | Órfão |
+| REQ-013 | n8n.ts | n8n-login-flow.test.ts (indireto) | Parcial / Órfão |
+| REQ-014 | storage.ts, server/context.ts, portal-api.ts | storage-extended.test.ts, storage.test.ts | Coberto |
+| REQ-015 | server/login-logger.ts, portal-api.ts | Nenhum específico | Órfão |
+| REQ-016 | portal-api.ts, server/storage.ts | Nenhum específico | Órfão |
