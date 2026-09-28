@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseBR, computeStatus, formatDateTime, addMonthsBR, fmtBR } from "@/lib/portal-utils";
+import { parseBR, computeStatus, formatDateTime, addMonthsBR, fmtBR, severityTone, severityLabel } from "@/lib/portal-utils";
 import type { ComplianceControl } from "@/data/types";
 
 describe("parseBR", () => {
@@ -79,5 +79,34 @@ describe("addMonthsBR", () => {
   it("soma negativa volta meses", () => {
     const r = addMonthsBR(parseBR("15/03/2024")!, -1);
     expect(fmtBR(r)).toBe("15/02/2024");
+  });
+});
+
+describe("severityTone", () => {
+  it("retorna danger para score >= 15", () => {
+    expect(severityTone(15)).toBe("danger");
+    expect(severityTone(100)).toBe("danger");
+  });
+  it("retorna warning para score 9-14", () => {
+    expect(severityTone(9)).toBe("warning");
+    expect(severityTone(14)).toBe("warning");
+  });
+  it("retorna info para score 4-8", () => {
+    expect(severityTone(4)).toBe("info");
+    expect(severityTone(8)).toBe("info");
+  });
+  it("retorna success para score < 4", () => {
+    expect(severityTone(0)).toBe("success");
+    expect(severityTone(3)).toBe("success");
+    expect(severityTone(-1)).toBe("success");
+  });
+});
+
+describe("severityLabel", () => {
+  it("retorna rótulos corretos", () => {
+    expect(severityLabel(15)).toBe("Crítica");
+    expect(severityLabel(9)).toBe("Alta");
+    expect(severityLabel(4)).toBe("Moderada");
+    expect(severityLabel(0)).toBe("Baixa");
   });
 });
