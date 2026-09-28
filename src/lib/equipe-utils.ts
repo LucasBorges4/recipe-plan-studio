@@ -7,7 +7,7 @@ import type {
 } from "@/data/types";
 
 /** Nome do projeto usado na mensagem pré-preenchida dos canais. */
-export const PROJECT_NAME = "Grupo W. Geotec CAFUFV";
+export const PROJECT_NAME = "GRUPO GWG";
 
 /** Metadados por tipo de evento (rótulo PT-BR + tom do design system). */
 export const EVENT_KIND_META: Record<

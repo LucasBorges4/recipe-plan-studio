@@ -17,7 +17,7 @@ import type { TeamMember, TimelineEvent } from "@/data/types";
 const geron: TeamMember = {
   id: "gerson",
   name: "Gérson",
-  role: "Chief Scientific Officer",
+  role: "CSO",
   area: "Geociências e Tecnologia",
   tier: "lead",
   badge: "crown",
@@ -30,7 +30,7 @@ const geron: TeamMember = {
 const camila: TeamMember = {
   id: "camila",
   name: "Camila",
-  role: "Chief Projects Officer",
+  role: "CPO",
   area: "Entregas e Relacionamento",
   tier: "secondary",
   primaryContact: true,
@@ -64,7 +64,7 @@ describe("Equipe — LeadCard (TDD 1-3)", () => {
   it("renderiza Gérson como lead primário com selo de liderança e frentes", () => {
     render(<LeadCard member={geron} />);
     expect(screen.getByText("Gérson")).toBeInTheDocument();
-    expect(screen.getByText("Chief Scientific Officer")).toBeInTheDocument();
+    expect(screen.getByText("CSO")).toBeInTheDocument();
     expect(screen.getByText("LIDERANÇA ESTRATÉGICA")).toBeInTheDocument();
     expect(screen.getByText("Visão • Pesquisa • Inovação • Direção do Projeto")).toBeInTheDocument();
     expect(screen.getByText("CIÊNCIA / INOVAÇÃO / RESULTADOS")).toBeInTheDocument();
@@ -81,7 +81,7 @@ describe("Equipe — LeadCard (TDD 1-3)", () => {
   it("Camila aparece como secundária com selo de responsável pelo projeto", () => {
     render(<LeadCard member={camila} secondary className="lg:col-span-1" />);
     expect(screen.getByText("Camila")).toBeInTheDocument();
-    expect(screen.getByText("Chief Projects Officer")).toBeInTheDocument();
+    expect(screen.getByText("CPO")).toBeInTheDocument();
     expect(screen.getByText("RESPONSÁVEL PELO PROJETO")).toBeInTheDocument();
     expect(screen.getByText("PROJETOS / RELACIONAMENTO / CONQUISTAS")).toBeInTheDocument();
   });

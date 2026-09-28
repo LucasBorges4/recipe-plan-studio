@@ -208,7 +208,7 @@ describe("canais de contato (RF05-RF07)", () => {
   it("WhatsApp usa wa.me com número limpo e texto pré-preenchido", () => {
     const href = buildContactHref({ type: "whatsapp", label: "WhatsApp", value: "+55 (11) 99999-8888" });
     expect(href).toContain("https://wa.me/5511999998888?text=");
-    expect(decodeURIComponent(href)).toContain("Grupo W. Geotec CAFUFV");
+    expect(decodeURIComponent(href)).toContain("GRUPO GWG");
   });
 
   it("e-mail usa mailto com assunto e corpo", () => {

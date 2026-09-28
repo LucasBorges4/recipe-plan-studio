@@ -8,8 +8,8 @@ describe("team data (Equipe e Projeto)", () => {
     expect(ger?.tier).toBe("lead");
     expect(cam?.tier).toBe("secondary");
     expect(cam?.primaryContact).toBe(true);
-    expect(ger?.role).toBe("Chief Scientific Officer");
-    expect(cam?.role).toBe("Chief Projects Officer");
+    expect(ger?.role).toBe("CSO");
+    expect(cam?.role).toBe("CPO");
   });
 
   it("todos os cargos definidos estão em inglês (RF03)", () => {

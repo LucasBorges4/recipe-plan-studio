@@ -94,6 +94,11 @@ export interface ContactChannel {
   value: string;
 }
 
+/** Endereço de e-mail opcional do membro para contato direto. */
+export interface TeamMemberContact {
+  email?: string;
+}
+
 /** Destaque visual do membro: primário (Gérson), secundário (Camila) ou simples. */
 export type TeamMemberTier = "lead" | "secondary" | "member";
 
@@ -125,6 +130,8 @@ export interface TeamMember {
   tier: TeamMemberTier;
   /** Responsável pelo acompanhamento com o cliente. */
   primaryContact?: boolean;
+  /** E-mail para contato direto. */
+  email?: string | null;
   /** Canais reais; vazio até o dado chegar (RNF07). */
   channels: ContactChannel[];
 }

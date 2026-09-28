@@ -10,7 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { buildChannels, contactLabel, PROJECT_NAME } from "@/lib/equipe-utils";
+import { buildChannels, contactLabel } from "@/lib/equipe-utils";
 import type { TeamMember } from "@/data/types";
 
 const channelIcon = { whatsapp: MessageCircle, email: Mail, meeting: CalendarClock } as const;
@@ -27,10 +27,10 @@ export function ContactDialog({ member }: { member: TeamMember }) {
         type="button"
         size="sm"
         variant={member.tier === "member" ? "ghost" : "default"}
-        onClick={() => hasChannels && setOpen(true)}
-        disabled={!hasChannels}
+        onClick={() => hasChannels || member.email ? setOpen(true) : undefined}
+        disabled={!hasChannels && !member.email}
         aria-label={label}
-        title={hasChannels ? label : "Contato ainda não disponível"}
+        title={member.email ?? hasChannels ? label : "Contato ainda não disponível"}
         className={member.tier === "member" ? "justify-start px-2 text-muted-foreground" : ""}
       >
         <MessageCircle className="size-4" />
@@ -43,11 +43,11 @@ export function ContactDialog({ member }: { member: TeamMember }) {
             {label}
           </DialogTitle>
           <DialogDescription className="text-xs">
-            {member.role} · {PROJECT_NAME}
+            {member.role} · {member.area}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-2.5 py-1">
-          {channels.length === 0 && (
+          {(channels.length === 0 && !member.email) && (
             <p className="flex items-center gap-2 rounded-lg border border-dashed border-border bg-muted/40 px-3 py-3 text-sm text-muted-foreground">
               <PhoneOff className="size-4 shrink-0" />
               Os canais de contato de {member.name} ainda não foram cadastrados.
@@ -72,6 +72,18 @@ export function ContactDialog({ member }: { member: TeamMember }) {
               </a>
             );
           })}
+          {member.email && (
+            <a
+              href={`mailto:${member.email}`}
+              className="flex items-center justify-between gap-3 rounded-lg border border-brand/30 bg-brand-soft/50 px-4 py-3 text-sm text-foreground transition-colors hover:bg-brand-soft"
+            >
+              <span className="flex items-center gap-2.5">
+                <Mail className="size-4 shrink-0 text-brand" />
+                {member.email}
+              </span>
+              <ExternalLink className="size-4 shrink-0 text-brand" />
+            </a>
+          )}
         </div>
         <DialogFooter>
           <DialogClose asChild>

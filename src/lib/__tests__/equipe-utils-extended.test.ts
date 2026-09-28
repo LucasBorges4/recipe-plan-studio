@@ -77,7 +77,7 @@ const makeEvent = (
 
 describe("equipe-utils — CONSTANTS", () => {
   it("PROJECT_NAME é a string correta", () => {
-    expect(PROJECT_NAME).toBe("Grupo W. Geotec CAFUFV");
+    expect(PROJECT_NAME).toBe("GRUPO GWG");
   });
 
   it("CHANNEL_ORDER tem a ordem canônica", () => {
@@ -159,7 +159,7 @@ describe("equipe-utils — buildContactHref", () => {
     const result = buildContactHref(makeChannel("whatsapp", "11999999999"));
     expect(result).toMatch(/^https:\/\/wa\.me\//);
     expect(result).toContain("text=");
-    expect(result).toContain("Grupo");
+    expect(result).toContain("GRUPO");
   });
 
   it("gera link mailto com assunto e corpo", () => {
