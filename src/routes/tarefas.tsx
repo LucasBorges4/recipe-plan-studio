@@ -29,6 +29,7 @@ import {
   ArrowRight,
   GripVertical,
   ArrowDownToLine,
+  Eye,
 } from "lucide-react";
 import { PageHeader } from "@/components/portal/PageHeader";
 import { StatusBadge } from "@/components/portal/StatusBadge";
@@ -516,7 +517,7 @@ function TarefasPage() {
         {isWaitingClient ? (
           <div className="mt-1.5 pl-5">
             <span className="inline-flex items-center gap-1 rounded-md bg-amber-500/15 text-amber-700 dark:text-amber-300 px-1.5 py-0.5 text-[10px] font-bold border border-amber-400/30 animate-pulse">
-              ⚡ Aguardando você
+              Aguardando você
             </span>
           </div>
         ) : null}
@@ -723,9 +724,9 @@ function TarefasPage() {
       {/* Widget agregado */}
       <div className="mb-4 flex flex-wrap gap-3">
         {[
-          { label: "Aguardando você", stage: "waiting_client", icon: "⚡", color: "bg-amber-500/15 text-amber-700 border-amber-400/30" },
-          { label: "Concluídas", stage: "done", icon: "✅", color: "bg-emerald-500/15 text-emerald-700 border-emerald-400/30" },
-          { label: "Em revisão", stage: "review", icon: "👀", color: "bg-purple-500/15 text-purple-700 border-purple-400/30" },
+          { label: "Aguardando você", stage: "waiting_client", icon: "clock", color: "bg-amber-500/15 text-amber-700 border-amber-400/30" },
+          { label: "Concluídas", stage: "done", icon: "check", color: "bg-emerald-500/15 text-emerald-700 border-emerald-400/30" },
+          { label: "Em revisão", stage: "review", icon: "eye", color: "bg-purple-500/15 text-purple-700 border-purple-400/30" },
         ].map((w) => {
           const count = items.filter((t) => taskStage(t) === (w.stage as import("@/data/types").Stage)).length;
           return (
@@ -741,7 +742,11 @@ function TarefasPage() {
                 w.color,
               )}
             >
-              <span>{w.icon}</span>
+              <span className="flex items-center gap-1">
+                {w.icon === "clock" && <Clock className="size-3.5" />}
+                {w.icon === "check" && <CheckCircle2 className="size-3.5" />}
+                {w.icon === "eye" && <Eye className="size-3.5" />}
+              </span>
               <span>{w.label}</span>
               <span className="ml-0.5 font-bold">{count}</span>
             </button>

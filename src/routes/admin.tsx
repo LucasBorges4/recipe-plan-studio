@@ -19,6 +19,9 @@ import {
   RefreshCw,
   Users,
   CheckCircle2,
+  BookOpen,
+  Notebook,
+  AlertTriangle,
 } from "lucide-react";
 import { PageHeader } from "@/components/portal/PageHeader";
 import { NoticeBanner } from "@/components/portal/NoticeBanner";
@@ -156,31 +159,31 @@ const moduleDelegation: Array<{
 }> = [
   {
     label: "Wiki",
-    icon: "📚",
+    icon: "book",
     keys: ["wiki.write", "wiki.maintain"],
     description: "Escrever e manter artigos da Wiki",
   },
   {
     label: "Tarefas",
-    icon: "✅",
+    icon: "check",
     keys: ["tasks.manage", "tasks.move", "tasks.approve", "tasks.comment"],
     description: "Criar, mover, aprovar e comentar tarefas",
   },
   {
     label: "Diário de Bordo",
-    icon: "📓",
+    icon: "notebook",
     keys: ["journal.manage"],
     description: "Gerenciar marcos e releases do diário",
   },
   {
     label: "Compliance",
-    icon: "🛡️",
+    icon: "shield",
     keys: ["evidence.attach", "evidence.review", "compliance.validate", "audit.read"],
     description: "Anexar e revisar evidências, validar conformidade",
   },
   {
     label: "Mapa de Riscos",
-    icon: "⚠️",
+    icon: "alert",
     keys: ["risks.manage", "risks.monitor"],
     description: "Gerenciar e monitorar riscos e mitigações",
   },
@@ -344,7 +347,15 @@ function UserFunctionsDialog({
                     >
                       <div>
                         <p className="text-xs font-medium text-foreground">
-                          {m.icon} {m.label} {hasAll ? "· concedido" : hasSome ? "· parcial" : ""}
+                          <span className="flex items-center gap-1.5">
+                            {m.icon === "book" && <BookOpen className="size-3.5" />}
+                            {m.icon === "check" && <CheckCircle2 className="size-3.5" />}
+                            {m.icon === "notebook" && <Notebook className="size-3.5" />}
+                            {m.icon === "shield" && <ShieldCheck className="size-3.5" />}
+                            {m.icon === "alert" && <AlertTriangle className="size-3.5" />}
+                            <span>{m.label}</span>
+                          </span>
+                          {hasAll ? "· concedido" : hasSome ? "· parcial" : ""}
                         </p>
                         <p className="text-[11px] text-muted-foreground">{m.description}</p>
                         <p className="font-mono text-[10px] text-muted-foreground">
