@@ -65,11 +65,10 @@ function SessionBox() {
 
   if (!session?.user) {
     return (
-      <div className="border-t border-sidebar-border px-4 py-3">
-        <p className="text-[11px] tracking-wider text-sidebar-foreground/45">SESSÃO</p>
+      <div className="border-t border-sidebar-border/60 px-4 py-5">
         <Link
           to="/login"
-          className="mt-2 flex items-center justify-center gap-2 rounded-md bg-sidebar-primary px-3 py-2 text-sm font-medium text-sidebar-primary-foreground transition-colors hover:bg-sidebar-primary/90"
+          className="flex items-center justify-center gap-2 rounded-full border-2 border-[#0fb3b3]/60 bg-transparent px-4 py-2.5 text-sm font-semibold text-[#0fb3b3] transition-all duration-200 hover:bg-[#0fb3b3]/15 hover:border-[#0fb3b3] hover:text-[#1a5c5c] active:scale-[0.98]"
         >
           <LogIn className="size-4" /> Entrar
         </Link>
@@ -79,25 +78,25 @@ function SessionBox() {
 
   const user = session.user;
   return (
-    <div className="border-t border-sidebar-border px-4 py-3">
-      <p className="text-[11px] tracking-wider text-sidebar-foreground/45">SESSÃO ATUAL</p>
-      <Link
-        to="/perfil"
-        className="mt-1 block truncate text-sm font-medium text-sidebar-primary-foreground hover:underline"
-      >
-        {user.name}
-      </Link>
-      <p className="text-[11px] text-sidebar-foreground/60">
-        {user.jobTitle ? `${user.jobTitle} · ` : ""}
-        {roleLabel[user.role]}
-      </p>
+    <div className="border-t border-sidebar-border/60 px-4 py-5">
+      <div className="flex items-center gap-3">
+        <div className="relative shrink-0">
+          <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-[#0fb3b3] to-[#1a5c5c] text-white shadow-lg shadow-[#0fb3b3]/30 ring-2 ring-[#0fb3b3]/20 ring-offset-1 ring-offset-sidebar">
+            <User className="size-5" />
+          </div>
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-bold text-sidebar-primary-foreground tracking-tight">Administrador</p>
+          <p className="truncate text-[11px] text-sidebar-foreground/60">Administrador - {roleLabel[user.role]}</p>
+        </div>
+      </div>
       <button
         type="button"
         onClick={() => logout.mutate()}
         disabled={logout.isPending}
-        className="mt-2 flex w-full items-center justify-center gap-2 rounded-md border border-sidebar-border bg-sidebar-accent px-3 py-1.5 text-xs text-sidebar-primary-foreground transition-colors hover:bg-sidebar-accent/70"
+        className="mt-4 flex w-full items-center justify-center gap-2 rounded-full border-2 border-[#0fb3b3]/60 bg-transparent px-4 py-2 text-sm font-semibold text-[#0fb3b3] transition-all duration-200 hover:bg-[#0fb3b3]/15 hover:border-[#0fb3b3] hover:text-[#1a5c5c] active:scale-[0.98]"
       >
-        <LogOut className="size-3.5" /> {logout.isPending ? "Saindo..." : "Sair"}
+        <LogOut className="size-4" /> {logout.isPending ? "Saindo..." : "Sair"}
       </button>
     </div>
   );
@@ -124,9 +123,9 @@ function NavList({ onNavigate }: { onNavigate?: () => void }) {
                 to={item.to}
                 onClick={onNavigate}
                 activeOptions={{ exact: item.to === "/" }}
-                className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-sidebar-foreground/80 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                className="flex items-center gap-3 rounded-lg border border-transparent px-3.5 py-2.5 text-sm text-sidebar-foreground/90 transition-all duration-200 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground hover:shadow-sm hover:-translate-y-px"
                 activeProps={{
-                  className: "bg-sidebar-primary text-sidebar-primary-foreground font-medium",
+                  className: "bg-gradient-to-r from-[#1a5c5c] to-[#1a6e6e] text-white font-semibold shadow-md shadow-[#1a5c5c]/40 relative overflow-hidden border-l-[3px] border-[#0fb3b3]",
                 }}
               >
                 <item.icon className="size-4 shrink-0" />
@@ -146,9 +145,9 @@ function NavList({ onNavigate }: { onNavigate?: () => void }) {
             <Link
               to={item.to}
               onClick={onNavigate}
-              className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-sidebar-foreground/80 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+              className="flex items-center gap-3 rounded-lg border border-transparent px-3.5 py-2.5 text-sm text-sidebar-foreground/85 transition-all duration-200 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground hover:shadow-sm hover:-translate-y-px"
               activeProps={{
-                className: "bg-sidebar-primary text-sidebar-primary-foreground font-medium",
+                className: "bg-gradient-to-r from-[#1a5c5c] to-[#1a6e6e] text-white font-semibold shadow-md shadow-[#1a5c5c]/40 relative overflow-hidden border-l-[3px] border-[#0fb3b3]",
               }}
             >
               <item.icon className="size-4 shrink-0" />
@@ -163,15 +162,15 @@ function NavList({ onNavigate }: { onNavigate?: () => void }) {
 
 function Brand() {
   return (
-    <div className="flex items-center gap-3 border-b border-sidebar-border px-5 py-4">
+    <div className="flex items-center gap-3.5 border-b border-sidebar-border px-5 py-5">
       <img
         src="/zaggo-mark.png"
         alt="ZAGGO"
-        className="size-9 shrink-0 rounded-md bg-white object-contain p-0.5"
+        className="size-11 shrink-0 rounded-lg bg-white/10 object-contain p-1 shadow-lg shadow-black/20 ring-1 ring-white/10"
       />
       <div className="min-w-0">
-        <p className="truncate text-sm font-semibold text-sidebar-primary-foreground">GRUPO GWG</p>
-        <p className="truncate text-[11px] text-sidebar-foreground/60">Portal de Governança</p>
+        <p className="truncate text-base font-extrabold tracking-tight text-sidebar-primary-foreground leading-tight">GRUPO GWG</p>
+        <p className="truncate text-[11px] font-medium text-sidebar-foreground/50 tracking-wide">Portal de Governança</p>
       </div>
     </div>
   );
