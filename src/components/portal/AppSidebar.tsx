@@ -185,7 +185,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [searchQuery, setSearchQuery] = useState("");
   const search = useGlobalSearch(searchQuery);
 
-  if (pathname === "/login") {
+  if (pathname === "/login" || pathname === "/mentoria") {
     return <>{children}</>;
   }
 
