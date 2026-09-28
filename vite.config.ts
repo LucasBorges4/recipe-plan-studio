@@ -12,6 +12,12 @@ export default defineConfig({
   },
   nitro: {
     preset: "node-server",
+    publicAssets: [
+      {
+        dir: "./public",
+        fallthrough: true,
+      },
+    ],
     output: {
       dir: ".output",
       publicDir: ".output/public",
