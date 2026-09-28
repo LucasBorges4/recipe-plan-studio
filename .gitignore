@@ -31,6 +31,9 @@ dist-ssr
 *.sln
 *.sw?
 
+# Build artifacts in public
+public/assets/
+
 # Backend / runtime
 .data/
 package-lock.json
