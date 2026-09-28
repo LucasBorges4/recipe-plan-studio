@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { useTeamMembers, useLinkTeamProfile, useUnlinkTeamProfile } from "@/lib/api-hooks";
 import { qk } from "@/lib/api-hooks";
 import { updateProfileFn } from "@/lib/portal-api";
-import { normalizeNameSlug, TEAM_GROUP_LABEL, type TeamMemberLinked } from "@/lib/team-photos";
+import { normalizeNameSlug, TEAM_GROUP_LABEL, photoForName, type TeamMemberLinked } from "@/lib/team-photos";
 import { PageHeader } from "@/components/portal/PageHeader";
 import { StatusBadge } from "@/components/portal/StatusBadge";
 import { Avatar } from "@/components/portal/Avatar";
@@ -63,8 +63,7 @@ export function TeamLinking({ userId, teamMemberId }: TeamLinkingProps) {
               >
                 {initials(linkedMember.name)}
               </span>
-            )}
-            <div className="min-w-0">
+            )}            <div className="min-w-0">
               <p className="text-sm font-semibold text-foreground">{linkedMember.name}</p>
               <p className="text-xs text-muted-foreground">{linkedMember.role || "Papel a definir"}</p>
               <StatusBadge tone="brand" className="mt-1">

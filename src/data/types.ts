@@ -106,7 +106,7 @@ export type TeamMemberTier = "lead" | "secondary" | "member";
 export type TeamLeaderBadge = "crown" | "star";
 
 /** Grupo em que o membro aparece na página /equipe (sem dados imaginados — RNF13). */
-export type TeamGroup = "projeto" | "engenharia" | "banco";
+export type TeamGroup = "projeto" | "engenharia";
 
 /** Membro da equipe exibido na página /equipe. */
 export interface TeamMember {

@@ -130,14 +130,14 @@ describe("buildTeamCatalog (catálogo sincronizado)", () => {
     for (const m of catalog) expect(TEAM_GROUP_LABEL[m.group]).toBeTruthy();
   });
 
-  it("grupo banco deriva de fotos não correspondidas a membros fixos", () => {
+  it("grupo engenharia deriva de fotos não correspondidas a membros fixos", () => {
     const catalog = buildTeamCatalog();
-    const banco = catalog.filter((m) => m.group === "banco");
+    const engenharia = catalog.filter((m) => m.group === "engenharia");
     const manifestOnly = teamPhotosManifest.filter((p) => !FIXED_SLUGS.has(p.slug));
-    expect(banco.length).toBe(manifestOnly.length);
-    for (const b of banco) {
-      expect(b.photo).toBeTruthy();
-      expect(manifestOnly.some((p) => p.photo === b.photo)).toBe(true);
+    expect(engenharia.length).toBe(manifestOnly.length);
+    for (const e of engenharia) {
+      expect(e.photo).toBeTruthy();
+      expect(manifestOnly.some((p) => p.photo === e.photo)).toBe(true);
     }
   });
 

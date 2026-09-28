@@ -3,9 +3,10 @@ import { Link } from "@tanstack/react-router";
 import { SectionHeader } from "@/components/portal/SectionHeader";
 import { Avatar } from "@/components/portal/Avatar";
 import { PanelCard } from "@/components/portal/PanelCard";
+import { photoForName } from "@/lib/team-photos";
 
 interface TeamSectionProps {
-  teamList: { id: string; name: string; role?: string; area?: string; tier?: string }[];
+  teamList: { id: string; name: string; role?: string; area?: string; tier?: string; photo?: string }[];
 }
 
 export function TeamSection({ teamList }: TeamSectionProps) {
@@ -34,7 +35,7 @@ export function TeamSection({ teamList }: TeamSectionProps) {
           {sortedList.map((tm) => (
             <li key={tm.id}>
               <div className="flex items-center gap-3 rounded-lg px-2 py-2">
-                <Avatar name={tm.name} avatarUrl={null} size="md" />
+                <Avatar name={tm.name} avatarUrl={tm.photo ?? photoForName(tm.name)} size="md" />
                 <div className="min-w-0">
                   <p className="text-sm font-bold truncate text-foreground">{tm.name}</p>
                   <p className="text-[11px] text-muted-foreground truncate">

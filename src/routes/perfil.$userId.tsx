@@ -6,6 +6,7 @@ import { initials } from "@/components/portal/ProgressBar";
 import { usePublicUser, useSession } from "@/lib/api-hooks";
 import { roleLabel } from "@/lib/rbac";
 import { PHOTO_ASPECT_CSS } from "@/lib/photo-frame";
+import { photoForName } from "@/lib/team-photos";
 import type { Role } from "@/lib/rbac";
 
 export const Route = createFileRoute("/perfil/$userId")({
@@ -81,9 +82,9 @@ to="/equipe"
       <div className="rounded-xl border border-border bg-card p-6">
         <div className="flex flex-col items-start gap-6 md:flex-row md:items-center">
           <div className="flex shrink-0 flex-col items-center">
-            {u.avatarUrl ? (
+            {u.avatarUrl || photoForName(u.name) ? (
               <img
-                src={u.avatarUrl}
+                src={u.avatarUrl ?? photoForName(u.name)}
                 alt={u.name}
                 className={`h-28 rounded-lg object-cover shadow-lg ring-2 ring-brand/20 ${PHOTO_ASPECT_CSS}`}
                 loading="eager"

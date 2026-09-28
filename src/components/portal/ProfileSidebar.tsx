@@ -5,6 +5,7 @@ import { StatusBadge } from "@/components/portal/StatusBadge";
 import { roleLabel, type Role } from "@/lib/rbac";
 import { cropTo43, PHOTO_ASPECT_CSS } from "@/lib/photo-frame";
 import { initials } from "@/components/portal/ProgressBar";
+import { photoForName } from "@/lib/team-photos";
 
 interface ProfileSidebarProps {
   name: string;
@@ -25,9 +26,9 @@ export function ProfileSidebar({
 
   return (
     <div className="rounded-xl border border-border bg-card p-6 text-center">
-      {avatarValue ? (
+      {avatarValue || photoForName(name) ? (
         <img
-          src={avatarValue}
+          src={avatarValue ?? photoForName(name)}
           alt="Foto de perfil"
           className={`mx-auto h-20 rounded-lg object-cover shadow-md ring-2 ring-brand/20 ${PHOTO_ASPECT_CSS}`}
           loading="eager"

@@ -106,7 +106,6 @@ export interface TeamMemberLinked extends TeamCatalogMember {
 export const TEAM_GROUP_LABEL: Record<TeamGroup, string> = {
   projeto: "Equipe do Projeto",
   engenharia: "Engenharia",
-  banco: "Equipe Banco",
 };
 
 function photoFor(member: TeamMember): string | undefined {
@@ -114,7 +113,7 @@ function photoFor(member: TeamMember): string | undefined {
   return matchTeamPhoto(member.name);
 }
 
-/** Catálogo completo: membros fixos + membros derivados de fotos (grupo banco). */
+/** Catálogo completo: membros fixos + membros derivados de fotos (grupo engenharia). */
 export function buildTeamCatalog(): TeamCatalogMember[] {
   const seen = new Set<string>();
   const members: TeamCatalogMember[] = [];
@@ -137,7 +136,7 @@ export function buildTeamCatalog(): TeamCatalogMember[] {
       name: p.name,
       role: "",
       area: "",
-      group: "banco",
+      group: "engenharia",
       tier: "member",
       photo: p.photo,
       channels: [],

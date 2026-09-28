@@ -1,5 +1,6 @@
 import { cn } from "@/lib/utils";
 import { PHOTO_ASPECT_CSS } from "@/lib/photo-frame";
+import { photoForName } from "@/lib/team-photos";
 
 export function initials(name: string) {
   return name
@@ -10,12 +11,16 @@ export function initials(name: string) {
     .join("");
 }
 
+
 /**
  * Avatar simples do portal (usado no painel e na wiki).
  *
  * A foto é sempre 4:3: cada tamanho define só a **altura** e a largura sai de
  * `aspect-[4/3]`. Por isso as classes são `h-*` e não `size-*` — `size-*` fixa
  * largura e altura ao mesmo tempo e o `aspect-ratio` deixa de valer.
+ *
+ * Foto sincronizada: se `avatarUrl` não estiver definido, tenta resolver pelo
+ * nome via `photoForName` (manifest de fotos do projeto).
  */
 export function Avatar({
   name,
@@ -36,7 +41,8 @@ export function Avatar({
     xl: "h-20 text-lg",
   };
 
-  const hasAvatar = !!avatarUrl;
+  const resolvedPhoto = avatarUrl ?? photoForName(name);
+  const hasAvatar = !!resolvedPhoto;
 
   return (
     <span
@@ -49,7 +55,7 @@ export function Avatar({
     >
       {hasAvatar ? (
         <img
-          src={avatarUrl!}
+          src={resolvedPhoto!}
           alt={name}
           className="h-full w-full object-cover"
           loading="lazy"
