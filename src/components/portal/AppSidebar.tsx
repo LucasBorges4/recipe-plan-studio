@@ -171,8 +171,8 @@ function Brand() {
         className="size-11 shrink-0 rounded-lg bg-white/10 object-contain p-1 shadow-lg shadow-black/20 ring-1 ring-white/10"
       />
       <div className="min-w-0">
-        <p className="truncate text-base font-extrabold tracking-tight text-sidebar-primary-foreground leading-tight">GRUPO GWG</p>
-        <p className="truncate text-[11px] font-medium text-sidebar-foreground/50 tracking-wide">Portal de Governança</p>
+        <p className="truncate text-base font-extrabold tracking-tight text-sidebar-primary-foreground leading-tight">ZAGGO</p>
+        <p className="truncate text-[11px] font-medium text-sidebar-foreground/50 tracking-wide">Representações</p>
       </div>
     </div>
   );
