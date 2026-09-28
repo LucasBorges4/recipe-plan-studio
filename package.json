@@ -11,7 +11,7 @@
     "build:vm": "STORAGE_REQUIRE_PERSISTENT=1 NITRO_PRESET=node-server vite build",
     "start:vm": "STORAGE_REQUIRE_PERSISTENT=1 PORT=3001 node .output/server/index.mjs",
     "deploy": "npm run build && npm run postbuild && pm2 stop recipe-plan-studio 2>/dev/null; pm2 delete recipe-plan-studio 2>/dev/null; pm2 start ecosystem.config.cjs",
-    "postbuild": "node scripts/inject-static-handler.mjs",
+    "postbuild": "rm -rf public/assets && mkdir -p public/assets && cp -a .output/public/assets/* public/assets/ 2>/dev/null; node scripts/inject-static-handler.mjs",
     "pm2:logs": "pm2 logs recipe-plan-studio",
     "pm2:status": "pm2 describe recipe-plan-studio",
     "lint": "eslint .",
