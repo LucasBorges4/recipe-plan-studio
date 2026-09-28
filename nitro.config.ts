@@ -7,4 +7,18 @@ export default defineNitroConfig({
     dir: ".output",
     publicDir: "./public",
   },
+  routeRules: {
+    "/**": {
+      headers: {
+        "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+        "Pragma": "no-cache",
+        "Expires": "0",
+      },
+    },
+    "/assets/**": {
+      headers: {
+        "Cache-Control": "public, max-age=31536000, immutable",
+      },
+    },
+  },
 });
