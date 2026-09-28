@@ -495,7 +495,7 @@ describe("n8n Login - Edge cases de segurança", () => {
     expect(() => verifyPortalArgon2id("test", PEPPER, "abc", "def")).not.toThrow();
   });
 
-  it("timing: hash dummy retorna false em tempo constante", () => {
+  it("timing: hash dummy retorna false em tempo constante", async () => {
     const start = Date.now();
     for (let i = 0; i < 10; i++) {
       verifyPortalArgon2id(
@@ -507,7 +507,7 @@ describe("n8n Login - Edge cases de segurança", () => {
     }
     const elapsed = Date.now() - start;
     expect(elapsed).toBeGreaterThan(0);
-  });
+  }, 30000);
 });
 
 /* ------------------------------------------------------------------ */

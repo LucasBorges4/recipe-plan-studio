@@ -1,0 +1,472 @@
+
+<!doctype html>
+<html lang="en">
+
+<head>
+    <title>Code coverage report for recipe-plan-studio/src/data/wiki.ts</title>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="../../../prettify.css" />
+    <link rel="stylesheet" href="../../../base.css" />
+    <link rel="shortcut icon" type="image/x-icon" href="../../../favicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style type='text/css'>
+        .coverage-summary .sorter {
+            background-image: url(../../../sort-arrow-sprite.png);
+        }
+    </style>
+</head>
+    
+<body>
+<div class='wrapper'>
+    <div class='pad1'>
+        <h1><a href="../../../index.html">All files</a> / <a href="index.html">recipe-plan-studio/src/data</a> wiki.ts</h1>
+        <div class='clearfix'>
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Statements</span>
+                <span class='fraction'>0/126</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">100% </span>
+                <span class="quiet">Branches</span>
+                <span class='fraction'>1/1</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">100% </span>
+                <span class="quiet">Functions</span>
+                <span class='fraction'>1/1</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Lines</span>
+                <span class='fraction'>0/126</span>
+            </div>
+        
+            
+        </div>
+        <p class="quiet">
+            Press <em>n</em> or <em>j</em> to go to the next uncovered block, <em>b</em>, <em>p</em> or <em>k</em> for the previous block.
+        </p>
+        <template id="filterTemplate">
+            <div class="quiet">
+                Filter:
+                <input type="search" id="fileSearch">
+            </div>
+        </template>
+    </div>
+    <div class='status-line low'></div>
+    <pre><table class="coverage">
+<tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
+<a name='L2'></a><a href='#L2'>2</a>
+<a name='L3'></a><a href='#L3'>3</a>
+<a name='L4'></a><a href='#L4'>4</a>
+<a name='L5'></a><a href='#L5'>5</a>
+<a name='L6'></a><a href='#L6'>6</a>
+<a name='L7'></a><a href='#L7'>7</a>
+<a name='L8'></a><a href='#L8'>8</a>
+<a name='L9'></a><a href='#L9'>9</a>
+<a name='L10'></a><a href='#L10'>10</a>
+<a name='L11'></a><a href='#L11'>11</a>
+<a name='L12'></a><a href='#L12'>12</a>
+<a name='L13'></a><a href='#L13'>13</a>
+<a name='L14'></a><a href='#L14'>14</a>
+<a name='L15'></a><a href='#L15'>15</a>
+<a name='L16'></a><a href='#L16'>16</a>
+<a name='L17'></a><a href='#L17'>17</a>
+<a name='L18'></a><a href='#L18'>18</a>
+<a name='L19'></a><a href='#L19'>19</a>
+<a name='L20'></a><a href='#L20'>20</a>
+<a name='L21'></a><a href='#L21'>21</a>
+<a name='L22'></a><a href='#L22'>22</a>
+<a name='L23'></a><a href='#L23'>23</a>
+<a name='L24'></a><a href='#L24'>24</a>
+<a name='L25'></a><a href='#L25'>25</a>
+<a name='L26'></a><a href='#L26'>26</a>
+<a name='L27'></a><a href='#L27'>27</a>
+<a name='L28'></a><a href='#L28'>28</a>
+<a name='L29'></a><a href='#L29'>29</a>
+<a name='L30'></a><a href='#L30'>30</a>
+<a name='L31'></a><a href='#L31'>31</a>
+<a name='L32'></a><a href='#L32'>32</a>
+<a name='L33'></a><a href='#L33'>33</a>
+<a name='L34'></a><a href='#L34'>34</a>
+<a name='L35'></a><a href='#L35'>35</a>
+<a name='L36'></a><a href='#L36'>36</a>
+<a name='L37'></a><a href='#L37'>37</a>
+<a name='L38'></a><a href='#L38'>38</a>
+<a name='L39'></a><a href='#L39'>39</a>
+<a name='L40'></a><a href='#L40'>40</a>
+<a name='L41'></a><a href='#L41'>41</a>
+<a name='L42'></a><a href='#L42'>42</a>
+<a name='L43'></a><a href='#L43'>43</a>
+<a name='L44'></a><a href='#L44'>44</a>
+<a name='L45'></a><a href='#L45'>45</a>
+<a name='L46'></a><a href='#L46'>46</a>
+<a name='L47'></a><a href='#L47'>47</a>
+<a name='L48'></a><a href='#L48'>48</a>
+<a name='L49'></a><a href='#L49'>49</a>
+<a name='L50'></a><a href='#L50'>50</a>
+<a name='L51'></a><a href='#L51'>51</a>
+<a name='L52'></a><a href='#L52'>52</a>
+<a name='L53'></a><a href='#L53'>53</a>
+<a name='L54'></a><a href='#L54'>54</a>
+<a name='L55'></a><a href='#L55'>55</a>
+<a name='L56'></a><a href='#L56'>56</a>
+<a name='L57'></a><a href='#L57'>57</a>
+<a name='L58'></a><a href='#L58'>58</a>
+<a name='L59'></a><a href='#L59'>59</a>
+<a name='L60'></a><a href='#L60'>60</a>
+<a name='L61'></a><a href='#L61'>61</a>
+<a name='L62'></a><a href='#L62'>62</a>
+<a name='L63'></a><a href='#L63'>63</a>
+<a name='L64'></a><a href='#L64'>64</a>
+<a name='L65'></a><a href='#L65'>65</a>
+<a name='L66'></a><a href='#L66'>66</a>
+<a name='L67'></a><a href='#L67'>67</a>
+<a name='L68'></a><a href='#L68'>68</a>
+<a name='L69'></a><a href='#L69'>69</a>
+<a name='L70'></a><a href='#L70'>70</a>
+<a name='L71'></a><a href='#L71'>71</a>
+<a name='L72'></a><a href='#L72'>72</a>
+<a name='L73'></a><a href='#L73'>73</a>
+<a name='L74'></a><a href='#L74'>74</a>
+<a name='L75'></a><a href='#L75'>75</a>
+<a name='L76'></a><a href='#L76'>76</a>
+<a name='L77'></a><a href='#L77'>77</a>
+<a name='L78'></a><a href='#L78'>78</a>
+<a name='L79'></a><a href='#L79'>79</a>
+<a name='L80'></a><a href='#L80'>80</a>
+<a name='L81'></a><a href='#L81'>81</a>
+<a name='L82'></a><a href='#L82'>82</a>
+<a name='L83'></a><a href='#L83'>83</a>
+<a name='L84'></a><a href='#L84'>84</a>
+<a name='L85'></a><a href='#L85'>85</a>
+<a name='L86'></a><a href='#L86'>86</a>
+<a name='L87'></a><a href='#L87'>87</a>
+<a name='L88'></a><a href='#L88'>88</a>
+<a name='L89'></a><a href='#L89'>89</a>
+<a name='L90'></a><a href='#L90'>90</a>
+<a name='L91'></a><a href='#L91'>91</a>
+<a name='L92'></a><a href='#L92'>92</a>
+<a name='L93'></a><a href='#L93'>93</a>
+<a name='L94'></a><a href='#L94'>94</a>
+<a name='L95'></a><a href='#L95'>95</a>
+<a name='L96'></a><a href='#L96'>96</a>
+<a name='L97'></a><a href='#L97'>97</a>
+<a name='L98'></a><a href='#L98'>98</a>
+<a name='L99'></a><a href='#L99'>99</a>
+<a name='L100'></a><a href='#L100'>100</a>
+<a name='L101'></a><a href='#L101'>101</a>
+<a name='L102'></a><a href='#L102'>102</a>
+<a name='L103'></a><a href='#L103'>103</a>
+<a name='L104'></a><a href='#L104'>104</a>
+<a name='L105'></a><a href='#L105'>105</a>
+<a name='L106'></a><a href='#L106'>106</a>
+<a name='L107'></a><a href='#L107'>107</a>
+<a name='L108'></a><a href='#L108'>108</a>
+<a name='L109'></a><a href='#L109'>109</a>
+<a name='L110'></a><a href='#L110'>110</a>
+<a name='L111'></a><a href='#L111'>111</a>
+<a name='L112'></a><a href='#L112'>112</a>
+<a name='L113'></a><a href='#L113'>113</a>
+<a name='L114'></a><a href='#L114'>114</a>
+<a name='L115'></a><a href='#L115'>115</a>
+<a name='L116'></a><a href='#L116'>116</a>
+<a name='L117'></a><a href='#L117'>117</a>
+<a name='L118'></a><a href='#L118'>118</a>
+<a name='L119'></a><a href='#L119'>119</a>
+<a name='L120'></a><a href='#L120'>120</a>
+<a name='L121'></a><a href='#L121'>121</a>
+<a name='L122'></a><a href='#L122'>122</a>
+<a name='L123'></a><a href='#L123'>123</a>
+<a name='L124'></a><a href='#L124'>124</a>
+<a name='L125'></a><a href='#L125'>125</a>
+<a name='L126'></a><a href='#L126'>126</a>
+<a name='L127'></a><a href='#L127'>127</a>
+<a name='L128'></a><a href='#L128'>128</a>
+<a name='L129'></a><a href='#L129'>129</a>
+<a name='L130'></a><a href='#L130'>130</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">import type { WikiArticle } from './types';
+&nbsp;
+<span class="cstat-no" title="statement not covered" >export const wikiArticles: WikiArticle[] = [</span>
+<span class="cstat-no" title="statement not covered" >  {</span>
+<span class="cstat-no" title="statement not covered" >    slug: 'visao-geral-do-portal',</span>
+<span class="cstat-no" title="statement not covered" >    title: 'Visao geral do Portal de Governanca GWG',</span>
+<span class="cstat-no" title="statement not covered" >    category: 'Sobre o Projeto',</span>
+<span class="cstat-no" title="statement not covered" >    summary: 'O que e o portal, por que existe e como ele se conecta com os processos da GWG.',</span>
+<span class="cstat-no" title="statement not covered" >    updatedAt: '2026-09-14',</span>
+<span class="cstat-no" title="statement not covered" >    version: 'v2',</span>
+<span class="cstat-no" title="statement not covered" >    updatedBy: 'Camila Tavares Barcelos',</span>
+<span class="cstat-no" title="statement not covered" >    sections: [</span>
+<span class="cstat-no" title="statement not covered" >      { heading: 'O que e o portal?', body: 'O Portal de Governanca e uma plataforma integrada que centraliza tarefas, conformidade, evidencias, riscos, equipe e documentacao do projeto da GWG — Grupo W. Geotec. Ele foi projetado para dar visibilidade ao time e aos clientes sobre o que esta acontecendo, o que precisa ser feito e onde estao os gargalos.' },</span>
+<span class="cstat-no" title="statement not covered" >      { heading: 'Quem usa?', body: 'Administradores, diretores, gestores, desenvolvedores, auditores e visualizadores possuem perfis com permissoes diferentes. Cada papel ve apenas o que e relevante para sua funcao. Clientes podem comentar em tarefas e visualizar status, sem acesso interno.' },</span>
+<span class="cstat-no" title="statement not covered" >      { heading: 'Como comecar?', body: 'Acesse https://portal.163.176.45.217.sslip.io, faca login com seu e-mail e senha. Se nao tiver acesso, solicite ao administrador. A primeira tela e o Painel Executivo com os indicadores consolidados. Use o menu lateral para navegar entre os modulos.' },</span>
+<span class="cstat-no" title="statement not covered" >    ],</span>
+<span class="cstat-no" title="statement not covered" >  },</span>
+<span class="cstat-no" title="statement not covered" >  {</span>
+<span class="cstat-no" title="statement not covered" >    slug: 'gerenciando-tarefas-kanban',</span>
+<span class="cstat-no" title="statement not covered" >    title: 'Gerenciando tarefas com o quadro Kanban',</span>
+<span class="cstat-no" title="statement not covered" >    category: 'Como usar o sistema',</span>
+<span class="cstat-no" title="statement not covered" >    summary: 'Como criar, mover e acompanhar tarefas no quadro Kanban do portal.',</span>
+<span class="cstat-no" title="statement not covered" >    updatedAt: '2026-09-15',</span>
+<span class="cstat-no" title="statement not covered" >    version: 'v1',</span>
+<span class="cstat-no" title="statement not covered" >    updatedBy: 'Lucas Borges',</span>
+<span class="cstat-no" title="statement not covered" >    sections: [</span>
+<span class="cstat-no" title="statement not covered" >      { heading: 'O quadro Kanban', body: 'Na pagina Tarefas, as tarefas aparecem organizadas em colunas que representam o ciclo de vida: Backlog, Em andamento, Aguardando aprovacao, Concluido e Arquivado. Cada card mostra titulo, responsavel, prazo e badges de severidade.' },</span>
+<span class="cstat-no" title="statement not covered" >      { heading: 'Criando e movendo tarefas', body: 'Clique em Nova tarefa para criar com titulo, descricao, responsavel e prazo. Para mover, basta arrastar o card entre colunas. O sistema salva automaticamente e registra a movimentacao na trilha de auditoria.' },</span>
+<span class="cstat-no" title="statement not covered" >      { heading: 'Filtros e busca', body: 'Use a barra de busca e os filtros por responsavel, prioridade ou etapa para encontrar rapidamente o que precisa. Colunas aguardando acao do cliente sao destacadas com badge amarelo para facilitar o acompanhamento.' },</span>
+<span class="cstat-no" title="statement not covered" >    ],</span>
+<span class="cstat-no" title="statement not covered" >  },</span>
+<span class="cstat-no" title="statement not covered" >  {</span>
+<span class="cstat-no" title="statement not covered" >    slug: 'fluxo-aprovacao-evidencias',</span>
+<span class="cstat-no" title="statement not covered" >    title: 'Fluxo de aprovacao de evidencias de conformidade',</span>
+<span class="cstat-no" title="statement not covered" >    category: 'Processos da GWG',</span>
+<span class="cstat-no" title="statement not covered" >    summary: 'Como as evidencias de evidencias de conformidade sao enviadas, revisadas e aprovadas.',</span>
+<span class="cstat-no" title="statement not covered" >    updatedAt: '2026-09-12',</span>
+<span class="cstat-no" title="statement not covered" >    version: 'v1',</span>
+<span class="cstat-no" title="statement not covered" >    updatedBy: 'Daniel Melo',</span>
+<span class="cstat-no" title="statement not covered" >    sections: [</span>
+<span class="cstat-no" title="statement not covered" >      { heading: 'Envio de evidencias', body: 'O responsavel pela tarefa anexa evidencias (arquivos, links ou URLs de upload) diretamente no dialogo da tarefa. O campo de upload aceita imagens, PDFs e links externos. Cada evidencia recebe um identificador unico.' },</span>
+<span class="cstat-no" title="statement not covered" >      { heading: 'Revisao e aprovacao', body: 'O auditor ou gestor revisa cada evidencia e define se esta Conforme, Nao conforme ou parcial. A decisao e registrada na trilha de auditoria com o nome do revisor e data/hora. Evidencias pendentes aparecem destacadas no painel de compliance.' },</span>
+<span class="cstat-no" title="statement not covered" >    ],</span>
+<span class="cstat-no" title="statement not covered" >  },</span>
+<span class="cstat-no" title="statement not covered" >  {</span>
+<span class="cstat-no" title="statement not covered" >    slug: 'monitoramento-compliance',</span>
+<span class="cstat-no" title="statement not covered" >    title: 'Monitoramento de controles de conformidade',</span>
+<span class="cstat-no" title="statement not covered" >    category: 'Compliance',</span>
+<span class="cstat-no" title="statement not covered" >    summary: 'Como acompanhar o status dos controles de conformidade e prazos de revisao.',</span>
+<span class="cstat-no" title="statement not covered" >    updatedAt: '2026-09-10',</span>
+<span class="cstat-no" title="statement not covered" >    version: 'v1',</span>
+<span class="cstat-no" title="statement not covered" >    updatedBy: 'Camila Tavares Barcelos',</span>
+<span class="cstat-no" title="statement not covered" >    sections: [</span>
+<span class="cstat-no" title="statement not covered" >      { heading: 'Painel de controles', body: 'A pagina Compliance mostra todos os controles com status (Conforme, Nao conforme, Nao iniciado, Em atraso), tonalidade visual (verde, amarelo, vermelho), proxima revisao e dono do controle. Filtre por categoria ou responsavel.' },</span>
+<span class="cstat-no" title="statement not covered" >      { heading: 'Ciclo de revisao', body: 'Cada controle tem uma proxima data de revisao. Quando o prazo vence, o sistema marca como Overdue e envia alerta visual. O auditor pode registrar a revisao, atualizar o status e agendar a proxima revisao. Todas as alteracoes ficam registradas na auditoria.' },</span>
+<span class="cstat-no" title="statement not covered" >    ],</span>
+<span class="cstat-no" title="statement not covered" >  },</span>
+<span class="cstat-no" title="statement not covered" >  {</span>
+<span class="cstat-no" title="statement not covered" >    slug: 'mapa-de-riscos-como-usar',</span>
+<span class="cstat-no" title="statement not covered" >    title: 'Como consultar e atualizar o Mapa de Riscos',</span>
+<span class="cstat-no" title="statement not covered" >    category: 'Como usar o sistema',</span>
+<span class="cstat-no" title="statement not covered" >    summary: 'Visao geral da tela de riscos, a matriz de probabilidades e impacto, e como cadastrar novos riscos.',</span>
+<span class="cstat-no" title="statement not covered" >    updatedAt: '2026-09-16',</span>
+<span class="cstat-no" title="statement not covered" >    version: 'v1',</span>
+<span class="cstat-no" title="statement not covered" >    updatedBy: 'Lucas Borges',</span>
+<span class="cstat-no" title="statement not covered" >    sections: [</span>
+<span class="cstat-no" title="statement not covered" >      { heading: 'O que e o Mapa de Riscos?', body: 'A tela Mapa de Riscos mostra todos os riscos identificados no projeto com sua probabilidade (1-5) e impacto (1-5). A matriz 5x5 posiciona os riscos visualmente: quanto mais no canto superior direito, maior o risco. Riscos em vermelho precisam de atencao imediata.' },</span>
+<span class="cstat-no" title="statement not covered" >      { heading: 'Cadastrar novo risco', body: 'Clique em Novo risco, preencha titulo, categoria, responsavel, probabilidade e impacto (usando os sliders), mitiguacao e proxima acao. O sistema salva e posiciona o risco na matriz. Riscos vinculados a tarefas aparecem com link direto para o card da tarefa.' },</span>
+<span class="cstat-no" title="statement not covered" >      { heading: 'Status e filtros', body: 'Cada risco pode ter status: Ativo, Critico, Em tratamento, Mitigado ou Pendente do cliente. Use os filtros de busca e periodo para localizar riscos especificos. O resumo no topo mostra a contagem por status.' },</span>
+<span class="cstat-no" title="statement not covered" >    ],</span>
+<span class="cstat-no" title="statement not covered" >  },</span>
+<span class="cstat-no" title="statement not covered" >  {</span>
+<span class="cstat-no" title="statement not covered" >    slug: 'automacoes-portal',</span>
+<span class="cstat-no" title="statement not covered" >    title: 'Automacoes e integracoes do portal',</span>
+<span class="cstat-no" title="statement not covered" >    category: 'Integracoes e Automacoes',</span>
+<span class="cstat-no" title="statement not covered" >    summary: 'Como o portal se conecta com ferramentas externas via N8N e APIs.',</span>
+<span class="cstat-no" title="statement not covered" >    updatedAt: '2026-09-08',</span>
+<span class="cstat-no" title="statement not covered" >    version: 'v1',</span>
+<span class="cstat-no" title="statement not covered" >    updatedBy: 'Lucas Borges',</span>
+<span class="cstat-no" title="statement not covered" >    sections: [</span>
+<span class="cstat-no" title="statement not covered" >      { heading: 'Visao geral', body: 'O portal possui modulo de Automacoes integrado ao N8N. As automacoes podem enviar notificacoes, criar tarefas automaticamente, sincronizar dados com ferramentas externas e executar fluxos de trabalho sob demanda. O acesso e por role — apenas admins podem gerenciar.' },</span>
+<span class="cstat-no" title="statement not covered" >      { heading: 'Como visualizar', body: 'Na pagina Automacoes, veja a lista de workflows disponiveis com nome, status (Ativo/Inativo), data da ultima execucao e proxima agendada. Clique em um workflow para ver detalhes de execucoes anteriores.' },</span>
+<span class="cstat-no" title="statement not covered" >    ],</span>
+<span class="cstat-no" title="statement not covered" >  },</span>
+<span class="cstat-no" title="statement not covered" >  {</span>
+<span class="cstat-no" title="statement not covered" >    slug: 'termos-politicas',</span>
+<span class="cstat-no" title="statement not covered" >    title: 'Termos de uso e politica de dados',</span>
+<span class="cstat-no" title="statement not covered" >    category: 'Documentos e Referencias',</span>
+<span class="cstat-no" title="statement not covered" >    summary: 'Documentos legais do projeto: termos de uso, politica de privacidade e LGPD.',</span>
+<span class="cstat-no" title="statement not covered" >    updatedAt: '2026-09-05',</span>
+<span class="cstat-no" title="statement not covered" >    version: 'v1',</span>
+<span class="cstat-no" title="statement not covered" >    updatedBy: 'Camila Tavares Barcelos',</span>
+<span class="cstat-no" title="statement not covered" >    sections: [</span>
+<span class="cstat-no" title="statement not covered" >      { heading: 'Termos de Uso', body: 'Os Termos de Uso detalham as regras de acesso ao portal, responsabilidades dos usuarios, propriedade intelectual e condicoes de uso do servico. Todo usuario deve ler e aceitar antes de acessar o sistema pela primeira vez.' },</span>
+<span class="cstat-no" title="statement not covered" >      { heading: 'Politica LGPD', body: 'Em conformidade com a Lei Geral de Protecao de Dados, o portal registra apenas os dados necessarios para operacao. Nenhum dado pessoal e compartilhado sem consentimento. A auditoria mantem registro de todas as acoes para fins de compliance.' },</span>
+<span class="cstat-no" title="statement not covered" >    ],</span>
+<span class="cstat-no" title="statement not covered" >  },</span>
+<span class="cstat-no" title="statement not covered" >  {</span>
+<span class="cstat-no" title="statement not covered" >    slug: 'faq-portal',</span>
+<span class="cstat-no" title="statement not covered" >    title: 'FAQ — Duidas comuns do portal',</span>
+<span class="cstat-no" title="statement not covered" >    category: 'Perguntas Frequentes',</span>
+<span class="cstat-no" title="statement not covered" >    summary: 'Respostas para as perguntas mais frequentes sobre o uso do portal.',</span>
+<span class="cstat-no" title="statement not covered" >    updatedAt: '2026-09-11',</span>
+<span class="cstat-no" title="statement not covered" >    version: 'v1',</span>
+<span class="cstat-no" title="statement not covered" >    updatedBy: 'Administrador',</span>
+<span class="cstat-no" title="statement not covered" >    sections: [</span>
+<span class="cstat-no" title="statement not covered" >      { heading: 'Esqueci minha senha', body: 'Clique em Esqueceu sua senha? na tela de login. O sistema enviara um e-mail com instrucoes para redefinicao. Se nao receber o e-mail em 5 minutos, verifique a caixa de spam ou entre em contato com o administrador.' },</span>
+<span class="cstat-no" title="statement not covered" >      { heading: 'Como mudar meu papel ou departamento?', body: 'Apenas o administrador pode alterar papel e departamento de usuarios. Solicite ao time de TI ou ao gestor do projeto. Todas as alteracoes sao registradas na trilha de auditoria.' },</span>
+<span class="cstat-no" title="statement not covered" >      { heading: 'Como adicionar evidencias a uma tarefa?', body: 'Abra a tarefa, clique na aba Evidencias e faca upload do arquivo ou cole o link externo. Anexe tambem uma descricao curta do que a evidencia comprova. O auditor revisara e registrara a decisao.' },</span>
+<span class="cstat-no" title="statement not covered" >      { heading: 'Posso visualizar a auditoria?', body: 'Sim, se voce tem papel de administrador, diretor, auditor ou visualizador. Acessando Auditoria no menu lateral, veja todas as acoes realizadas no sistema com data, autor, acao e detalhes. A auditoria e imutavel.' },</span>
+<span class="cstat-no" title="statement not covered" >    ],</span>
+<span class="cstat-no" title="statement not covered" >  },</span>
+<span class="cstat-no" title="statement not covered" >  {</span>
+<span class="cstat-no" title="statement not covered" >    slug: 'primeiros-passos',</span>
+<span class="cstat-no" title="statement not covered" >    title: 'Primeiros passos no portal',</span>
+<span class="cstat-no" title="statement not covered" >    category: 'Treinamentos',</span>
+<span class="cstat-no" title="statement not covered" >    summary: 'Guia pratico para novos usuarios comecarem a usar o portal de governanca.',</span>
+<span class="cstat-no" title="statement not covered" >    updatedAt: '2026-09-13',</span>
+<span class="cstat-no" title="statement not covered" >    version: 'v1',</span>
+<span class="cstat-no" title="statement not covered" >    updatedBy: 'Daniel Melo',</span>
+<span class="cstat-no" title="statement not covered" >    sections: [</span>
+<span class="cstat-no" title="statement not covered" >      { heading: 'Primeiro login', body: 'Acesse o portal pelo navegador, clique em Criar conta (se ainda nao tiver) e preencha nome, e-mail e senha. Aguarde a aprovacao do administrador. Apos aprovacao, faca login e explore o Painel Executivo.' },</span>
+<span class="cstat-no" title="statement not covered" >      { heading: 'Navegacao', body: 'O menu lateral permite acessar todos os modulos: Tarefas, Compliance, Riscos, Diario de Bordo, Equipe, Wiki, Auditoria e Configuracoes. A busca global na barra superior encontra qualquer item no sistema.' },</span>
+<span class="cstat-no" title="statement not covered" >      { heading: 'Sua primeira tarefa', body: 'Acesse Tarefas e clique em Nova tarefa. Defina titulo, descricao, responsavel e prazo. Coloque no quadro Kanban e acompanhe o progresso. Voce pode comentar, anexar evidencias e movimentar o card conforme o trabalho avanca.' },</span>
+<span class="cstat-no" title="statement not covered" >    ],</span>
+<span class="cstat-no" title="statement not covered" >  },</span>
+<span class="cstat-no" title="statement not covered" >];</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >export const wikiCategories: string[] = [];</span>
+&nbsp;</pre></td></tr></table></pre>
+
+                <div class='push'></div><!-- for sticky footer -->
+            </div><!-- /wrapper -->
+            <div class='footer quiet pad2 space-top1 center small'>
+                Code coverage generated by
+                <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
+                at 2026-09-28T12:26:32.660Z
+            </div>
+        <script src="../../../prettify.js"></script>
+        <script>
+            window.onload = function () {
+                prettyPrint();
+            };
+        </script>
+        <script src="../../../sorter.js"></script>
+        <script src="../../../block-navigation.js"></script>
+    </body>
+</html>
+    

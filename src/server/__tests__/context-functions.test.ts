@@ -2,7 +2,7 @@
  * Testes unitários para funções de context em src/server/context.ts
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import {
   newId,
   isRateLimited,
@@ -29,7 +29,7 @@ describe("context — newId", () => {
     const id = newId("aud");
     const parts = id.split("_");
     expect(parts.length).toBe(2);
-    expect(parts[1].length).toBeGreaterThan(0);
+    expect(parts[1]!.length).toBeGreaterThan(0);
   });
 });
 

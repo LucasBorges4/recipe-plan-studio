@@ -21,7 +21,8 @@ import {
   formatAuditActor,
   formatAuditTime,
 } from "@/lib/zaggo-helpers";
-import type { Module, Task, Milestone, Risk, AuditEntry } from "@/data/types";
+import type { Module, Task, Milestone, Risk } from "@/data/types";
+import type { AuditEntry } from "@/lib/records";
 
 /* ------------------------------------------------------------------ */
 /* Helpers                                                             */
@@ -29,7 +30,10 @@ import type { Module, Task, Milestone, Risk, AuditEntry } from "@/data/types";
 
 const makeModule = (done: number, total: number): Module => ({
   id: "mod-1",
-  title: "Módulo",
+  name: "Módulo",
+  status: "active",
+  tone: "brand",
+  date: "2026-09-28",
   done,
   total,
 });
@@ -37,25 +41,39 @@ const makeModule = (done: number, total: number): Module => ({
 const makeTask = (column: string): Task => ({
   id: "task-1",
   title: "Tarefa",
-  column: column as Task["column"],
-  status: "pending",
+  description: "Descrição da tarefa",
+  column,
+  priority: "medium" as Task["priority"],
+  tags: [],
+  assignee: "",
+  stage: "not_started",
+  progress: 0,
+  responsible: null,
+  waitingOnClient: false,
 });
 
 const makeMilestone = (
   title: string,
   date: string,
-  type: string = "entrega",
+  type: string = "Entrega",
 ): Milestone => ({
   id: "ms-1",
   title,
   date,
   type: type as Milestone["type"],
+  description: "Descrição do milestone",
 });
 
 const makeRisk = (): Risk => ({
   id: "risk-1",
   title: "Risco",
-  status: "aberto",
+  category: "Técnico",
+  owner: "Teste",
+  role: "desenvolvedor",
+  probability: 3,
+  impact: 3,
+  mitigation: "Mitigação planejada",
+  status: "ativo",
 });
 
 const makeAuditEntry = (actor: string = "Teste"): AuditEntry => ({

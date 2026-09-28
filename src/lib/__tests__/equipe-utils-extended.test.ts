@@ -41,7 +41,7 @@ import type { ContactChannel, TeamMember, TimelineEvent } from "@/data/types";
 const makeChannel = (
   type: ContactChannel["type"],
   value: string,
-): ContactChannel => ({ type, value });
+): ContactChannel => ({ type, value, label: type });
 
 const makeMember = (
   id: string,
@@ -50,11 +50,9 @@ const makeMember = (
 ): TeamMember => ({
   id,
   name,
-  role: "desenvolvedor",
-  jobTitle: null,
-  department: null,
-  bio: null,
-  avatarUrl: null,
+  role: "Desenvolvedor",
+  area: "Engenharia",
+  tier: "member",
   channels,
 });
 
@@ -65,8 +63,11 @@ const makeEvent = (
   kind: "entrega",
   status: "aprovado",
   title: "Teste",
+  description: "",
   author: "teste",
   date: "2026-09-28",
+  attachments: [],
+  comments: [],
   ...overrides,
 });
 
@@ -141,7 +142,7 @@ describe("equipe-utils — sortChannels", () => {
   it("não altera array original", () => {
     const channels = [makeChannel("meeting", "sala")];
     sortChannels(channels);
-    expect(channels[0].type).toBe("meeting");
+    expect(channels[0]!.type).toBe("meeting");
   });
 
   it("retorna vazio para array vazio", () => {
@@ -190,9 +191,9 @@ describe("equipe-utils — buildChannels", () => {
       makeChannel("whatsapp", "11999999999"),
     ]);
     const result = buildChannels(member);
-    expect(result[0].type).toBe("whatsapp");
-    expect(result[0]).toHaveProperty("href");
-    expect(result[1]).toHaveProperty("href");
+    expect(result[0]!.type).toBe("whatsapp");
+    expect(result[0]!).toHaveProperty("href");
+    expect(result[1]!).toHaveProperty("href");
   });
 });
 
@@ -300,8 +301,8 @@ describe("equipe-utils — latestEvents", () => {
     ];
     const result = latestEvents(events, 2);
     expect(result).toHaveLength(2);
-    expect(result[0].id).toBe("2");
-    expect(result[1].id).toBe("3");
+    expect(result[0]!.id).toBe("2");
+    expect(result[1]!.id).toBe("3");
   });
 
   it("padrão retorna 4", () => {
@@ -323,14 +324,14 @@ describe("equipe-utils — sortEventsDesc", () => {
       makeEvent({ date: "2026-09-28", id: "recente" }),
     ];
     const result = sortEventsDesc(events);
-    expect(result[0].id).toBe("recente");
-    expect(result[1].id).toBe("antigo");
+    expect(result[0]!.id).toBe("recente");
+    expect(result[1]!.id).toBe("antigo");
   });
 
   it("não altera array original", () => {
     const events = [makeEvent({ date: "2026-01-01" })];
     sortEventsDesc(events);
-    expect(events[0].date).toBe("2026-01-01");
+    expect(events[0]!.date).toBe("2026-01-01");
   });
 });
 
@@ -348,7 +349,7 @@ describe("equipe-utils — monthKey", () => {
   });
 
   it("retorna vazio para undefined", () => {
-    expect(monthKey(undefined ?? "")).toBe("");
+    expect(monthKey("" as string)).toBe("");
   });
 });
 
@@ -383,9 +384,9 @@ describe("equipe-utils — groupByMonth", () => {
     ];
     const result = groupByMonth(events);
     expect(result).toHaveLength(2);
-    expect(result[0].key).toBe("2026-09");
-    expect(result[0].events).toHaveLength(2);
-    expect(result[1].key).toBe("2026-08");
+    expect(result[0]!.key).toBe("2026-09");
+    expect(result[0]!.events).toHaveLength(2);
+    expect(result[1]!.key).toBe("2026-08");
   });
 
   it("retorna vazio para array vazio", () => {
