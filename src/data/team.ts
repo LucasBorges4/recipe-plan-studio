@@ -1,3 +1,90 @@
-import type { TechItem } from "./types";
+import type { TechItem, TeamMember } from "./types";
 
 export const stack: TechItem[] = [];
+
+/** Placeholder do papel de liderança estratégica e científica (cargo fixado em inglês).
+ *  Canais de contato ausentes até os dados reais chegarem (RNF07). */
+export const teamMembers: TeamMember[] = [
+  {
+    id: "gerson",
+    group: "projeto",
+    name: "Gérson",
+    role: "Chief Scientific Officer",
+    area: "Geociências e Tecnologia",
+    tier: "lead",
+    badge: "crown",
+    fronts: ["Visão", "Pesquisa", "Inovação", "Direção do Projeto"],
+    signature: "CIÊNCIA / INOVAÇÃO / RESULTADOS",
+    bio: "Lidera a pesquisa e a visão estratégica do projeto, conduzindo as soluções científicas em geotecnologias e coordenando os caminhos que transformam dados em resultados.",
+    channels: [],
+  },
+  {
+    id: "camila",
+    group: "projeto",
+    name: "Camila",
+    role: "Chief Projects Officer",
+    area: "Entregas e Relacionamento",
+    tier: "secondary",
+    badge: "star",
+    primaryContact: true,
+    fronts: ["Cliente", "Acompanhamento", "Entregas"],
+    signature: "PROJETOS / RELACIONAMENTO / CONQUISTAS",
+    bio: "Cuida do relacionamento com o cliente e do acompanhamento do projeto, organizando as entregas para que cada etapa avance no ritmo e na qualidade combinados.",
+    channels: [],
+  },
+  {
+    id: "daniel-melo",
+    group: "projeto",
+    name: "Daniel Melo",
+    role: "Manager",
+    area: "",
+    tier: "member",
+    photo: "/team/daniel-melo.png",
+    channels: [],
+  },
+  {
+    id: "ana-soares",
+    group: "projeto",
+    name: "Ana Soares",
+    role: "",
+    area: "",
+    tier: "member",
+    channels: [],
+  },
+  {
+    id: "tome",
+    group: "projeto",
+    name: "Tomé",
+    role: "",
+    area: "",
+    tier: "member",
+    channels: [],
+  },
+  {
+    id: "arthur",
+    group: "projeto",
+    name: "Arthur",
+    role: "",
+    area: "",
+    tier: "member",
+    channels: [],
+  },
+  {
+    id: "michael-barbosa",
+    group: "projeto",
+    name: "Michael Barbosa",
+    role: "",
+    area: "",
+    tier: "member",
+    channels: [],
+  },
+  {
+    id: "lucas-borges",
+    group: "projeto",
+    name: "Lucas Borges",
+    role: "Desenvolvedor",
+    area: "",
+    tier: "member",
+    channels: [],
+  },
+];

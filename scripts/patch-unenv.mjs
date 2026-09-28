@@ -23,4 +23,3 @@ export default {
 } else {
   console.log("[patch] unenv sqlite.mjs not found, skipping");
 }
-

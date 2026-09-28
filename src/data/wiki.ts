@@ -1,5 +1,129 @@
-import type { WikiArticle } from "./types";
+import type { WikiArticle } from './types';
 
-export const wikiArticles: WikiArticle[] = [];
+export const wikiArticles: WikiArticle[] = [
+  {
+    slug: 'visao-geral-do-portal',
+    title: 'Visao geral do Portal de Governanca GWG',
+    category: 'Sobre o Projeto',
+    summary: 'O que e o portal, por que existe e como ele se conecta com os processos da GWG.',
+    updatedAt: '2026-09-14',
+    version: 'v2',
+    updatedBy: 'Camila Tavares Barcelos',
+    sections: [
+      { heading: 'O que e o portal?', body: 'O Portal de Governanca e uma plataforma integrada que centraliza tarefas, conformidade, evidencias, riscos, equipe e documentacao do projeto da GWG — Grupo W. Geotec. Ele foi projetado para dar visibilidade ao time e aos clientes sobre o que esta acontecendo, o que precisa ser feito e onde estao os gargalos.' },
+      { heading: 'Quem usa?', body: 'Administradores, diretores, gestores, desenvolvedores, auditores e visualizadores possuem perfis com permissoes diferentes. Cada papel ve apenas o que e relevante para sua funcao. Clientes podem comentar em tarefas e visualizar status, sem acesso interno.' },
+      { heading: 'Como comecar?', body: 'Acesse https://portal.163.176.45.217.sslip.io, faca login com seu e-mail e senha. Se nao tiver acesso, solicite ao administrador. A primeira tela e o Painel Executivo com os indicadores consolidados. Use o menu lateral para navegar entre os modulos.' },
+    ],
+  },
+  {
+    slug: 'gerenciando-tarefas-kanban',
+    title: 'Gerenciando tarefas com o quadro Kanban',
+    category: 'Como usar o sistema',
+    summary: 'Como criar, mover e acompanhar tarefas no quadro Kanban do portal.',
+    updatedAt: '2026-09-15',
+    version: 'v1',
+    updatedBy: 'Lucas Borges',
+    sections: [
+      { heading: 'O quadro Kanban', body: 'Na pagina Tarefas, as tarefas aparecem organizadas em colunas que representam o ciclo de vida: Backlog, Em andamento, Aguardando aprovacao, Concluido e Arquivado. Cada card mostra titulo, responsavel, prazo e badges de severidade.' },
+      { heading: 'Criando e movendo tarefas', body: 'Clique em Nova tarefa para criar com titulo, descricao, responsavel e prazo. Para mover, basta arrastar o card entre colunas. O sistema salva automaticamente e registra a movimentacao na trilha de auditoria.' },
+      { heading: 'Filtros e busca', body: 'Use a barra de busca e os filtros por responsavel, prioridade ou etapa para encontrar rapidamente o que precisa. Colunas aguardando acao do cliente sao destacadas com badge amarelo para facilitar o acompanhamento.' },
+    ],
+  },
+  {
+    slug: 'fluxo-aprovacao-evidencias',
+    title: 'Fluxo de aprovacao de evidencias de conformidade',
+    category: 'Processos da GWG',
+    summary: 'Como as evidencias de evidencias de conformidade sao enviadas, revisadas e aprovadas.',
+    updatedAt: '2026-09-12',
+    version: 'v1',
+    updatedBy: 'Daniel Melo',
+    sections: [
+      { heading: 'Envio de evidencias', body: 'O responsavel pela tarefa anexa evidencias (arquivos, links ou URLs de upload) diretamente no dialogo da tarefa. O campo de upload aceita imagens, PDFs e links externos. Cada evidencia recebe um identificador unico.' },
+      { heading: 'Revisao e aprovacao', body: 'O auditor ou gestor revisa cada evidencia e define se esta Conforme, Nao conforme ou parcial. A decisao e registrada na trilha de auditoria com o nome do revisor e data/hora. Evidencias pendentes aparecem destacadas no painel de compliance.' },
+    ],
+  },
+  {
+    slug: 'monitoramento-compliance',
+    title: 'Monitoramento de controles de conformidade',
+    category: 'Compliance',
+    summary: 'Como acompanhar o status dos controles de conformidade e prazos de revisao.',
+    updatedAt: '2026-09-10',
+    version: 'v1',
+    updatedBy: 'Camila Tavares Barcelos',
+    sections: [
+      { heading: 'Painel de controles', body: 'A pagina Compliance mostra todos os controles com status (Conforme, Nao conforme, Nao iniciado, Em atraso), tonalidade visual (verde, amarelo, vermelho), proxima revisao e dono do controle. Filtre por categoria ou responsavel.' },
+      { heading: 'Ciclo de revisao', body: 'Cada controle tem uma proxima data de revisao. Quando o prazo vence, o sistema marca como Overdue e envia alerta visual. O auditor pode registrar a revisao, atualizar o status e agendar a proxima revisao. Todas as alteracoes ficam registradas na auditoria.' },
+    ],
+  },
+  {
+    slug: 'mapa-de-riscos-como-usar',
+    title: 'Como consultar e atualizar o Mapa de Riscos',
+    category: 'Como usar o sistema',
+    summary: 'Visao geral da tela de riscos, a matriz de probabilidades e impacto, e como cadastrar novos riscos.',
+    updatedAt: '2026-09-16',
+    version: 'v1',
+    updatedBy: 'Lucas Borges',
+    sections: [
+      { heading: 'O que e o Mapa de Riscos?', body: 'A tela Mapa de Riscos mostra todos os riscos identificados no projeto com sua probabilidade (1-5) e impacto (1-5). A matriz 5x5 posiciona os riscos visualmente: quanto mais no canto superior direito, maior o risco. Riscos em vermelho precisam de atencao imediata.' },
+      { heading: 'Cadastrar novo risco', body: 'Clique em Novo risco, preencha titulo, categoria, responsavel, probabilidade e impacto (usando os sliders), mitiguacao e proxima acao. O sistema salva e posiciona o risco na matriz. Riscos vinculados a tarefas aparecem com link direto para o card da tarefa.' },
+      { heading: 'Status e filtros', body: 'Cada risco pode ter status: Ativo, Critico, Em tratamento, Mitigado ou Pendente do cliente. Use os filtros de busca e periodo para localizar riscos especificos. O resumo no topo mostra a contagem por status.' },
+    ],
+  },
+  {
+    slug: 'automacoes-portal',
+    title: 'Automacoes e integracoes do portal',
+    category: 'Integracoes e Automacoes',
+    summary: 'Como o portal se conecta com ferramentas externas via N8N e APIs.',
+    updatedAt: '2026-09-08',
+    version: 'v1',
+    updatedBy: 'Lucas Borges',
+    sections: [
+      { heading: 'Visao geral', body: 'O portal possui modulo de Automacoes integrado ao N8N. As automacoes podem enviar notificacoes, criar tarefas automaticamente, sincronizar dados com ferramentas externas e executar fluxos de trabalho sob demanda. O acesso e por role — apenas admins podem gerenciar.' },
+      { heading: 'Como visualizar', body: 'Na pagina Automacoes, veja a lista de workflows disponiveis com nome, status (Ativo/Inativo), data da ultima execucao e proxima agendada. Clique em um workflow para ver detalhes de execucoes anteriores.' },
+    ],
+  },
+  {
+    slug: 'termos-politicas',
+    title: 'Termos de uso e politica de dados',
+    category: 'Documentos e Referencias',
+    summary: 'Documentos legais do projeto: termos de uso, politica de privacidade e LGPD.',
+    updatedAt: '2026-09-05',
+    version: 'v1',
+    updatedBy: 'Camila Tavares Barcelos',
+    sections: [
+      { heading: 'Termos de Uso', body: 'Os Termos de Uso detalham as regras de acesso ao portal, responsabilidades dos usuarios, propriedade intelectual e condicoes de uso do servico. Todo usuario deve ler e aceitar antes de acessar o sistema pela primeira vez.' },
+      { heading: 'Politica LGPD', body: 'Em conformidade com a Lei Geral de Protecao de Dados, o portal registra apenas os dados necessarios para operacao. Nenhum dado pessoal e compartilhado sem consentimento. A auditoria mantem registro de todas as acoes para fins de compliance.' },
+    ],
+  },
+  {
+    slug: 'faq-portal',
+    title: 'FAQ — Duidas comuns do portal',
+    category: 'Perguntas Frequentes',
+    summary: 'Respostas para as perguntas mais frequentes sobre o uso do portal.',
+    updatedAt: '2026-09-11',
+    version: 'v1',
+    updatedBy: 'Administrador',
+    sections: [
+      { heading: 'Esqueci minha senha', body: 'Clique em Esqueceu sua senha? na tela de login. O sistema enviara um e-mail com instrucoes para redefinicao. Se nao receber o e-mail em 5 minutos, verifique a caixa de spam ou entre em contato com o administrador.' },
+      { heading: 'Como mudar meu papel ou departamento?', body: 'Apenas o administrador pode alterar papel e departamento de usuarios. Solicite ao time de TI ou ao gestor do projeto. Todas as alteracoes sao registradas na trilha de auditoria.' },
+      { heading: 'Como adicionar evidencias a uma tarefa?', body: 'Abra a tarefa, clique na aba Evidencias e faca upload do arquivo ou cole o link externo. Anexe tambem uma descricao curta do que a evidencia comprova. O auditor revisara e registrara a decisao.' },
+      { heading: 'Posso visualizar a auditoria?', body: 'Sim, se voce tem papel de administrador, diretor, auditor ou visualizador. Acessando Auditoria no menu lateral, veja todas as acoes realizadas no sistema com data, autor, acao e detalhes. A auditoria e imutavel.' },
+    ],
+  },
+  {
+    slug: 'primeiros-passos',
+    title: 'Primeiros passos no portal',
+    category: 'Treinamentos',
+    summary: 'Guia pratico para novos usuarios comecarem a usar o portal de governanca.',
+    updatedAt: '2026-09-13',
+    version: 'v1',
+    updatedBy: 'Daniel Melo',
+    sections: [
+      { heading: 'Primeiro login', body: 'Acesse o portal pelo navegador, clique em Criar conta (se ainda nao tiver) e preencha nome, e-mail e senha. Aguarde a aprovacao do administrador. Apos aprovacao, faca login e explore o Painel Executivo.' },
+      { heading: 'Navegacao', body: 'O menu lateral permite acessar todos os modulos: Tarefas, Compliance, Riscos, Diario de Bordo, Equipe, Wiki, Auditoria e Configuracoes. A busca global na barra superior encontra qualquer item no sistema.' },
+      { heading: 'Sua primeira tarefa', body: 'Acesse Tarefas e clique em Nova tarefa. Defina titulo, descricao, responsavel e prazo. Coloque no quadro Kanban e acompanhe o progresso. Voce pode comentar, anexar evidencias e movimentar o card conforme o trabalho avanca.' },
+    ],
+  },
+];
 
 export const wikiCategories: string[] = [];

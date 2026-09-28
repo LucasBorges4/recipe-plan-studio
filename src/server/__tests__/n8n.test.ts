@@ -38,8 +38,12 @@ describe("n8n hardening - validateN8nUrl", () => {
   it("rejeita credenciais na URL", async () => {
     await expect(validateN8nUrl("http://user:pass@host")).rejects.toThrow();
   });
-  it("rejeita porta 0", async () => {
+  it("rejeita porta 0 literal", async () => {
     await expect(validateN8nUrl("http://localhost:0")).rejects.toThrow();
+  });
+  it("aceita URL https sem porta explícita (public url)", async () => {
+    const validated = await validateN8nUrl("https://163-176-45-217.sslip.io", async () => ["163.176.45.217"]);
+    expect(validated).toBe("https://163-176-45-217.sslip.io:443");
   });
   it("rejeita URL com IP bloqueado", async () => {
     await expect(validateN8nUrl("http://10.0.0.1:5679")).rejects.toThrow();

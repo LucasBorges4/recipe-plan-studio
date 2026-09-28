@@ -8,6 +8,7 @@ import { roles, roleLabel, userCan } from "@/lib/rbac";
 import type { Role } from "@/lib/rbac";
 import {
   getN8nInfoFn,
+  getN8nFrameHealthFn,
   listAutomationSharesFn,
   upsertAutomationShareFn,
   deleteAutomationShareFn,
@@ -22,7 +23,7 @@ import { toast } from "sonner";
 
 export const Route = createFileRoute("/automacoes")({
   head: () => ({
-    meta: [{ title: "Automações — Portal Grupo W. Geotec CAFUFV" }],
+    meta: [{ title: "Automações — Portal GWG — Grupo W. Geotec" }],
   }),
   component: AutomacoesPage,
 });
@@ -34,7 +35,15 @@ function AutomacoesPage() {
   const qc = useQueryClient();
 
   const { data: n8nInfo } = useQuery({ queryKey: ["n8n-info"], queryFn: () => getN8nInfoFn() });
-  const n8nUrl = n8nInfo?.publicUrl ?? n8nInfo?.url ?? "http://127.0.0.1:5679";
+  const n8nUrl = n8nInfo?.publicUrl ?? n8nInfo?.url ?? "";
+
+  const { data: frameHealth } = useQuery({
+    queryKey: ["n8n-frame-health"],
+    queryFn: () => getN8nFrameHealthFn(),
+    enabled: !!user,
+    staleTime: 60_000,
+  });
+  const frameHint = frameHealth?.ok ? frameHealth.data : null;
 
   const { data: sharesRes } = useQuery({
     queryKey: ["automation-shares"],
@@ -147,6 +156,7 @@ function AutomacoesPage() {
         <button
           onClick={() => provisionM.mutate()}
           className="rounded-md border border-input px-4 py-2 text-sm"
+          title="Use o mesmo e-mail/senha do portal no n8n"
         >
           Meu acesso n8n
         </button>
@@ -231,13 +241,39 @@ function AutomacoesPage() {
                 )}
               </div>
               <div className="mt-4 rounded-lg border border-dashed border-border bg-surface p-3">
-                <p className="text-xs font-medium">n8n embarcado — {roleLabel[r]}</p>
-                <iframe
-                  title={`n8n-${r}`}
-                  src={n8nUrl}
-                  className="mt-2 h-[520px] w-full rounded-md border border-border bg-white"
-                  loading="lazy"
-                />
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-medium">n8n embarcado — {roleLabel[r]}</p>
+                  {frameHint && !frameHint.reachable && (
+                    <span className="inline-flex items-center gap-1 rounded bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-700">
+                      n8n indisponível
+                    </span>
+                  )}
+                  {frameHint && frameHint.reachable && frameHint.blocked && (
+                    <span className="inline-flex items-center gap-1 rounded bg-red-500/10 px-2 py-0.5 text-[10px] font-medium text-red-700">
+                      Iframe bloqueado
+                    </span>
+                  )}
+                </div>
+                {frameHint && !frameHint.reachable && (
+                  <div className="mt-2 rounded-md border border-amber-500/20 bg-amber-50 p-2 text-[11px] text-amber-800">
+                    O n8n está indisponível neste momento. Verifique a rede ou tente abrir em nova aba.
+                  </div>
+                )}
+                {frameHint && frameHint.reachable && frameHint.blocked && (
+                  <div className="mt-2 rounded-md border border-red-500/20 bg-red-50 p-2 text-[11px] text-red-800">
+                    O iframe está bloqueado pelo header <code className="rounded bg-white px-0.5">X-Frame-Options: SAMEORIGIN</code>.
+                    O operador precisa configurar o proxy (CSP <code className="rounded bg-white px-0.5">frame-ancestors</code> + remoção do header) no nginx.
+                    Use o botão abaixo para abrir em nova aba.
+                  </div>
+                )}
+                {n8nUrl && (
+                  <iframe
+                    title={`n8n-${r}`}
+                    src={n8nUrl}
+                    className="mt-2 h-[520px] w-full rounded-md border border-border bg-white"
+                    loading="lazy"
+                  />
+                )}
                 <p className="mt-2 text-[11px] text-muted-foreground">
                   Dica: no n8n, crie o usuário com o mesmo e-mail do portal na primeira abertura.
                   Depois copie o Workflow ID e registre abaixo para controlar o compartilhamento por
@@ -439,7 +475,8 @@ function AutomacoesPage() {
           workflow.
         </p>
         <p className="mt-1">
-          IP público detectado automaticamente via N8N_PUBLIC_URL / api.ipify.org · Porta dedicada: 5679 · n8n legado: 5678 · Defina N8N_API_KEY + N8N_PUBLIC_URL no .env para produção.
+          IP público detectado automaticamente via N8N_PUBLIC_URL / api.ipify.org · Porta dedicada:
+          5679 · n8n legado: 5678 · Defina N8N_API_KEY + N8N_PUBLIC_URL no .env para produção.
         </p>
         <p className="mt-1 text-[11px]">
           URL atual: <code className="rounded bg-white px-1 py-0.5">{n8nUrl}</code>

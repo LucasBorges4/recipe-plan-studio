@@ -1,7 +1,10 @@
 import { SqliteBackend, SCHEMA } from "./storage";
 import type { StorageInfo } from "./storage";
 
-type QueryRunner = (sql: string, params?: unknown[]) => Promise<{ rows: unknown[]; rowCount?: number }>;
+type QueryRunner = (
+  sql: string,
+  params?: unknown[],
+) => Promise<{ rows: unknown[]; rowCount?: number }>;
 
 function isNeonUrl(url: string): boolean {
   return url.includes("neon.tech") || url.includes("pooler.supabase") || url.includes(".neon.");
@@ -30,7 +33,10 @@ export class PostgresStorage extends SqliteBackend {
   override readonly kind: StorageInfo["kind"] = "sqlite" as const;
   private queryRunner!: QueryRunner;
   private dbUrl: string;
-  private pgPool: { query: (text: string, params?: unknown[]) => Promise<{ rows: unknown[] }>; end: () => Promise<void> } | null = null;
+  private pgPool: {
+    query: (text: string, params?: unknown[]) => Promise<{ rows: unknown[] }>;
+    end: () => Promise<void>;
+  } | null = null;
 
   private constructor(url: string) {
     super();
@@ -43,21 +49,44 @@ export class PostgresStorage extends SqliteBackend {
       if (isNeonUrl(connectionString)) {
         const { neon } = await import("@neondatabase/serverless");
         const sql = neon(connectionString);
-        const test = await (sql as unknown as (s: TemplateStringsArray) => Promise<unknown[]>)`SELECT 1 AS ok`;
+        const test = await (sql as unknown as (
+          s: TemplateStringsArray,
+        ) => Promise<unknown[]>)`SELECT 1 AS ok`;
         if (!test) throw new Error("SELECT 1 falhou");
         store.queryRunner = async (sqlStr: string, params: unknown[] = []) => {
           const pgSql = store.toPg(sqlStr);
-          const res = params.length === 0 ? await (sql as unknown as (q: string) => Promise<unknown[]>)(pgSql) : await (sql as unknown as (q: string, p: unknown[]) => Promise<unknown[]>)(pgSql, params);
+          const res =
+            params.length === 0
+              ? await (sql as unknown as (q: string) => Promise<unknown[]>)(pgSql)
+              : await (sql as unknown as (q: string, p: unknown[]) => Promise<unknown[]>)(
+                  pgSql,
+                  params,
+                );
           return { rows: Array.isArray(res) ? res : [] };
         };
       } else {
         const { Pool } = await import("pg");
-        const pool = new Pool({ connectionString, ssl: connectionString.includes("sslmode=require") ? { rejectUnauthorized: false } : undefined, max: 5, idleTimeoutMillis: 30000, connectionTimeoutMillis: 10000, keepAlive: true });
+        const pool = new Pool({
+          connectionString,
+          ssl: connectionString.includes("sslmode=require")
+            ? { rejectUnauthorized: false }
+            : undefined,
+          max: 5,
+          idleTimeoutMillis: 30000,
+          connectionTimeoutMillis: 10000,
+          keepAlive: true,
+        });
         pool.on("error", (err) => console.error(`[portal] pg pool error: ${err.message}`));
         pool.on("connect", (client) => {
-          (client as unknown as { on: (e: string, h: (err: Error) => void) => void }).on("error", (err) => console.error(`[portal] pg client error: ${err.message}`));
+          (client as unknown as { on: (e: string, h: (err: Error) => void) => void }).on(
+            "error",
+            (err) => console.error(`[portal] pg client error: ${err.message}`),
+          );
         });
-        if (typeof process !== "undefined" && !(process as unknown as { _pgHandler?: boolean })._pgHandler) {
+        if (
+          typeof process !== "undefined" &&
+          !(process as unknown as { _pgHandler?: boolean })._pgHandler
+        ) {
           (process as unknown as { _pgHandler?: boolean })._pgHandler = true;
           process.on("uncaughtException", (err) => {
             if (err.message.includes("terminating connection due to administrator command")) {
@@ -90,7 +119,10 @@ export class PostgresStorage extends SqliteBackend {
   }
 
   protected override async exec(sql: string): Promise<void> {
-    const statements = sql.split(";").map((s) => s.trim()).filter(Boolean);
+    const statements = sql
+      .split(";")
+      .map((s) => s.trim())
+      .filter(Boolean);
     for (const stmt of statements) {
       try {
         await this.query(stmt);
@@ -104,11 +136,50 @@ export class PostgresStorage extends SqliteBackend {
   }
 
   private async execSchema() {
-    let pgSchema = SCHEMA
-      .replace(/INTEGER PRIMARY KEY AUTOINCREMENT/g, "SERIAL PRIMARY KEY")
-      .replace(/ COLLATE NOCASE/g, "");
+    let pgSchema = SCHEMA.replace(
+      /INTEGER PRIMARY KEY AUTOINCREMENT/g,
+      "SERIAL PRIMARY KEY",
+    ).replace(/ COLLATE NOCASE/g, "");
     await this.exec(pgSchema);
-    await this.exec(`CREATE UNIQUE INDEX IF NOT EXISTS users_email_lower_idx ON users (LOWER(email));`).catch(() => {});
+    await this.exec(`ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;`).catch(() => {});
+    await this.exec(`ALTER TABLE users ADD COLUMN IF NOT EXISTS team_member_id TEXT;`).catch(
+      () => {},
+    );
+    await this.exec(
+      `CREATE UNIQUE INDEX IF NOT EXISTS users_email_lower_idx ON users (LOWER(email));`,
+    ).catch(() => {});
+    // Migração aditiva tasks
+    const taskMigrations = [
+      "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS stage TEXT NOT NULL DEFAULT 'not_started'",
+      "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS progress INTEGER NOT NULL DEFAULT 0",
+      "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS responsible TEXT",
+      "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS waiting_on_client INTEGER NOT NULL DEFAULT 0",
+    ];
+    for (const sql of taskMigrations) {
+      try {
+        await this.exec(sql);
+      } catch {
+        void 0;
+      }
+    }
+    // Migração aditiva risks
+    const riskMigrations = [
+      "ALTER TABLE risks ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'ativo'",
+      "ALTER TABLE risks ADD COLUMN IF NOT EXISTS next_action TEXT NOT NULL DEFAULT ''",
+      "ALTER TABLE risks ADD COLUMN IF NOT EXISTS due TEXT",
+      "ALTER TABLE risks ADD COLUMN IF NOT EXISTS task_id TEXT",
+    ];
+    for (const sql of riskMigrations) {
+      try {
+        await this.exec(sql);
+      } catch {
+        void 0;
+      }
+    }
+    // Migração aditiva wiki
+    await this.exec(
+      'ALTER TABLE wiki_articles ADD COLUMN IF NOT EXISTS updated_by TEXT'
+    ).catch(() => {});
   }
 
   /** Converte SQL SQLite para Postgres (placeholders $n, INSERT OR IGNORE, COLLATE NOCASE). */
@@ -130,7 +201,10 @@ export class PostgresStorage extends SqliteBackend {
     return this.queryRunner(sqlStr, params);
   }
 
-  protected override async one(sql: string, ...params: any[]): Promise<Record<string, any> | undefined> {
+  protected override async one(
+    sql: string,
+    ...params: any[]
+  ): Promise<Record<string, any> | undefined> {
     const { rows } = await this.query(sql, params);
     const row = rows[0];
     if (!row) return undefined;
@@ -139,7 +213,9 @@ export class PostgresStorage extends SqliteBackend {
 
   protected override async many(sql: string, ...params: any[]): Promise<Record<string, any>[]> {
     const { rows } = await this.query(sql, params);
-    return rows.map((row: unknown) => normalizePgRow(row as Record<string, unknown>) as Record<string, unknown>);
+    return rows.map(
+      (row: unknown) => normalizePgRow(row as Record<string, unknown>) as Record<string, unknown>,
+    );
   }
 
   protected override async run(sql: string, ...params: any[]): Promise<{ changes: number }> {
@@ -159,15 +235,22 @@ export class PostgresStorage extends SqliteBackend {
     if (rows.length === 0) return [];
     const latest = new Map<string, Record<string, unknown>>();
     for (const r of rows) {
-      const slug = String((r as Record<string, unknown>)["slug"] ?? (r as Record<string, unknown>)["Slug"] ?? "");
+      const slug = String(
+        (r as Record<string, unknown>)["slug"] ?? (r as Record<string, unknown>)["Slug"] ?? "",
+      );
       if (!latest.has(slug)) latest.set(slug, r as Record<string, unknown>);
     }
     const safeJson = (v: unknown, fb: unknown) => {
       if (typeof v !== "string") return fb as never;
-      try { return JSON.parse(v as string) as never; } catch { return fb as never; }
+      try {
+        return JSON.parse(v as string) as never;
+      } catch {
+        return fb as never;
+      }
     };
-    const str = (v: unknown, fb = ""): string => typeof v === "string" ? v : typeof v === "number" ? String(v) : fb;
-    const nul = (v: unknown): string | null => typeof v === "string" ? v : null;
+    const str = (v: unknown, fb = ""): string =>
+      typeof v === "string" ? v : typeof v === "number" ? String(v) : fb;
+    const nul = (v: unknown): string | null => (typeof v === "string" ? v : null);
     return Array.from(latest.values()).map((r): import("./storage").LegalDoc => ({
       id: str((r as Record<string, unknown>)["id"] ?? (r as Record<string, unknown>)["ID"]),
       slug: str((r as Record<string, unknown>)["slug"]),

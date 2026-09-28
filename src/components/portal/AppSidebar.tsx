@@ -1,4 +1,4 @@
-import { Link } from "@tanstack/react-router";
+import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import {
   LayoutDashboard,
   KanbanSquare,
@@ -6,7 +6,6 @@ import {
   ShieldCheck,
   Library,
   AlertTriangle,
-  Users,
   User,
   FileText,
   Lock,
@@ -16,26 +15,28 @@ import {
   Bot,
   X,
   Search,
+  UsersRound,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { LogOut, LogIn } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { roleLabel } from "@/lib/rbac";
+import { roleLabel, menuAllowed } from "@/lib/rbac";
 import { useGlobalSearch } from "@/lib/api-hooks";
 import { useSession, qk } from "@/lib/api-hooks";
 import { logoutFn } from "@/lib/portal-api";
+import { useRouteGuard } from "@/lib/page-guard";
 
 const mainNav = [
   { to: "/", label: "Painel Executivo", icon: LayoutDashboard },
+  { to: "/equipe", label: "Equipe do Projeto", icon: UsersRound },
   { to: "/tarefas", label: "Tarefas", icon: KanbanSquare },
   { to: "/automacoes", label: "Automações", icon: Bot },
   { to: "/diario", label: "Diário de Bordo", icon: BookOpen },
   { to: "/compliance", label: "Compliance", icon: ShieldCheck },
   { to: "/wiki", label: "Wiki", icon: Library },
   { to: "/riscos", label: "Mapa de Riscos", icon: AlertTriangle },
-  { to: "/engenharia", label: "Engenharia e Equipe", icon: Users },
   { to: "/perfil", label: "Meu Perfil", icon: User },
 ] as const;
 
@@ -80,7 +81,10 @@ function SessionBox() {
   return (
     <div className="border-t border-sidebar-border px-4 py-3">
       <p className="text-[11px] tracking-wider text-sidebar-foreground/45">SESSÃO ATUAL</p>
-      <Link to="/perfil" className="mt-1 block truncate text-sm font-medium text-sidebar-primary-foreground hover:underline">
+      <Link
+        to="/perfil"
+        className="mt-1 block truncate text-sm font-medium text-sidebar-primary-foreground hover:underline"
+      >
         {user.name}
       </Link>
       <p className="text-[11px] text-sidebar-foreground/60">
@@ -100,32 +104,44 @@ function SessionBox() {
 }
 
 function NavList({ onNavigate }: { onNavigate?: () => void }) {
+  const { data: session } = useSession();
+  const userRole = session?.user?.role;
+
+  const filteredMain = mainNav.filter((item) => (userRole ? menuAllowed(userRole, item.to) : true));
+  const filteredLegal = legalNav.filter((item) =>
+    userRole ? menuAllowed(userRole, item.to) : true,
+  );
+
   return (
     <nav className="flex-1 overflow-y-auto px-3 py-4">
       <ul className="space-y-1">
-        {mainNav.map((item) => (
-          <li key={item.to}>
-            <Link
-              to={item.to}
-              onClick={onNavigate}
-              activeOptions={{ exact: item.to === "/" }}
-              className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-sidebar-foreground/80 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-              activeProps={{
-                className: "bg-sidebar-primary text-sidebar-primary-foreground font-medium",
-              }}
-            >
-              <item.icon className="size-4 shrink-0" />
-              <span className="truncate">{item.label}</span>
-            </Link>
-          </li>
-        ))}
+        {filteredMain.map((item) => {
+          const isHome = item.to === "/";
+          const label = userRole === "cliente" && isHome ? "Acompanhamento" : item.label;
+          return (
+            <li key={item.to}>
+              <Link
+                to={item.to}
+                onClick={onNavigate}
+                activeOptions={{ exact: item.to === "/" }}
+                className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-sidebar-foreground/80 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                activeProps={{
+                  className: "bg-sidebar-primary text-sidebar-primary-foreground font-medium",
+                }}
+              >
+                <item.icon className="size-4 shrink-0" />
+                <span className="truncate">{label}</span>
+              </Link>
+            </li>
+          );
+        })}
       </ul>
 
       <p className="mt-6 mb-2 px-3 text-[11px] font-semibold tracking-widest text-sidebar-foreground/45">
         LEGAL &amp; ADMIN
       </p>
       <ul className="space-y-1">
-        {legalNav.map((item) => (
+        {filteredLegal.map((item) => (
           <li key={item.to}>
             <Link
               to={item.to}
@@ -148,9 +164,13 @@ function NavList({ onNavigate }: { onNavigate?: () => void }) {
 function Brand() {
   return (
     <div className="flex items-center gap-3 border-b border-sidebar-border px-5 py-4">
-      <img src="/logo.jpg" alt="Grupo W. Geotec CAFUFV" className="size-9 shrink-0 rounded-md bg-white object-contain p-0.5" />
+      <img
+        src="/zaggo-mark.png"
+        alt="ZAGGO"
+        className="size-9 shrink-0 rounded-md bg-white object-contain p-0.5"
+      />
       <div className="min-w-0">
-        <p className="truncate text-sm font-semibold text-sidebar-primary-foreground">Grupo W. Geotec CAFUFV</p>
+        <p className="truncate text-sm font-semibold text-sidebar-primary-foreground">GRUPO GWG</p>
         <p className="truncate text-[11px] text-sidebar-foreground/60">Portal de Governança</p>
       </div>
     </div>
@@ -158,9 +178,15 @@ function Brand() {
 }
 
 export function AppShell({ children }: { children: React.ReactNode }) {
+  useRouteGuard();
+  const { pathname } = useLocation();
   const [open, setOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const search = useGlobalSearch(searchQuery);
+
+  if (pathname === "/login") {
+    return <>{children}</>;
+  }
 
   return (
     <div className="flex min-h-screen bg-surface">
@@ -169,7 +195,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <NavList />
         <SessionBox />
         <p className="border-t border-sidebar-border px-5 py-3 text-[11px] text-sidebar-foreground/40">
-          © 2026 Grupo W. Geotec CAFUFV
+          © 2026 GRUPO GWG
         </p>
       </aside>
 

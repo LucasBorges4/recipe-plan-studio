@@ -12,13 +12,22 @@ export const nextStepSchema = z.object({
 });
 
 export const legalDocSchema = z.object({
-  slug: z.string().regex(/^[a-z0-9-]+$/).min(2).max(40),
+  slug: z
+    .string()
+    .regex(/^[a-z0-9-]+$/)
+    .min(2)
+    .max(40),
   title: z.string().trim().min(3).max(120),
   subtitle: z.string().trim().max(200).optional().default(""),
   version: z.string().trim().min(1).max(20),
   intro: z.string().trim().max(2000).optional().default(""),
   clauses: z
-    .array(z.object({ title: z.string().trim().min(1).max(120), body: z.string().trim().min(1).max(5000) }))
+    .array(
+      z.object({
+        title: z.string().trim().min(1).max(120),
+        body: z.string().trim().min(1).max(5000),
+      }),
+    )
     .min(1)
     .max(30),
   publishedAt: isoDateSchema,
@@ -44,7 +53,15 @@ export function isFutureISO(iso: string): boolean {
   return iso > new Date().toISOString().slice(0, 10);
 }
 
-export const docKinds = ["risk", "milestone", "release", "tech", "member", "patent", "wiki"] as const;
+export const docKinds = [
+  "risk",
+  "milestone",
+  "release",
+  "tech",
+  "member",
+  "patent",
+  "wiki",
+] as const;
 export type DocKind = (typeof docKinds)[number];
 
 const text = (min: number, max: number) => z.string().trim().min(min).max(max);

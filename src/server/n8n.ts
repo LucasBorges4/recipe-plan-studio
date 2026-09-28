@@ -137,7 +137,7 @@ export async function validateN8nUrl(
   if (url.username || url.password) {
     throw new Error("Credenciais na URL não são permitidas");
   }
-  if (url.port === "0" || parseInt(url.port || "0", 10) === 0) {
+  if (url.port !== "" && parseInt(url.port, 10) === 0) {
     throw new Error("Porta 0 não é permitida");
   }
   const hostname = url.hostname;
@@ -146,7 +146,7 @@ export async function validateN8nUrl(
     : await new Promise<string[]>((resolve) => {
         try {
           const { lookup } = require("node:dns");
-          lookup(hostname, { all: true }, (err, addrs: unknown) => {
+          lookup(hostname, { all: true }, (err: unknown, addrs: unknown) => {
             const results = Array.isArray(addrs)
               ? addrs.map((a: unknown) =>
                   typeof a === "object" && a !== null && "address" in a
@@ -219,19 +219,20 @@ export async function n8nFetch(path: string, init: RequestInit = {}) {
 }
 
 export async function listN8nWorkflows(): Promise<N8nWorkflow[]> {
-  const res = await n8nFetch("");
+  const res = await n8nFetch("/workflows");
   if (!res.ok) throw new Error(`n8n list failed: ${res.status}`);
-  return res.json();
+  const json = (await res.json()) as { data?: N8nWorkflow[] };
+  return Array.isArray(json.data) ? json.data : [];
 }
 
 export async function getN8nWorkflow(id: number): Promise<N8nWorkflow> {
-  const res = await n8nFetch(`/${id}`);
+  const res = await n8nFetch(`/workflows/${id}`);
   if (!res.ok) throw new Error(`n8n get failed: ${res.status}`);
   return res.json();
 }
 
 export async function createN8nWorkflow(payload: N8nWorkflowCreatePayload): Promise<N8nWorkflow> {
-  const res = await n8nFetch("", { method: "POST", body: JSON.stringify(payload) });
+  const res = await n8nFetch("/workflows", { method: "POST", body: JSON.stringify(payload) });
   if (!res.ok) throw new Error(`n8n create failed: ${res.status}`);
   return res.json();
 }
@@ -240,36 +241,162 @@ export async function updateN8nWorkflow(
   id: number,
   payload: N8nWorkflowCreatePayload,
 ): Promise<N8nWorkflow> {
-  const res = await n8nFetch(`/${id}`, { method: "PUT", body: JSON.stringify(payload) });
+  const res = await n8nFetch(`/workflows/${id}`, { method: "PUT", body: JSON.stringify(payload) });
   if (!res.ok) throw new Error(`n8n update failed: ${res.status}`);
   return res.json();
 }
 
 export async function deleteN8nWorkflow(id: number): Promise<void> {
-  const res = await n8nFetch(`/${id}`, { method: "DELETE" });
+  const res = await n8nFetch(`/workflows/${id}`, { method: "DELETE" });
   if (!res.ok) throw new Error(`n8n delete failed: ${res.status}`);
+}
+
+export interface FrameConnectivityHint {
+  reachable: boolean;
+  blocked: boolean;
+  status?: number;
+  frameHeader?: string;
+  cspFrameAncestors?: boolean;
+}
+
+export async function getFrameConnectivityHint(): Promise<FrameConnectivityHint> {
+  try {
+    const url = n8nPublicUrl();
+    // Verifica a URL pública do n8n com timeout curto (4s)
+    const res = await safeFetch(url, { method: "GET" }, 4000, 5 * 1024 * 1024);
+    const status = res.status;
+    const frameHeader = res.headers.get("x-frame-options") || undefined;
+    const cspHeader = res.headers.get("content-security-policy") || undefined;
+    const cspFrameAncestors = cspHeader
+      ? /frame-ancestors\s+[^;]*['"]?self['"]?/.test(cspHeader) || /frame-ancestors\s+[^;]*https?:\/\/portal\.[^;]*sslip\.io/.test(cspHeader)
+      : false;
+    // Bloqueado se há X-Frame-Options restritivo e NÃO há CSP frame-ancestors permissivo
+    const blockedHeader = (frameHeader ?? "").toLowerCase();
+    const blocked =
+      (blockedHeader === "sameorigin" || blockedHeader === "deny" || blockedHeader.includes("sameorigin")) &&
+      !cspFrameAncestors;
+    const hint: FrameConnectivityHint = {
+      reachable: true,
+      blocked,
+      status,
+      ...(frameHeader ? { frameHeader } : {}),
+      ...(cspFrameAncestors ? { cspFrameAncestors: true } : {}),
+    };
+    return hint;
+  } catch (e) {
+    // Rede falhou ou timeout
+    return { reachable: false, blocked: false };
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* SSO Token (Fase 2 — HMAC com crypto do Node)                          */
+/* ------------------------------------------------------------------ */
+
+export interface SsoTokenPayload {
+  email: string;
+  fn: string;
+  ln: string;
+  iat: number;
+  exp: number;
+}
+
+function base64urlEncode(obj: SsoTokenPayload | string): string {
+  const json = typeof obj === "string" ? obj : JSON.stringify(obj);
+  return Buffer.from(json)
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+}
+
+export function generateSsoToken(
+  payload: { email: string; firstName?: string; lastName?: string },
+  secret: string,
+  ttlMinutes = 5,
+): string {
+  const { createHmac } = require("crypto");
+  const now = Math.floor(Date.now() / 1000);
+  const p: SsoTokenPayload = {
+    email: payload.email.toLowerCase().trim(),
+    fn: payload.firstName || "",
+    ln: payload.lastName || "",
+    iat: now,
+    exp: now + ttlMinutes * 60,
+  };
+  const payloadB64 = base64urlEncode(p);
+  const hmac = createHmac("sha256", secret).update(payloadB64).digest("base64url");
+  return `${payloadB64}.${hmac}`;
+}
+
+export function verifySsoToken(token: string, secret: string): SsoTokenPayload | null {
+  const { createHmac } = require("crypto");
+  const parts = token.split(".");
+  if (parts.length !== 2) return null;
+  const [payloadB64, signature] = parts as [string, string];
+  if (!payloadB64 || !signature) return null;
+  const hmac = createHmac("sha256", secret).update(payloadB64).digest("base64url");
+  if (hmac !== signature) return null;
+  try {
+    const payloadStr = Buffer.from(payloadB64.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf-8");
+    const p: SsoTokenPayload = JSON.parse(payloadStr);
+    if (p.exp < Math.floor(Date.now() / 1000)) return null; // expirado
+    return p;
+  } catch {
+    return null;
+  }
 }
 
 export async function provisionN8nUser(
   email: string,
   name: string,
-  password: string,
+  password?: string,
+  ssoToken?: string,
 ): Promise<N8nUser> {
   const [firstName, ...lastParts] = name.trim().split(/\s+/);
   const lastName = lastParts.join(" ") || firstName;
-  const res = await n8nFetch("/users", {
+  // Endpoint custom do container n8n (porta 3456, exposta via nginx)
+  const registerUrl =
+    process.env["N8N_REGISTRATION_URL"]?.trim() || "http://127.0.0.1:3456/register";
+  const body: Record<string, unknown> = {
+    email: email.toLowerCase().trim(),
+    firstName: firstName || "User",
+    lastName,
+  };
+  if (ssoToken) {
+    (body as Record<string, unknown>)["ssoToken"] = ssoToken;
+  } else if (password) {
+    (body as Record<string, unknown>)["password"] = password;
+  }
+  // Se não há ssoToken nem password, não envia senha; o register-server
+  // criará usuário com senha aleatória interna se receber ssoToken válido.
+  const res = await fetch(registerUrl, {
     method: "POST",
-    body: JSON.stringify({
-      email,
-      password,
-      firstName: firstName || "User",
-      lastName,
-      role: "editor",
-    }),
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ message: res.statusText }) as { message?: string });
     throw new Error(`n8n provision failed: ${res.status} ${err.message ?? ""}`);
   }
-  return res.json();
+  const data = (await res.json()) as {
+    ok?: boolean;
+    message?: string;
+    id?: string;
+    email?: string;
+    firstName?: string;
+    lastName?: string;
+    roleSlug?: string;
+  };
+  // O register-server retorna {ok, message}; construímos N8nUser a partir dos inputs
+  return {
+    id: data.id ? parseInt(data.id.replace(/[^\d]/g, "").slice(0, 8)) || 0 : 0,
+    email: email.toLowerCase().trim(),
+    firstName: firstName || "User",
+    lastName,
+    role: "global:member",
+    disabled: false,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  } as N8nUser;
 }

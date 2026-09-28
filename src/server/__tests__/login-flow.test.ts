@@ -1,5 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { hashPassword, verifyPassword, generateSaltHex, getDummyPasswordHash } from "@/server/passwords";
+import {
+  hashPassword,
+  verifyPassword,
+  generateSaltHex,
+  getDummyPasswordHash,
+} from "@/server/passwords";
 import { SqliteStorage, MemoryStorage, type Storage, type UserRow } from "@/server/storage";
 import { resolvePepper } from "@/server/context";
 import { logLoginAttempt, type LoginLogEntry } from "@/server/login-logger";
@@ -16,18 +21,20 @@ afterEach(() => {
 
 function userRow(overrides: Partial<UserRow> = {}): UserRow {
   const salt = generateSaltHex();
-  const hash = hashPassword("Geos@2026!", PEPPER, salt);
+  const hash = hashPassword("GWG@2026!", PEPPER, salt);
   return {
     id: "u_test",
     name: "Admin Test",
-    email: "admin@grupogeos.com.br",
+    email: "admin@grupogwg.com.br",
     role: "admin",
     jobTitle: null,
     department: null,
     bio: null,
+    avatarUrl: null,
     passwordHash: hash,
     passwordSalt: salt,
     createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
     ...overrides,
   };
 }
@@ -36,38 +43,39 @@ describe("Login flow completo (simulação server-side)", () => {
   let storage: Storage;
 
   beforeEach(async () => {
-    storage = await SqliteStorage.open(":memory:");
+    const openStorage = await SqliteStorage.open(":memory:");
+    storage = openStorage!;
     process.env["AUTH_PEPPER"] = PEPPER;
   });
 
   it("hash e verificação com pepper real", () => {
     const salt = generateSaltHex();
-    const hash = hashPassword("Geos@2026!", PEPPER, salt);
+    const hash = hashPassword("GWG@2026!", PEPPER, salt);
     expect(hash.startsWith("$argon2id$")).toBe(true);
-    expect(verifyPassword("Geos@2026!", PEPPER, hash)).toBe(true);
+    expect(verifyPassword("GWG@2026!", PEPPER, hash)).toBe(true);
   });
 
   it("senha errada é rejeitada", () => {
     const salt = generateSaltHex();
-    const hash = hashPassword("Geos@2026!", PEPPER, salt);
+    const hash = hashPassword("GWG@2026!", PEPPER, salt);
     expect(verifyPassword("senha-errada", PEPPER, hash)).toBe(false);
   });
 
   it("pepper diferente é rejeitada", () => {
     const salt = generateSaltHex();
-    const hash = hashPassword("Geos@2026!", PEPPER, salt);
-    expect(verifyPassword("Geos@2026!", "outra-pepper-totalmente-diferente-xxx", hash)).toBe(false);
+    const hash = hashPassword("GWG@2026!", PEPPER, salt);
+    expect(verifyPassword("GWG@2026!", "outra-pepper-totalmente-diferente-xxx", hash)).toBe(false);
   });
 
   it("busca de usuário por email (case-insensitive) e verificação", async () => {
     const row = userRow();
     await storage.insertUser(row);
 
-    const found = await storage.getUserByEmail("ADMIN@GRUPOGEOS.COM.BR");
+    const found = await storage.getUserByEmail("ADMIN@GRUPOGWG.COM.BR");
     expect(found).not.toBeNull();
     expect(found!.id).toBe("u_test");
 
-    const valid = verifyPassword("Geos@2026!", PEPPER, found!.passwordHash);
+    const valid = verifyPassword("GWG@2026!", PEPPER, found!.passwordHash);
     expect(valid).toBe(true);
   });
 
@@ -76,7 +84,7 @@ describe("Login flow completo (simulação server-side)", () => {
     expect(found).toBeNull();
 
     const dummyHash = getDummyPasswordHash();
-    expect(verifyPassword("Geos@2026!", PEPPER, dummyHash)).toBe(false);
+    expect(verifyPassword("GWG@2026!", PEPPER, dummyHash)).toBe(false);
     expect(verifyPassword("qualquer", PEPPER, dummyHash)).toBe(false);
   });
 
@@ -96,9 +104,9 @@ describe("Login flow completo (simulação server-side)", () => {
 
   it("hash com hash-wasm é verificável por @noble/hashes (compatibilidade)", async () => {
     const salt = "0f0e0d0c0b0a09080706050403020100";
-    const hash = hashPassword("Geos@2026!", PEPPER, salt);
-    expect(verifyPassword("Geos@2026!", PEPPER, hash)).toBe(true);
-    expect(verifyPassword("Geos@2026!", PEPPER, hash)).toBe(true);
+    const hash = hashPassword("GWG@2026!", PEPPER, salt);
+    expect(verifyPassword("GWG@2026!", PEPPER, hash)).toBe(true);
+    expect(verifyPassword("GWG@2026!", PEPPER, hash)).toBe(true);
   });
 
   it("dummy hash formato PHC válido", () => {
@@ -116,7 +124,7 @@ describe("Login flow completo (simulação server-side)", () => {
     const found = await storage.getUserByEmail(row.email);
     expect(found).not.toBeNull();
 
-    const valid = verifyPassword("Geos@2026!", PEPPER, found!.passwordHash);
+    const valid = verifyPassword("GWG@2026!", PEPPER, found!.passwordHash);
     expect(valid).toBe(true);
 
     const token = crypto.randomUUID();
@@ -125,15 +133,15 @@ describe("Login flow completo (simulação server-side)", () => {
 
   it("senha vazia é rejeitada (edge case)", () => {
     const salt = generateSaltHex();
-    const hash = hashPassword("Geos@2026!", PEPPER, salt);
+    const hash = hashPassword("GWG@2026!", PEPPER, salt);
     expect(verifyPassword("", PEPPER, hash)).toBe(false);
   });
 
   it("senha com espaços extras é tratada", () => {
     const salt = generateSaltHex();
-    const hash = hashPassword("Geos@2026!", PEPPER, salt);
-    expect(verifyPassword("Geos@2026!  ", PEPPER, hash)).toBe(false);
-    expect(verifyPassword(" Geos@2026!", PEPPER, hash)).toBe(false);
+    const hash = hashPassword("GWG@2026!", PEPPER, salt);
+    expect(verifyPassword("GWG@2026!  ", PEPPER, hash)).toBe(false);
+    expect(verifyPassword(" GWG@2026!", PEPPER, hash)).toBe(false);
   });
 });
 
@@ -151,10 +159,11 @@ describe("login-logger (file-based)", () => {
     expect(existsSync(logFile)).toBe(true);
     const content = readFileSync(logFile, "utf-8");
     const lines = content.trim().split("\n");
-    const last = JSON.parse(lines[lines.length - 1]) as LoginLogEntry;
-    expect(last.email).toBe("test@test.com");
+    const lastLine = lines[lines.length - 1];
+    const last = JSON.parse(lastLine!) as LoginLogEntry;
+    expect(last.email).toBe("***@test.com");
     expect(last.outcome).toBe("success");
-    expect(last.ip).toBe("127.0.0.1");
+    expect(last.ip).toBe("127.0.0.***");
   });
 
   it("logLoginAttempt registra falha com detalhes", () => {
@@ -164,19 +173,14 @@ describe("login-logger (file-based)", () => {
       ip: "10.0.0.1",
       outcome: "failure",
       reason: "invalid_password",
-      userFound: true,
-      passwordValid: false,
-      pepperSource: "env",
-      passwordHashPrefix: "$argon2id$v=19$m=19456",
     });
 
     const content = readFileSync(logFile, "utf-8");
     const lines = content.trim().split("\n");
-    const last = JSON.parse(lines[lines.length - 1]) as LoginLogEntry;
+    const lastLine = lines[lines.length - 1];
+    const last = JSON.parse(lastLine!) as LoginLogEntry;
     expect(last.outcome).toBe("failure");
     expect(last.reason).toBe("invalid_password");
-    expect(last.userFound).toBe(true);
-    expect(last.passwordValid).toBe(false);
   });
 
   it("logLoginAttempt registra rate_limit", () => {
@@ -189,7 +193,8 @@ describe("login-logger (file-based)", () => {
 
     const content = readFileSync(logFile, "utf-8");
     const lines = content.trim().split("\n");
-    const last = JSON.parse(lines[lines.length - 1]) as LoginLogEntry;
+    const lastLine = lines[lines.length - 1];
+    const last = JSON.parse(lastLine!) as LoginLogEntry;
     expect(last.outcome).toBe("rate_limited");
   });
 
@@ -211,14 +216,13 @@ describe("login-logger (file-based)", () => {
       email: "admin@test.com",
       ip: "163.176.45.217",
       outcome: "success",
-      userFound: true,
-      passwordValid: true,
     });
 
     const content = readFileSync(logFile, "utf-8");
     const lines = content.trim().split("\n");
-    const last = JSON.parse(lines[lines.length - 1]) as LoginLogEntry;
+    const lastLine = lines[lines.length - 1];
+    const last = JSON.parse(lastLine!) as LoginLogEntry;
     expect(last.outcome).toBe("success");
-    expect(last.ip).toBe("163.176.45.217");
+    expect(last.ip).toBe("163.176.45.***");
   });
 });

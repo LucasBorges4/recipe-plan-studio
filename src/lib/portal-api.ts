@@ -1,12 +1,16 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { roleLabel, defaultRoleForNewUser, movePermission, userCan } from "@/lib/rbac";
+import { columnToStage, stageToColumn, inferProgressFromStage, isWaitingOnClient } from "@/lib/task-stages";
 import { addMonthsBR, fmtBR } from "@/lib/portal-utils";
+import { buildTeamCatalog } from "@/lib/team-photos";
+import type { TeamMemberLinked } from "@/lib/team-photos";
+import { listTeamMembers } from "@/server/team-catalog";
 import type { PublicUser } from "@/lib/rbac";
 import type { DatabaseDump } from "@/server/storage";
 import type { AuditEntry, JsonObject, PortalStatePayload, PublicInvite } from "@/lib/records";
 import { docKinds, docKindLabel, docSchemas } from "@/lib/doc-schemas";
-import type { Priority } from "@/data/types";
+import type { JournalComment, JournalEntry, Priority, Task } from "@/data/types";
 import { logLoginAttempt } from "@/server/login-logger";
 
 /* ------------------------------------------------------------------ */
@@ -170,6 +174,8 @@ export const registerFn = createServerFn({ method: "POST" })
         passwordHash: hash,
         passwordSalt: salt,
         createdAt: now,
+        updatedAt: now,
+        avatarUrl: null,
       });
 
       if (inviteHash) await c.storage.markInviteUsed(inviteHash, now, userId);
@@ -217,11 +223,16 @@ export const loginFn = createServerFn({ method: "POST" })
       try {
         const { getRequestIP } = await import("@tanstack/react-start/server");
         ip = getRequestIP({ xForwardedFor: true }) ?? null;
-      } catch {}
+      } catch { void 0; }
 
       const key = await c.requestKey("login", data.email);
       if (c.isRateLimited(key)) {
-        logLoginAttempt({ ts: new Date().toISOString(), email: data.email, ip, outcome: "rate_limited" });
+        logLoginAttempt({
+          ts: new Date().toISOString(),
+          email: data.email,
+          ip,
+          outcome: "rate_limited",
+        });
         return {
           ok: false,
           error: "Muitas tentativas de login. Tente novamente em alguns minutos.",
@@ -231,8 +242,6 @@ export const loginFn = createServerFn({ method: "POST" })
       const email = data.email.toLowerCase().trim();
       const user = await c.storage.getUserByEmail(email);
       const targetHash = user?.passwordHash ?? c.pw.getDummyPasswordHash();
-      const pepperLen = c.pepper.length;
-      const pepperSource = pepperLen > 0 ? "env/meta" : "none";
 
       let valid = false;
       let verifyError: string | null = null;
@@ -248,10 +257,6 @@ export const loginFn = createServerFn({ method: "POST" })
         ip,
         outcome: !user || !valid ? "failure" : "success",
         reason: !user ? "user_not_found" : !valid ? (verifyError ?? "invalid_password") : undefined,
-        userFound: !!user,
-        passwordValid: valid,
-        pepperSource: pepperSource as "env" | "meta",
-        passwordHashPrefix: user?.passwordHash?.slice(0, 40) ?? "N/A",
         error: verifyError ?? undefined,
       });
 
@@ -272,7 +277,13 @@ export const loginFn = createServerFn({ method: "POST" })
       const row = await c.storage.getUserById(user.id);
       return { ok: true, data: await c.auth.publicUserWithFunctions(c.storage, row!) };
     } catch (e) {
-      logLoginAttempt({ ts: new Date().toISOString(), email: data.email, ip: null, outcome: "error", error: e instanceof Error ? e.message : String(e) });
+      logLoginAttempt({
+        ts: new Date().toISOString(),
+        email: data.email,
+        ip: null,
+        outcome: "error",
+        error: e instanceof Error ? e.message : String(e),
+      });
       return { ok: false, error: errorMsg(e) };
     }
   });
@@ -319,65 +330,75 @@ export const meFn = createServerFn({ method: "GET" }).handler(
  * erro real de abertura do Postgres/Neon se houver. Use em produção para
  * depurar por que cadastro/login não persistem.
  */
-export const storageDiagnosticFn = createServerFn({ method: "GET" }).handler(
-  async (): Promise<
-    Record<string, unknown>
-  > => {
-    let storageMod: typeof import("@/server/storage") | null = null;
-    let pgOpenError: string | null = null;
-    let tursoOpenError: string | null = null;
-    try {
-      storageMod = await import("@/server/storage");
-    } catch (e) {
-      return { fatal: `Falha ao importar storage: ${e instanceof Error ? e.message : String(e)}` };
-    }
-    try {
-      const { PostgresStorage } = await import("@/server/postgres-storage");
-      pgOpenError = PostgresStorage.lastOpenError;
-    } catch (e) {
-      pgOpenError = `falha ao importar postgres-storage: ${e instanceof Error ? e.message : String(e)}`;
-    }
-    try {
-      const { TursoStorage } = await import("@/server/turso-storage");
-      tursoOpenError = TursoStorage.lastOpenError ?? null;
-    } catch (e) {
-      tursoOpenError = `falha ao importar turso-storage: ${e instanceof Error ? e.message : String(e)}`;
-    }
+export const storageDiagnosticFn = createServerFn({ method: "GET" }).handler(async () => {
+  try {
+    const c = await ctx();
+    await c.auth.requirePermission(c.storage, "admin.manage");
+  } catch (e) {
+    return { fatal: errorMsg(e) };
+  }
+  let storageMod: typeof import("@/server/storage") | null = null;
+  let pgOpenError: string | null = null;
+  let tursoOpenError: string | null = null;
+  try {
+    storageMod = await import("@/server/storage");
+  } catch (e) {
+    return { fatal: `Falha ao importar storage: ${e instanceof Error ? e.message : String(e)}` };
+  }
+  try {
+    const { PostgresStorage } = await import("@/server/postgres-storage");
+    pgOpenError = PostgresStorage.lastOpenError;
+  } catch (e) {
+    pgOpenError = `falha ao importar postgres-storage: ${e instanceof Error ? e.message : String(e)}`;
+  }
+  try {
+    const { TursoStorage } = await import("@/server/turso-storage");
+    tursoOpenError = TursoStorage.lastOpenError ?? null;
+  } catch (e) {
+    tursoOpenError = `falha ao importar turso-storage: ${e instanceof Error ? e.message : String(e)}`;
+  }
 
-    const env: Record<string, boolean> = {};
-    const envNames = ["POSTGRES_URL", "POSTGRES_PRISMA_URL", "POSTGRES_URL_NON_POOLING", "DATABASE_URL", "TURSO_DATABASE_URL", "LIBSQL_URL", "STORAGE_REQUIRE_PERSISTENT"];
-    for (const n of envNames) {
-      env[n] =
-        typeof process !== "undefined" && process.env
-          ? Boolean((process.env[n] ?? "").trim())
-          : false;
-    }
+  const env: Record<string, boolean> = {};
+  const envNames = [
+    "POSTGRES_URL",
+    "POSTGRES_PRISMA_URL",
+    "POSTGRES_URL_NON_POOLING",
+    "DATABASE_URL",
+    "TURSO_DATABASE_URL",
+    "LIBSQL_URL",
+    "STORAGE_REQUIRE_PERSISTENT",
+  ];
+  for (const n of envNames) {
+    env[n] =
+      typeof process !== "undefined" && process.env
+        ? Boolean((process.env[n] ?? "").trim())
+        : false;
+  }
 
-    let storageState: Record<string, unknown> = {};
-    if (storageMod) {
-      try {
-        const storage = await storageMod.getStorage();
-        storageState = {
-          storageKind: storage.kind,
-          activePath: storageMod.getActiveDatabasePath(),
-          persistent: storageMod.isStoragePersistent(),
-          initError: storageMod.getStorageInitError(),
-        };
-      } catch (e) {
-        storageState = { initError: e instanceof Error ? e.message : String(e) };
-      }
+  let storageState: Record<string, string | number | boolean | null> = {};
+  if (storageMod) {
+    try {
+      const storage = await storageMod.getStorage();
+      storageState = {
+        storageKind: storage.kind,
+        activePath: storageMod.getActiveDatabasePath(),
+        persistent: storageMod.isStoragePersistent(),
+        initError: storageMod.getStorageInitError(),
+      };
+    } catch (e) {
+      storageState = { initError: e instanceof Error ? e.message : String(e) };
     }
+  }
 
-    return {
-      timing: new Date().toISOString(),
-      runtime: typeof process !== "undefined" ? process.env["NITRO_PRESET"] ?? "unknown" : "edge",
-      env,
-      postgresOpenError: pgOpenError,
-      tursoOpenError,
-      storage: storageState,
-    };
-  },
-);
+  return {
+    timing: new Date().toISOString(),
+    runtime: typeof process !== "undefined" ? (process.env["NITRO_PRESET"] ?? "unknown") : "edge",
+    env,
+    postgresOpenError: pgOpenError,
+    tursoOpenError,
+    storage: storageState,
+  };
+});
 
 /* ------------------------------------------------------------------ */
 /* 5. PORTAL STATE (leitura única para o cliente)                     */
@@ -388,6 +409,52 @@ export const getPortalStateFn = createServerFn({ method: "GET" }).handler(
     const { getStorage, isStoragePersistent, getStorageInitError } =
       await import("@/server/storage");
     const storage = await getStorage();
+
+    let authed = false;
+    try {
+      const c = await ctx();
+      await c.auth.requireUser(c.storage);
+      authed = true;
+    } catch {
+      // visitante anônimo (login/termos/lgpd) recebe apenas o subconjunto público
+    }
+
+    const [
+      persistent,
+      storageInitError,
+      legalDocs,
+      info,
+    ] = await Promise.all([
+      isStoragePersistent(),
+      getStorageInitError(),
+      storage.listLegalDocs(),
+      storage.getStorageInfo().catch(() => null),
+    ]);
+
+    if (!authed) {
+      return {
+        persistent,
+        storageInitError,
+        tasks: [],
+        columns: [],
+        controls: [],
+        comments: [],
+        evidences: [],
+        modules: [],
+        risks: [],
+        wiki: [],
+        milestones: [],
+        releases: [],
+        journal: [],
+        patentStages: [],
+        techStack: [],
+        nextSteps: [],
+        legalDocs,
+        auditCount: 0,
+        docs: [],
+      };
+    }
+
     const [
       tasks,
       columns,
@@ -399,13 +466,12 @@ export const getPortalStateFn = createServerFn({ method: "GET" }).handler(
       wiki,
       milestones,
       releases,
+      journal,
       patentStages,
       techStack,
       nextSteps,
-      legalDocs,
       auditCount,
       docs,
-      info,
     ] = await Promise.all([
       storage.listTasks(),
       storage.listColumns(),
@@ -417,18 +483,17 @@ export const getPortalStateFn = createServerFn({ method: "GET" }).handler(
       storage.listWiki(),
       storage.listMilestones(),
       storage.listReleases(),
+      storage.listJournalEntries(),
       storage.listPatentStages(),
       storage.listTechStack(),
       storage.listNextSteps(),
-      storage.listLegalDocs(),
       storage.countAudit(),
       storage.listDocs(),
-      storage.getStorageInfo().catch(() => null),
     ]);
     return {
-      persistent: isStoragePersistent(),
+      persistent,
       storagePath: info?.path ?? undefined,
-      storageInitError: getStorageInitError(),
+      storageInitError,
       storageEnv: {
         postgresUrl: Boolean(
           typeof process !== "undefined" && process.env
@@ -462,6 +527,7 @@ export const getPortalStateFn = createServerFn({ method: "GET" }).handler(
       wiki,
       milestones,
       releases,
+      journal,
       patentStages,
       techStack,
       nextSteps,
@@ -494,6 +560,7 @@ export const taskHistoryFn = createServerFn({ method: "GET" })
   .handler(async ({ data }): Promise<ApiResult<AuditEntry[]>> => {
     try {
       const c = await ctx();
+      await c.auth.requireUser(c.storage);
       const all = await c.storage.listAudit();
       return {
         ok: true,
@@ -518,6 +585,8 @@ export const createTaskFn = createServerFn({ method: "POST" })
         tags: z.array(z.string().trim().min(1).max(30)).max(8, "Muitas etiquetas").default([]),
         assignee: z.string().trim().max(80, "Responsável muito longo").optional(),
         due: z.string().regex(BR_DATE, "Data deve estar no formato dd/mm/aaaa").optional(),
+        stage: z.enum(["not_started", "in_progress", "waiting_client", "review", "done"]).optional(),
+        progress: z.number().int().min(0).max(100).optional(),
       })
       .strict(),
   )
@@ -531,7 +600,15 @@ export const createTaskFn = createServerFn({ method: "POST" })
         await c.storage.insertColumn("Backlog");
         columns = ["Backlog"];
       }
-      const column = columns[0] ?? "Backlog";
+      const defaultColumn = columns[0] ?? "Backlog";
+
+      const stage = data.stage ? data.stage : columnToStage(defaultColumn);
+      const progress = data.progress !== undefined ? data.progress : inferProgressFromStage(stage);
+      const column = data.stage ? stageToColumn(data.stage) : defaultColumn;
+      const responsible = data.stage === "waiting_client" ? (data.assignee?.trim() || user.name || "") : null;
+      if (data.stage === "waiting_client" && !responsible) {
+        return { ok: false, error: "Defina o responsável para tarefas em 'Aguardando você'." };
+      }
 
       const taskId = c.newId("t");
       await c.storage.insertTask({
@@ -542,6 +619,10 @@ export const createTaskFn = createServerFn({ method: "POST" })
         priority: data.priority as Priority,
         tags: data.tags,
         assignee: data.assignee?.trim() || user.name,
+        stage,
+        progress,
+        responsible,
+        waitingOnClient: isWaitingOnClient(stage),
         ...(data.due ? { due: data.due } : {}),
       });
 
@@ -599,6 +680,56 @@ export const moveTaskFn = createServerFn({ method: "POST" })
       );
 
       return { ok: true, data: null };
+    } catch (e) {
+      return { ok: false, error: errorMsg(e) };
+    }
+  });
+
+export const updateTaskFn = createServerFn({ method: "POST" })
+  .validator(
+    z
+      .object({
+        taskId: z.string().min(1),
+        progress: z.number().int().min(0, "Mínimo 0").max(100, "Máximo 100"),
+        responsible: z.string().trim().max(80, "Responsável muito longo"),
+        due: z.string().regex(BR_DATE, "Data deve estar no formato dd/mm/aaaa").optional(),
+      })
+      .strict(),
+  )
+  .handler(async ({ data }): Promise<ApiResult<Task | null>> => {
+    try {
+      const c = await ctx();
+      const task = await c.storage.getTask(data.taskId);
+      if (!task) return { ok: false, error: "Tarefa não encontrada." };
+
+      const user = await c.auth.requirePermission(c.storage, "task.move");
+
+      // Validação de responsável obrigatório quando stage atual é waiting_client
+      if (task.stage === "waiting_client" && (!data.responsible || !data.responsible.trim())) {
+        return { ok: false, error: "Defina o responsável para tarefas em 'Aguardando você'." };
+      }
+
+      const updated = await c.storage.updateTaskProgress(data.taskId, {
+        progress: data.progress,
+        responsible: data.responsible.trim() || null,
+        ...(data.due !== undefined ? { due: data.due } : {}),
+      });
+
+      if (!updated) return { ok: false, error: "Falha ao atualizar progresso." };
+
+      await c.logAudit(
+        c.storage,
+        { id: user.id, name: user.name, role: user.role },
+        {
+          action: "Tarefa atualizada",
+          entity: "tarefa",
+          entityId: data.taskId,
+          before: `progresso ${task.progress}% · responsável ${task.responsible ?? "-"}`,
+          after: `progresso ${updated.progress}% · responsável ${updated.responsible ?? "-"}`,
+        },
+      );
+
+      return { ok: true, data: updated };
     } catch (e) {
       return { ok: false, error: errorMsg(e) };
     }
@@ -861,9 +992,10 @@ export const listUsersFn = createServerFn({ method: "GET" }).handler(
 export const listPublicUsersFn = createServerFn({ method: "GET" }).handler(
   async (): Promise<ApiResult<PublicUser[]>> => {
     try {
-      const { getStorage } = await import("@/server/storage");
+      const c = await ctx();
+      await c.auth.requireUser(c.storage);
+      const storage = c.storage;
       const { publicUser } = await import("@/server/auth");
-      const storage = await getStorage();
       const users = await storage.listUsers();
       return { ok: true, data: users.map((u) => publicUser(u)) };
     } catch (e) {
@@ -872,14 +1004,27 @@ export const listPublicUsersFn = createServerFn({ method: "GET" }).handler(
   },
 );
 
+export const getPublicUserFn = createServerFn({ method: "GET" })
+  .validator(z.object({ userId: z.string() }).strict())
+  .handler(async ({ data }): Promise<ApiResult<PublicUser>> => {
+    try {
+      const c = await ctx();
+      const user = await c.storage.getUserById(data.userId);
+      if (!user) return { ok: false, error: "Usuário não encontrado." };
+      return { ok: true, data: await c.auth.publicUserWithFunctions(c.storage, user) };
+    } catch (e) {
+      return { ok: false, error: errorMsg(e) };
+    }
+  });
+
 export const listRoleFunctionsFn = createServerFn({ method: "GET" }).handler(
   async (): Promise<
     ApiResult<Array<{ role: string; functionKey: string; description: string }>>
   > => {
     try {
-      const { getStorage } = await import("@/server/storage");
-      const storage = await getStorage();
-      const rows = await storage.listAllRoleFunctions();
+      const c = await ctx();
+      await c.auth.requireUser(c.storage);
+      const rows = await c.storage.listAllRoleFunctions();
       return {
         ok: true,
         data: rows.map((r) => ({
@@ -899,7 +1044,7 @@ export const setUserRoleFn = createServerFn({ method: "POST" })
     z
       .object({
         userId: z.string().min(1),
-        role: z.enum(["admin", "diretor", "gestor", "desenvolvedor", "auditor"]),
+        role: z.enum(["admin", "diretor", "gestor", "desenvolvedor", "auditor", "visualizador", "cliente"]),
       })
       .strict(),
   )
@@ -1159,7 +1304,9 @@ export const createRiskFn = createServerFn({ method: "POST" })
         title: z.string().trim().min(5, "Título muito curto").max(120, "Título muito longo"),
         category: z.string().trim().min(2, "Categoria obrigatória").max(40),
         owner: z.string().trim().min(2, "Responsável obrigatório").max(80),
-        role: z.enum(["admin", "diretor", "gestor", "desenvolvedor", "auditor"]).optional(),
+        role: z
+          .enum(["admin", "diretor", "gestor", "desenvolvedor", "auditor", "visualizador", "cliente"])
+          .optional(),
         probability: z.number().int().min(1).max(5),
         impact: z.number().int().min(1).max(5),
         mitigation: z
@@ -1167,6 +1314,12 @@ export const createRiskFn = createServerFn({ method: "POST" })
           .trim()
           .min(10, "Mitigação muito curta")
           .max(500, "Mitigação muito longa"),
+        status: z
+          .enum(["ativo", "critico", "em_tratamento", "mitigado", "pendente_cliente"])
+          .optional(),
+        nextAction: z.string().trim().max(500).optional(),
+        due: z.string().max(40).nullable().optional(),
+        taskId: z.string().max(80).nullable().optional(),
       })
       .strict(),
   )
@@ -1201,10 +1354,18 @@ export const updateRiskFn = createServerFn({ method: "POST" })
         title: z.string().trim().min(5).max(120).optional(),
         category: z.string().trim().min(2).max(40).optional(),
         owner: z.string().trim().min(2).max(80).optional(),
-        role: z.enum(["admin", "diretor", "gestor", "desenvolvedor", "auditor"]).optional(),
+        role: z
+          .enum(["admin", "diretor", "gestor", "desenvolvedor", "auditor", "visualizador", "cliente"])
+          .optional(),
         probability: z.number().int().min(1).max(5).optional(),
         impact: z.number().int().min(1).max(5).optional(),
         mitigation: z.string().trim().min(10).max(500).optional(),
+        status: z
+          .enum(["ativo", "critico", "em_tratamento", "mitigado", "pendente_cliente"])
+          .optional(),
+        nextAction: z.string().trim().max(500).optional(),
+        due: z.string().max(40).nullable().optional(),
+        taskId: z.string().max(80).nullable().optional(),
       })
       .strict(),
   )
@@ -1267,7 +1428,12 @@ export const generateAutoRisksFn = createServerFn({ method: "POST" }).handler(
       const existingTitles = new Set(risks.map((r) => r.title));
       const now = new Date();
       let created = 0;
-      const mkRisk = async (title: string, category: string, mitigation: string) => {
+      const mkRisk = async (
+        title: string,
+        category: string,
+        mitigation: string,
+        extra?: { status?: import("@/data/types").RiskStatus; nextAction?: string; due?: string | null; taskId?: string | null },
+      ) => {
         if (existingTitles.has(title)) return;
         const id = c.newId("rsk");
         await c.storage.insertRisk({
@@ -1279,6 +1445,10 @@ export const generateAutoRisksFn = createServerFn({ method: "POST" }).handler(
           probability: 3,
           impact: 4,
           mitigation,
+          status: extra?.status ?? "ativo",
+          nextAction: extra?.nextAction ?? "",
+          due: extra?.due ?? null,
+          taskId: extra?.taskId ?? null,
         } as Parameters<typeof c.storage.insertRisk>[0]);
         existingTitles.add(title);
         created++;
@@ -1296,12 +1466,23 @@ export const generateAutoRisksFn = createServerFn({ method: "POST" }).handler(
             `Atraso: ${t.title}`,
             "Operacional",
             `Tarefa "${t.title}" vencida em ${t.due} na coluna ${t.column}. Verificar impedimentos.`,
+            {
+              status: "em_tratamento",
+              nextAction: `Desbloquear tarefa "${t.title}"`,
+              due: t.due,
+              taskId: t.id,
+            },
           );
         }
       }
       for (const ctrl of controls) {
         if (ctrl.status === "Vencido" || ctrl.overdue) {
-          await mkRisk(`Controle vencido: ${ctrl.control}`, "Compliance", `Controle "${ctrl.control}" (${ctrl.norm}) vencido. Revisão necessária.`);
+          await mkRisk(
+            `Controle vencido: ${ctrl.control}`,
+            "Compliance",
+            `Controle "${ctrl.control}" (${ctrl.norm}) vencido. Revisão necessária.`,
+            { status: "pendente_cliente", nextAction: `Revisar controle "${ctrl.control}"` },
+          );
         } else if (ctrl.nextReview) {
           const nr = new Date(ctrl.nextReview);
           if (nr < now) {
@@ -1309,6 +1490,7 @@ export const generateAutoRisksFn = createServerFn({ method: "POST" }).handler(
               `Revisão pendente: ${ctrl.control}`,
               "Compliance",
               `Revisão do controle "${ctrl.control}" expirou em ${ctrl.nextReview}.`,
+              { status: "pendente_cliente", nextAction: `Atualizar revisão do controle "${ctrl.control}"`, due: ctrl.nextReview },
             );
           }
         }
@@ -1364,6 +1546,7 @@ export const createWikiFn = createServerFn({ method: "POST" })
         updatedAt: fmtBR(new Date()),
         version: data.version,
         sections: data.sections,
+        updatedBy: user.name,
       });
       await c.logAudit(
         c.storage,
@@ -1540,6 +1723,240 @@ export const deleteReleaseFn = createServerFn({ method: "POST" })
     }
   });
 
+export const listJournalEntriesFn = createServerFn({ method: "GET" }).handler(
+  async (): Promise<ApiResult<JournalEntry[]>> => {
+    try {
+      const c = await ctx();
+      await c.auth.requireUser(c.storage);
+      return { ok: true, data: await c.storage.listJournalEntries() };
+    } catch (e) {
+      return { ok: false, error: errorMsg(e) };
+    }
+  },
+);
+
+export const createJournalEntryFn = createServerFn({ method: "POST" })
+  .validator(
+    z
+      .object({
+        id: z.string().min(1).optional(),
+        type: z.enum(["Entrega", "Integração", "Marco", "Decisão", "Aprovação", "Atualização"]),
+        title: z.string().trim().min(1, "Título obrigatório").max(120, "Título muito longo"),
+        description: z.string().trim().min(1, "Descrição obrigatória").max(500, "Descrição muito longa"),
+        occurredAt: z.string().min(3).max(30),
+        status: z.enum(["Em andamento", "Entregue", "Aguardando aprovação", "Aprovado pelo cliente", "Concluído", "Requer atenção"]),
+        authorId: z.string().min(1),
+        authorName: z.string().trim().min(1),
+        department: z.string().trim().max(80).optional(),
+        comments: z.array(z.any()).optional().default([]),
+        attachments: z.array(z.any()).optional().default([]),
+      })
+      .strict(),
+  )
+  .handler(async ({ data }): Promise<ApiResult<null>> => {
+    try {
+      const c = await ctx();
+      const user = await c.auth.requirePermission(c.storage, "journal.manage");
+      const entryId = data.id ?? c.newId("j");
+      await c.storage.insertJournalEntry({
+        id: entryId,
+        type: data.type,
+        title: data.title,
+        description: data.description,
+        occurredAt: data.occurredAt,
+        status: data.status,
+        authorId: user.id,
+        authorName: user.name,
+        department: data.department ?? null,
+        comments: (data.comments ?? []) as JournalComment[],
+        attachments: (data.attachments ?? []) as import("@/data/types").JournalAttachment[],
+      } as JournalEntry);
+      await c.logAudit(
+        c.storage,
+        { id: user.id, name: user.name, role: user.role },
+        { action: "Atualização do diário criada", entity: "journal", entityId: entryId, after: data.title },
+      );
+      return { ok: true, data: null };
+    } catch (e) {
+      return { ok: false, error: errorMsg(e) };
+    }
+  });
+
+export const updateJournalEntryFn = createServerFn({ method: "POST" })
+  .validator(
+    z
+      .object({
+        id: z.string().min(1),
+        title: z.string().trim().min(1).max(120).optional(),
+        description: z.string().trim().max(500).optional(),
+        status: z.enum(["Em andamento", "Entregue", "Aguardando aprovação", "Aprovado pelo cliente", "Concluído", "Requer atenção"]).optional(),
+      })
+      .strict(),
+  )
+  .handler(async ({ data }): Promise<ApiResult<boolean>> => {
+    try {
+      const c = await ctx();
+      const user = await c.auth.requirePermission(c.storage, "journal.manage");
+      const entries = await c.storage.listJournalEntries();
+      const entry = entries.find((e) => e.id === data.id);
+      if (!entry) return { ok: false, error: "Registro não encontrado." };
+      const updated = { ...entry, ...Object.fromEntries(Object.entries(data).filter(([, v]) => v !== undefined && v !== null)) } as JournalEntry;
+      const ok = await c.storage.updateJournalEntry(updated);
+      if (!ok) return { ok: false, error: "Falha ao atualizar." };
+      await c.logAudit(
+        c.storage,
+        { id: user.id, name: user.name, role: user.role },
+        { action: "Atualização do diário atualizada", entity: "journal", entityId: data.id, after: updated.title },
+      );
+      return { ok: true, data: true };
+    } catch (e) {
+      return { ok: false, error: errorMsg(e) };
+    }
+  });
+
+export const deleteJournalEntryFn = createServerFn({ method: "POST" })
+  .validator(z.object({ id: z.string().min(1) }).strict())
+  .handler(async ({ data }): Promise<ApiResult<null>> => {
+    try {
+      const c = await ctx();
+      const user = await c.auth.requirePermission(c.storage, "journal.manage");
+      const removed = await c.storage.deleteJournalEntry(data.id);
+      if (!removed) return { ok: false, error: "Registro não encontrado." };
+      await c.logAudit(
+        c.storage,
+        { id: user.id, name: user.name, role: user.role },
+        { action: "Atualização do diário removida", entity: "journal", entityId: data.id },
+      );
+      return { ok: true, data: null };
+    } catch (e) {
+      return { ok: false, error: errorMsg(e) };
+    }
+  });
+
+export const addJournalCommentFn = createServerFn({ method: "POST" })
+  .validator(
+    z
+      .object({
+        entryId: z.string().min(1),
+        content: z.string().trim().min(1, "Comentário vazio").max(1000, "Comentário muito longo"),
+      })
+      .strict(),
+  )
+  .handler(async ({ data }): Promise<ApiResult<null>> => {
+    try {
+      const c = await ctx();
+      const user = await c.auth.requireUser(c.storage);
+      const commentId = c.newId("jc");
+      const added = await c.storage.addJournalComment(data.entryId, {
+        id: commentId,
+        authorId: user.id,
+        authorName: user.name,
+        content: data.content,
+        createdAt: new Date().toISOString(),
+      } as JournalComment);
+      if (!added) return { ok: false, error: "Registro não encontrado." };
+      await c.logAudit(
+        c.storage,
+        { id: user.id, name: user.name, role: user.role },
+        { action: "Comentário adicionado ao diário", entity: "journal", entityId: data.entryId },
+      );
+      return { ok: true, data: null };
+    } catch (e) {
+      return { ok: false, error: errorMsg(e) };
+    }
+  });
+
+export const editOwnCommentFn = createServerFn({ method: "POST" })
+  .validator(
+    z
+      .object({
+        entryId: z.string().min(1),
+        commentId: z.string().min(1),
+        content: z.string().trim().min(1, "Comentário vazio").max(1000, "Comentário muito longo"),
+      })
+      .strict(),
+  )
+  .handler(async ({ data }): Promise<ApiResult<boolean>> => {
+    try {
+      const c = await ctx();
+      const user = await c.auth.requireUser(c.storage);
+      const updated = await c.storage.updateOwnComment(data.entryId, data.commentId, data.content, user.id);
+      if (!updated) return { ok: false, error: "Comentário não encontrado ou sem permissão." };
+      await c.logAudit(
+        c.storage,
+        { id: user.id, name: user.name, role: user.role },
+        { action: "Comentário editado no diário", entity: "journal", entityId: data.entryId },
+      );
+      return { ok: true, data: true };
+    } catch (e) {
+      return { ok: false, error: errorMsg(e) };
+    }
+  });
+
+export const deleteOwnCommentFn = createServerFn({ method: "POST" })
+  .validator(
+    z
+      .object({
+        entryId: z.string().min(1),
+        commentId: z.string().min(1),
+      })
+      .strict(),
+  )
+  .handler(async ({ data }): Promise<ApiResult<boolean>> => {
+    try {
+      const c = await ctx();
+      const user = await c.auth.requireUser(c.storage);
+      const deleted = await c.storage.deleteOwnComment(data.entryId, data.commentId, user.id);
+      if (!deleted) return { ok: false, error: "Comentário não encontrado ou sem permissão." };
+      await c.logAudit(
+        c.storage,
+        { id: user.id, name: user.name, role: user.role },
+        { action: "Comentário removido do diário", entity: "journal", entityId: data.entryId },
+      );
+      return { ok: true, data: true };
+    } catch (e) {
+      return { ok: false, error: errorMsg(e) };
+    }
+  });
+
+export const approveJournalEntryFn = createServerFn({ method: "POST" })
+  .validator(
+    z
+      .object({
+        id: z.string().min(1),
+        note: z.string().trim().max(300, "Nota muito longa").optional(),
+      })
+      .strict(),
+  )
+  .handler(async ({ data }): Promise<ApiResult<null>> => {
+    try {
+      const c = await ctx();
+      await c.auth.requireUser(c.storage);
+      const user = await c.auth.getCurrentUser(c.storage);
+      if (!user) return { ok: false, error: "Não autenticado." };
+      const entries = await c.storage.listJournalEntries();
+      const entry = entries.find((e) => e.id === data.id);
+      if (!entry) return { ok: false, error: "Registro não encontrado." };
+      const patch: JournalEntry = {
+        ...entry,
+        status: "Aprovado pelo cliente" as JournalEntry["status"],
+        approvedBy: user.name,
+        approvedAt: new Date().toISOString(),
+        ...(data.note !== undefined ? { approvedNote: data.note } : {} as any),
+      };
+      const ok = await c.storage.updateJournalEntry(patch);
+      if (!ok) return { ok: false, error: "Falha ao aprovar." };
+      await c.logAudit(
+        c.storage,
+        { id: user.id, name: user.name, role: user.role },
+        { action: "Atualização aprovada pelo cliente", entity: "journal", entityId: data.id, ...(data.note !== undefined ? { reason: data.note } : {}) },
+      );
+      return { ok: true, data: null };
+    } catch (e) {
+      return { ok: false, error: errorMsg(e) };
+    }
+  });
+
 /* ------------------------------------------------------------------ */
 /* 14. PATENT                                                           */
 /* ------------------------------------------------------------------ */
@@ -1558,7 +1975,7 @@ export const updatePatentStageFn = createServerFn({ method: "POST" })
   .handler(async ({ data }): Promise<ApiResult<null>> => {
     try {
       const c = await ctx();
-      const user = await c.auth.requirePermission(c.storage, "patent.manage");
+      const user = await c.auth.requirePermission(c.storage, "admin.manage");
       const stage = await c.storage.getPatentStage(data.id);
       if (!stage) return { ok: false, error: "Etapa não encontrada." };
       const updated = await c.storage.updatePatentStage(data.id, {
@@ -1744,6 +2161,7 @@ export const updateProfileFn = createServerFn({ method: "POST" })
         jobTitle: z.string().trim().max(80).optional(),
         department: z.string().trim().max(80).optional(),
         bio: z.string().trim().max(300).optional(),
+        avatarUrl: z.string().trim().max(1_500_000).nullable().optional(),
       })
       .strict(),
   )
@@ -1754,7 +2172,10 @@ export const updateProfileFn = createServerFn({ method: "POST" })
       const patch = Object.fromEntries(
         Object.entries(data).filter(([, v]) => v !== undefined),
       ) as Partial<
-        Pick<import("@/server/storage").UserRow, "name" | "jobTitle" | "department" | "bio">
+        Pick<
+          import("@/server/storage").UserRow,
+          "name" | "jobTitle" | "department" | "bio" | "avatarUrl"
+        >
       >;
       if (Object.keys(patch).length === 0)
         return { ok: false, error: "Nenhum campo para atualizar." };
@@ -1780,8 +2201,9 @@ export const updateProfileFn = createServerFn({ method: "POST" })
 export const bootstrapClearFn = createServerFn({ method: "POST" }).handler(
   async (): Promise<ApiResult<{ deleted: number }>> => {
     try {
-      const { getStorage } = await import("@/server/storage");
-      const storage = await getStorage();
+      const c = await ctx();
+      await c.auth.requirePermission(c.storage, "admin.manage");
+      const storage = c.storage;
       const count = await storage.countUsers();
       if (count === 0) return { ok: true, data: { deleted: 0 } };
       const deleted = await storage.clearAllUsers();
@@ -1796,12 +2218,8 @@ export const seedDemoUsersFn = createServerFn({ method: "POST" }).handler(
   async (): Promise<ApiResult<{ created: number }>> => {
     try {
       const c = await ctx();
+      await c.auth.requirePermission(c.storage, "admin.manage");
       const count = await c.storage.countUsers();
-      if (count > 0) {
-        const me = await c.auth.getCurrentUser(c.storage);
-        if (!me || !userCan(await c.auth.publicUserWithFunctions(c.storage, me), "admin.manage"))
-          return { ok: false, error: "Base já possui usuários — apenas admin pode semear." };
-      }
       const seeds: Array<{
         name: string;
         email: string;
@@ -1867,6 +2285,8 @@ export const seedDemoUsersFn = createServerFn({ method: "POST" }).handler(
           passwordHash: hash,
           passwordSalt: salt,
           createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          avatarUrl: null,
         });
         created++;
       }
@@ -1890,7 +2310,7 @@ export const createUserWithRoleFn = createServerFn({ method: "POST" })
         name: z.string().trim().min(2).max(80),
         email: z.string().trim().email().max(120),
         password: z.string().trim().min(8).max(200),
-        role: z.enum(["admin", "diretor", "gestor", "desenvolvedor", "auditor"]),
+        role: z.enum(["admin", "diretor", "gestor", "desenvolvedor", "auditor", "visualizador", "cliente"]),
         jobTitle: z.string().trim().max(80).optional(),
         department: z.string().trim().max(80).optional(),
       })
@@ -1917,6 +2337,8 @@ export const createUserWithRoleFn = createServerFn({ method: "POST" })
         passwordHash: hash,
         passwordSalt: salt,
         createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        avatarUrl: null,
       });
       const row = await c.storage.getUserById(id);
       await c.logAudit(c.storage, await c.auth.requireUser(c.storage), {
@@ -1938,7 +2360,9 @@ export const createControlFn = createServerFn({ method: "POST" })
         control: z.string().trim().min(5).max(120),
         norm: z.enum(["LGPD", "ISO 27001", "SOX"]),
         owner: z.string().trim().min(2).max(80),
-        role: z.enum(["admin", "diretor", "gestor", "desenvolvedor", "auditor"]).optional(),
+        role: z
+          .enum(["admin", "diretor", "gestor", "desenvolvedor", "auditor", "visualizador", "cliente"])
+          .optional(),
         tone: z
           .enum(["success", "info", "warning", "neutral", "danger", "brand"])
           .default("warning"),
@@ -2052,6 +2476,14 @@ export const deleteTechStackFn = createServerFn({ method: "POST" })
 
 export const getN8nInfoFn = createServerFn({ method: "GET" }).handler(
   async (): Promise<{ url: string; publicUrl: string; hasApiKey: boolean }> => {
+    let authed = false;
+    try {
+      const c = await ctx();
+      await c.auth.requireUser(c.storage);
+      authed = true;
+    } catch {
+      // não autenticado: segue sem expor hasApiKey
+    }
     const { n8nBaseUrl, n8nPublicUrl, n8nApiKey } = await import("@/server/n8n");
     let publicUrl = n8nPublicUrl();
     const base = n8nBaseUrl();
@@ -2072,13 +2504,29 @@ export const getN8nInfoFn = createServerFn({ method: "GET" }).handler(
         // mantém fallback local
       }
     }
-    return { url: base, publicUrl, hasApiKey: !!n8nApiKey() };
+    return { url: base, publicUrl, hasApiKey: authed && !!n8nApiKey() };
+  },
+);
+
+export const getN8nFrameHealthFn = createServerFn({ method: "GET" }).handler(
+  async (): Promise<ApiResult<import("@/server/n8n").FrameConnectivityHint>> => {
+    try {
+      const c = await ctx();
+      await c.auth.requireUser(c.storage);
+      const { getFrameConnectivityHint } = await import("@/server/n8n");
+      const result = await getFrameConnectivityHint();
+      return { ok: true, data: result };
+    } catch (e) {
+      return { ok: false, error: errorMsg(e) };
+    }
   },
 );
 
 export const listN8nWorkflowsFn = createServerFn({ method: "GET" }).handler(
   async (): Promise<ApiResult<import("@/server/n8n").N8nWorkflow[]>> => {
     try {
+      const c = await ctx();
+      await c.auth.requireUser(c.storage);
       const { listN8nWorkflows } = await import("@/server/n8n");
       return { ok: true, data: await listN8nWorkflows() };
     } catch (e) {
@@ -2091,6 +2539,8 @@ export const getN8nWorkflowFn = createServerFn({ method: "GET" })
   .validator(z.object({ id: z.coerce.number().min(1) }).strict())
   .handler(async ({ data }): Promise<ApiResult<import("@/server/n8n").N8nWorkflow>> => {
     try {
+      const c = await ctx();
+      await c.auth.requireUser(c.storage);
       const { getN8nWorkflow } = await import("@/server/n8n");
       return { ok: true, data: await getN8nWorkflow(data.id) };
     } catch (e) {
@@ -2111,6 +2561,8 @@ export const createN8nWorkflowFn = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }): Promise<ApiResult<import("@/server/n8n").N8nWorkflow>> => {
     try {
+      const c = await ctx();
+      await c.auth.requireUser(c.storage);
       const { createN8nWorkflow, n8nApiKey } = await import("@/server/n8n");
       if (!n8nApiKey()) return { ok: false, error: "N8N_API_KEY não configurada." };
       const payload: import("@/server/n8n").N8nWorkflowCreatePayload = { name: data.name };
@@ -2137,6 +2589,8 @@ export const updateN8nWorkflowFn = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }): Promise<ApiResult<import("@/server/n8n").N8nWorkflow>> => {
     try {
+      const c = await ctx();
+      await c.auth.requireUser(c.storage);
       const { updateN8nWorkflow, n8nApiKey } = await import("@/server/n8n");
       if (!n8nApiKey()) return { ok: false, error: "N8N_API_KEY não configurada." };
       const payload: import("@/server/n8n").N8nWorkflowCreatePayload = { name: data.name };
@@ -2153,6 +2607,8 @@ export const deleteN8nWorkflowFn = createServerFn({ method: "POST" })
   .validator(z.object({ id: z.coerce.number().min(1) }).strict())
   .handler(async ({ data }): Promise<ApiResult<null>> => {
     try {
+      const c = await ctx();
+      await c.auth.requireUser(c.storage);
       const { deleteN8nWorkflow } = await import("@/server/n8n");
       await deleteN8nWorkflow(data.id);
       return { ok: true, data: null };
@@ -2277,14 +2733,43 @@ export const provisionN8nUserFn = createServerFn({ method: "POST" }).handler(
     try {
       const c = await ctx();
       const user = await c.auth.requireUser(c.storage);
-      const { n8nPublicUrl, provisionN8nUser } = await import("@/server/n8n");
-      const password = "Temp12345!";
-      const n8nUser = await provisionN8nUser(user.email, user.name, password);
+      const { n8nPublicUrl } = await import("@/server/n8n");
+      // Fase 1: não criar usuário com senha temporária. O usuário deve usar
+      // o mesmo e-mail/senha do portal no n8n (email.auth-handler.js já valida no portal).
       return {
         ok: true,
         data: {
           n8nUrl: n8nPublicUrl(),
-          message: `Usuário criado no n8n: ${n8nUser.email} (role: ${n8nUser.role}). Senha temporária: ${password}`,
+          message: `Use seu e-mail e senha do portal para entrar no n8n (${user.email}). O acesso é criado automaticamente no primeiro login.`,
+        },
+      };
+    } catch (e) {
+      return { ok: false, error: errorMsg(e) };
+    }
+  },
+);
+
+export const getN8nSsoTokenFn = createServerFn({ method: "POST" }).handler(
+  async (): Promise<ApiResult<{ token: string; expiresAt: string }>> => {
+    try {
+      const c = await ctx();
+      const user = await c.auth.requireUser(c.storage);
+      const secret = (process.env["N8N_SSO_SECRET"] ?? "").trim();
+      if (!secret) {
+        return { ok: false, error: "SSO não configurado (N8N_SSO_SECRET vazio)." };
+      }
+      const { generateSsoToken } = await import("@/server/n8n");
+      const token = generateSsoToken(
+        { email: user.email, firstName: user.name.split(" ")[0] || "", lastName: user.name.split(" ").slice(1).join(" ") || "" },
+        secret,
+        5,
+      );
+      const payload = JSON.parse(Buffer.from(token.split(".")[0]!.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf-8"));
+      return {
+        ok: true,
+        data: {
+          token,
+          expiresAt: new Date(payload.exp * 1000).toISOString(),
         },
       };
     } catch (e) {
@@ -2577,10 +3062,9 @@ export const createPasswordResetFn = createServerFn({ method: "POST" })
       const actor = await c.auth.requirePermission(c.storage, "admin.manage");
       const target = await c.storage.getUserById(data.userId);
       if (!target) return { ok: false, error: "Usuário não encontrado." };
-      const raw = c.newId("rst") + Math.random().toString(36).slice(2);
-      const tokenHash = await (
-        await import("node:crypto")
-      )
+      const crypto = await import("node:crypto");
+      const raw = c.newId("rst") + crypto.randomBytes(16).toString("hex");
+      const tokenHash = await crypto
         .createHash("sha256")
         .update(raw)
         .digest("hex");
@@ -2808,7 +3292,7 @@ export const createInviteFn = createServerFn({ method: "POST" })
     z
       .object({
         email: z.string().trim().email("E-mail inválido").max(120),
-        role: z.enum(["admin", "diretor", "gestor", "desenvolvedor", "auditor"]),
+        role: z.enum(["admin", "diretor", "gestor", "desenvolvedor", "auditor", "visualizador", "cliente"]),
         days: z.coerce.number().int().min(1).max(60).default(7),
       })
       .strict(),
@@ -2918,21 +3402,12 @@ export const revokeInviteFn = createServerFn({ method: "POST" })
 /* ------------------------------------------------------------------ */
 
 export const debugLoginFn = createServerFn({ method: "POST" })
-  .validator(
-    z.object({ email: z.string().min(1), password: z.string().min(1) }).strict(),
-  )
-  .handler(async ({ data }): Promise<ApiResult<Record<string, unknown>>> => {
+  .validator(z.object({ email: z.string().min(1), password: z.string().min(1) }).strict())
+  .handler(async ({ data }) => {
     try {
       const c = await ctx();
+      await c.auth.requirePermission(c.storage, "admin.manage");
       const email = data.email.toLowerCase().trim();
-
-      const pepperEnv =
-        typeof process !== "undefined" && process.env
-          ? process.env["AUTH_PEPPER"] ?? ""
-          : "";
-      const metaPepper = await c.storage.getMeta("auth_pepper");
-      const pepperUsed = c.pepper;
-      const pepperSource = pepperEnv.trim().length > 0 ? "ENV" : "META";
 
       const user = await c.storage.getUserByEmail(email);
       const hash = user?.passwordHash ?? null;
@@ -2942,7 +3417,7 @@ export const debugLoginFn = createServerFn({ method: "POST" })
       let valid = false;
       let verifyError: string | null = null;
       try {
-        valid = c.pw.verifyPassword(data.password, pepperUsed, targetHash);
+        valid = c.pw.verifyPassword(data.password, c.pepper, targetHash);
       } catch (ve) {
         verifyError = ve instanceof Error ? ve.message : String(ve);
       }
@@ -2952,14 +3427,9 @@ export const debugLoginFn = createServerFn({ method: "POST" })
         data: {
           email,
           userFound: !!user,
-          pepperSource,
-          pepperEnvLen: pepperEnv.length,
-          pepperMetaLen: metaPepper?.length ?? 0,
-          pepperUsedLen: pepperUsed.length,
-          pepperUsedPrefix: pepperUsed.slice(0, 8),
-          hashPrefix: hash?.slice(0, 50) ?? "N/A",
-          saltPrefix: salt?.slice(0, 16) ?? "N/A",
-          hashLen: hash?.length ?? 0,
+          hashPresent: !!hash,
+          saltPresent: !!salt,
+          hashLength: hash?.length ?? 0,
           passwordValid: valid,
           verifyError,
         },
@@ -2968,3 +3438,78 @@ export const debugLoginFn = createServerFn({ method: "POST" })
       return { ok: false, error: errorMsg(e) };
     }
   });
+
+/* ------------------------------------------------------------------ */
+/* Equipe: catálogo sincronizado e atrelagem de perfis ao login        */
+/* ------------------------------------------------------------------ */
+
+export const listTeamMembersFn = createServerFn({ method: "GET" }).handler(
+  async (): Promise<ApiResult<TeamMemberLinked[]>> => {
+    try {
+      const c = await ctx();
+      await c.auth.requireUser(c.storage);
+      return { ok: true, data: await listTeamMembers(c.storage) };
+    } catch (e) {
+      return { ok: false, error: errorMsg(e) };
+    }
+  },
+);
+
+export const linkTeamProfileFn = createServerFn({ method: "POST" })
+  .validator(z.object({ memberId: z.string().trim().min(1).max(128) }).strict())
+  .handler(async ({ data }): Promise<ApiResult<PublicUser>> => {
+    try {
+      const c = await ctx();
+      const me = await c.auth.requireUser(c.storage);
+      const member = buildTeamCatalog().find((m) => m.id === data.memberId);
+      if (!member) return { ok: false, error: "Perfil de equipe não encontrado." };
+      const users = await c.storage.listUsers();
+      const taken = users.find((u) => u.teamMemberId === member.id && u.id !== me.id);
+      if (taken) {
+        return { ok: false, error: "Este perfil de equipe já está atrelado a outra conta." };
+      }
+      let row = me;
+      if (me.teamMemberId !== member.id) {
+        await c.storage.updateUser(me.id, { teamMemberId: member.id });
+        row = (await c.storage.getUserById(me.id)) ?? me;
+      }
+      await c.logAudit(
+        c.storage,
+        { id: row.id, name: row.name, role: row.role },
+        {
+          action: "Perfil de equipe atrelado",
+          entity: "equipe",
+          entityId: member.id,
+          after: `${member.name} (${member.group})`,
+        },
+      );
+      return { ok: true, data: await c.auth.publicUserWithFunctions(c.storage, row) };
+    } catch (e) {
+      return { ok: false, error: errorMsg(e) };
+    }
+  });
+
+export const unlinkTeamProfileFn = createServerFn({ method: "POST" }).handler(
+  async (): Promise<ApiResult<PublicUser>> => {
+    try {
+      const c = await ctx();
+      const me = await c.auth.requireUser(c.storage);
+      const previous = buildTeamCatalog().find((m) => m.id === me.teamMemberId);
+      await c.storage.updateUser(me.id, { teamMemberId: null });
+      const row = (await c.storage.getUserById(me.id)) ?? me;
+      await c.logAudit(
+        c.storage,
+        { id: row.id, name: row.name, role: row.role },
+        {
+          action: "Perfil de equipe desatrelado",
+          entity: "equipe",
+          entityId: me.id,
+          after: previous ? previous.name : "ninguém",
+        },
+      );
+      return { ok: true, data: await c.auth.publicUserWithFunctions(c.storage, row) };
+    } catch (e) {
+      return { ok: false, error: errorMsg(e) };
+    }
+  },
+);

@@ -4,7 +4,14 @@
  * (autoridade final: toda mutação valida a permissão novamente).
  */
 
-export type Role = "admin" | "diretor" | "gestor" | "desenvolvedor" | "auditor";
+export type Role =
+  | "admin"
+  | "diretor"
+  | "gestor"
+  | "desenvolvedor"
+  | "auditor"
+  | "visualizador"
+  | "cliente";
 
 /** Papel fictício usado apenas em registros de auditoria sem usuário autenticado. */
 export type SystemRole = "sistema";
@@ -18,6 +25,9 @@ export interface PublicUser {
   jobTitle: string | null;
   department: string | null;
   bio: string | null;
+  avatarUrl: string | null;
+  /** Perfil de equipe (/equipe) atrelado a esta conta (atrelagem). */
+  teamMemberId?: string | null;
   /** Funções concedidas individualmente pelo admin (além das da role). */
   functions: string[];
 }
@@ -99,6 +109,14 @@ export const roleFunctionsData: Record<Role, RoleFunction[]> = {
     { key: "reviews.track", description: "Acompanhar revisões vencidas e pendências" },
     { key: "data.integrity", description: "Validar integridade dos dados e trilhas de acesso" },
   ],
+  visualizador: [
+    { key: "tasks.track", description: "Acompanhar as tarefas do projeto (somente leitura)" },
+    { key: "audit.read", description: "Consultar a trilha de auditoria" },
+  ],
+  cliente: [
+    { key: "tasks.track", description: "Acompanhar tarefas do projeto" },
+    { key: "tasks.comment", description: "Comentar nas tarefas" },
+  ],
 };
 
 /** Retorna as funções de uma role a partir dos dados de função. */
@@ -106,7 +124,15 @@ export function getRoleFunctions(role: Role): RoleFunction[] {
   return roleFunctionsData[role];
 }
 
-export const roles: Role[] = ["admin", "diretor", "gestor", "desenvolvedor", "auditor"];
+export const roles: Role[] = [
+  "admin",
+  "diretor",
+  "gestor",
+  "desenvolvedor",
+  "auditor",
+  "visualizador",
+  "cliente",
+];
 
 export const roleLabel: Record<Role, string> = {
   admin: "Administrador",
@@ -114,6 +140,8 @@ export const roleLabel: Record<Role, string> = {
   gestor: "Gestor",
   desenvolvedor: "Colaborador",
   auditor: "Auditor",
+  visualizador: "Visualizador",
+  cliente: "Cliente",
 };
 
 export const auditableRoleLabel: Record<AuditableRole, string> = {
@@ -141,7 +169,7 @@ export type Permission =
   | "record.manage"
   | "invite.manage";
 
-const matrix: Record<Role, Permission[]> = {
+export const matrix: Record<Role, Permission[]> = {
   admin: [
     "task.create",
     "task.move",
@@ -155,7 +183,6 @@ const matrix: Record<Role, Permission[]> = {
     "wiki.write",
     "wiki.delete",
     "journal.manage",
-    "patent.manage",
     "automation.read",
     "automation.create",
     "automation.share",
@@ -197,6 +224,8 @@ const matrix: Record<Role, Permission[]> = {
     "automation.create",
   ],
   auditor: ["audit.read", "automation.read"],
+  visualizador: ["audit.read"],
+  cliente: ["task.comment"],
 };
 
 export function can(role: Role, permission: Permission) {
@@ -254,6 +283,22 @@ export const roleProfiles: Record<Role, RoleProfile> = {
     functions: roleFunctionsData.auditor.map((f) => f.description),
     permissions: matrix.auditor,
   },
+  visualizador: {
+    role: "visualizador",
+    label: "Visualizador",
+    position: "Observador do Projeto",
+    department: "Projeto",
+    functions: roleFunctionsData.visualizador.map((f) => f.description),
+    permissions: matrix.visualizador,
+  },
+  cliente: {
+    role: "cliente",
+    label: "Cliente",
+    position: "Cliente do Projeto",
+    department: "Projeto",
+    functions: roleFunctionsData.cliente.map((f) => f.description),
+    permissions: matrix.cliente,
+  },
 };
 
 /**
@@ -301,6 +346,7 @@ export const FUNCTION_PERMISSIONS: Record<string, Permission[]> = {
   "modules.track": ["record.manage"],
   "deadlines.manage": [],
   "tasks.move": ["task.move"],
+  "tasks.track": ["task.comment"],
   "tasks.comment": ["task.comment"],
   "modules.implement": [],
   "code.review": [],
@@ -338,3 +384,33 @@ export function isAdminRole(role: Role) {
 
 /** Papel atribuído a novas contas. A primeira conta do banco torna-se admin. */
 export const defaultRoleForNewUser: Role = "desenvolvedor";
+
+export const CLIENT_ROUTES: readonly string[] = ["/", "/perfil", "/termos", "/lgpd", "/tarefas", "/riscos", "/equipe"];
+
+/** Rotas ocultas para o papel visualizador (somente leitura). */
+export const VIEWER_HIDDEN_ROUTES: readonly string[] = ["/admin", "/automacoes"];
+
+export function pageAllowedForRole(role: Role, path: string): boolean {
+  if (role === "cliente") {
+    return CLIENT_ROUTES.some((r) => path === r || path.startsWith(r + "/"));
+  }
+  if (role === "visualizador") {
+    return !VIEWER_HIDDEN_ROUTES.some((r) => path === r || path.startsWith(r + "/"));
+  }
+  return true;
+}
+
+export function menuAllowed(role: Role, to: string): boolean {
+  if (role === "cliente") {
+    return CLIENT_ROUTES.some((r) => to === r || to.startsWith(r + "/"));
+  }
+  if (role === "visualizador") {
+    return !VIEWER_HIDDEN_ROUTES.some((r) => to === r || to.startsWith(r + "/"));
+  }
+  return true;
+}
+
+export function roleHome(role: Role): string {
+  if (role === "cliente") return "/";
+  return "/";
+}

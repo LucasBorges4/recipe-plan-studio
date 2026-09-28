@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&family=Nunito+Sans:ital,opsz,wght@0,6..12,300;0,6..12,400;0,6..12,500;0,6..12,600;0,6..12,700;1,6..12,400&display=swap');
 @import "tailwindcss" source(none);
 @source "../src";
 @import "tw-animate-css";
@@ -104,17 +105,17 @@
   --chart-3: oklch(0.398 0.07 227.392);
   --chart-4: oklch(0.828 0.189 84.429);
   --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.19 0.045 268);
-  --sidebar-foreground: oklch(0.88 0.015 262);
-  --sidebar-primary: oklch(0.28 0.07 268);
+  --sidebar: oklch(0.11 0.06 255);
+  --sidebar-foreground: oklch(0.93 0.015 255);
+  --sidebar-primary: oklch(0.21 0.085 255);
   --sidebar-primary-foreground: oklch(0.99 0.002 247);
-  --sidebar-accent: oklch(0.26 0.055 268);
-  --sidebar-accent-foreground: oklch(0.99 0.002 247);
-  --sidebar-border: oklch(0.28 0.05 268);
-  --sidebar-ring: oklch(0.6 0.12 165);
-  --brand: oklch(0.62 0.13 165);
+  --sidebar-accent: oklch(0.16 0.06 255);
+  --sidebar-accent-foreground: oklch(0.96 0.015 255);
+  --sidebar-border: oklch(0.18 0.05 255);
+  --sidebar-ring: oklch(0.5 0.12 220);
+  --brand: oklch(0.54 0.19 218);
   --brand-foreground: oklch(0.99 0.002 247);
-  --brand-soft: oklch(0.95 0.04 165);
+  --brand-soft: oklch(0.96 0.035 218);
   --success: oklch(0.52 0.12 158);
   --success-foreground: oklch(0.99 0.002 247);
   --success-soft: oklch(0.95 0.05 158);
@@ -156,14 +157,14 @@
   --chart-3: oklch(0.769 0.188 70.08);
   --chart-4: oklch(0.627 0.265 303.9);
   --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.208 0.042 265.755);
-  --sidebar-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-accent: oklch(0.279 0.041 260.031);
-  --sidebar-accent-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.551 0.027 264.364);
+  --sidebar: oklch(0.09 0.065 255);
+  --sidebar-foreground: oklch(0.93 0.015 255);
+  --sidebar-primary: oklch(0.28 0.09 255);
+  --sidebar-primary-foreground: oklch(0.99 0.002 247);
+  --sidebar-accent: oklch(0.18 0.06 255);
+  --sidebar-accent-foreground: oklch(0.96 0.015 255);
+  --sidebar-border: oklch(0.2 0.06 255);
+  --sidebar-ring: oklch(0.5 0.12 220);
 }
 
 @layer base {
@@ -171,8 +172,21 @@
     border-color: var(--color-border);
   }
 
+  html {
+    font-family: 'Manrope', 'Nunito Sans', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  }
+
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
+    font-family: 'Manrope', 'Nunito Sans', ui-sans-serif, system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Manrope', 'Nunito Sans', ui-sans-serif, system-ui, sans-serif;
+    font-weight: 700;
+    letter-spacing: -0.01em;
   }
 }

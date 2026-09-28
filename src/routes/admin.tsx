@@ -87,16 +87,16 @@ import { InvitesPanel } from "@/components/portal/InvitesPanel";
 export const Route = createFileRoute("/admin")({
   head: () => ({
     meta: [
-      { title: "Administração — Portal de Governança Grupo W. Geotec CAFUFV" },
+      { title: "Administração — Portal de Governança GWG — Grupo W. Geotec" },
       {
         name: "description",
         content:
           "Gestão de usuários e papéis, módulos do sistema, colunas do board e versões dos documentos institucionais.",
       },
-      { property: "og:title", content: "Administração — Grupo W. Geotec CAFUFV" },
+      { property: "og:title", content: "Administração — GWG — Grupo W. Geotec" },
       {
         property: "og:description",
-        content: "Configuração do Portal de Governança do Grupo W. Geotec CAFUFV.",
+        content: "Configuração do Portal de Governança do GWG — Grupo W. Geotec.",
       },
     ],
   }),
@@ -108,7 +108,9 @@ const roleTone: Record<Role, "danger" | "info" | "neutral" | "warning"> = {
   diretor: "info",
   gestor: "info",
   desenvolvedor: "neutral",
-  auditor: "warning",
+auditor: "warning",
+   visualizador: "info",
+   cliente: "neutral",
 };
 
 function DeleteButton({ label, onConfirm }: { label: string; onConfirm: () => void }) {
@@ -223,8 +225,10 @@ function UserFunctionsDialog({
   const bulkM = useMutation({
     mutationFn: async (v: { keys: string[]; grant: boolean }) => {
       for (const k of v.keys) {
-        if (v.grant && !granted.has(k)) await grantUserFunctionFn({ data: { userId: user.id, functionKey: k } });
-        if (!v.grant && granted.has(k)) await revokeUserFunctionFn({ data: { userId: user.id, functionKey: k } });
+        if (v.grant && !granted.has(k))
+          await grantUserFunctionFn({ data: { userId: user.id, functionKey: k } });
+        if (!v.grant && granted.has(k))
+          await revokeUserFunctionFn({ data: { userId: user.id, functionKey: k } });
       }
     },
     onSuccess: (_data, vars) => {
@@ -277,7 +281,8 @@ function UserFunctionsDialog({
             <StatusBadge tone={roleTone[user.role]}>{roleLabel[user.role]}</StatusBadge>
           </div>
           <DialogDescription className="text-xs">
-            Papel base: <strong>{roleLabel[user.role]}</strong>. Atribua funções específicas ou inspecione a matriz final de permissões efetivas do usuário.
+            Papel base: <strong>{roleLabel[user.role]}</strong>. Atribua funções específicas ou
+            inspecione a matriz final de permissões efetivas do usuário.
           </DialogDescription>
         </DialogHeader>
 
@@ -300,7 +305,8 @@ function UserFunctionsDialog({
                 : "border-transparent text-muted-foreground hover:text-foreground"
             }`}
           >
-            Permissões Efetivas ({effectivePermissions.size} ativa{effectivePermissions.size !== 1 ? "s" : ""})
+            Permissões Efetivas ({effectivePermissions.size} ativa
+            {effectivePermissions.size !== 1 ? "s" : ""})
           </button>
         </div>
 
@@ -310,7 +316,9 @@ function UserFunctionsDialog({
             <div className="rounded-xl border border-brand/20 bg-brand-soft/10 p-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs font-semibold text-foreground">Delegação rápida por módulo</p>
+                  <p className="text-xs font-semibold text-foreground">
+                    Delegação rápida por módulo
+                  </p>
                   <p className="mt-0.5 text-[11px] text-muted-foreground">
                     Conceda em 1 clique todas as funções necessárias para os módulos do sistema.
                   </p>
@@ -330,13 +338,18 @@ function UserFunctionsDialog({
                   const hasAll = m.keys.every((k) => granted.has(k));
                   const hasSome = !hasAll && m.keys.some((k) => granted.has(k));
                   return (
-                    <div key={m.label} className="flex items-center justify-between rounded-lg border border-border bg-card px-3 py-2">
+                    <div
+                      key={m.label}
+                      className="flex items-center justify-between rounded-lg border border-border bg-card px-3 py-2"
+                    >
                       <div>
                         <p className="text-xs font-medium text-foreground">
                           {m.icon} {m.label} {hasAll ? "· concedido" : hasSome ? "· parcial" : ""}
                         </p>
                         <p className="text-[11px] text-muted-foreground">{m.description}</p>
-                        <p className="font-mono text-[10px] text-muted-foreground">{m.keys.join(", ")}</p>
+                        <p className="font-mono text-[10px] text-muted-foreground">
+                          {m.keys.join(", ")}
+                        </p>
                       </div>
                       <button
                         disabled={bulkM.isPending}
@@ -353,7 +366,9 @@ function UserFunctionsDialog({
 
             {groups.map((g) => (
               <section key={g.role}>
-                <p className="mb-2 text-xs font-semibold text-foreground">Funções do Perfil {roleLabel[g.role]}</p>
+                <p className="mb-2 text-xs font-semibold text-foreground">
+                  Funções do Perfil {roleLabel[g.role]}
+                </p>
                 <ul className="space-y-1.5">
                   {g.items.map((f) => {
                     const isGranted = granted.has(f.key);
@@ -403,7 +418,8 @@ function UserFunctionsDialog({
         ) : (
           <div className="space-y-3 pt-2">
             <p className="text-xs text-muted-foreground">
-              Esta lista consolida as permissões ativas de <strong>{user.name}</strong>, separadas por origem (papel base vs funções concedidas especificamente ao usuário).
+              Esta lista consolida as permissões ativas de <strong>{user.name}</strong>, separadas
+              por origem (papel base vs funções concedidas especificamente ao usuário).
             </p>
             <div className="rounded-xl border border-border bg-card overflow-hidden">
               <table className="w-full text-left text-xs">
@@ -424,7 +440,9 @@ function UserFunctionsDialog({
                       <tr key={p.key} className="hover:bg-muted/20">
                         <td className="px-3 py-2 font-medium text-foreground">
                           {p.label}
-                          <span className="block font-mono text-[10px] text-muted-foreground">{p.key}</span>
+                          <span className="block font-mono text-[10px] text-muted-foreground">
+                            {p.key}
+                          </span>
                         </td>
                         <td className="px-3 py-2 text-muted-foreground">{p.group}</td>
                         <td className="px-3 py-2 text-right">
@@ -535,7 +553,9 @@ function PerfisSection() {
             Matriz de Permissões para Alteração do Ambiente
           </h3>
           <p className="text-xs text-muted-foreground">
-            O Administrador pode configurar e atribuir qualquer uma destas permissões individualmente a usuários de qualquer papel através do botão <strong>"Funções"</strong> na aba Usuários.
+            O Administrador pode configurar e atribuir qualquer uma destas permissões
+            individualmente a usuários de qualquer papel através do botão <strong>"Funções"</strong>{" "}
+            na aba Usuários.
           </p>
         </div>
 
@@ -1007,7 +1027,7 @@ function AdminPage() {
               <input
                 value={nuEmail}
                 onChange={(e) => setNuEmail(e.target.value)}
-                placeholder="email@grupogeos.com.br"
+                placeholder="email@grupogwg.com.br"
                 className="flex-1 rounded-md border border-input bg-card px-3 py-2 text-xs"
               />
               <input
@@ -1108,7 +1128,8 @@ function AdminPage() {
           <div className="rounded-xl border border-border bg-card overflow-hidden">
             <div className="px-4 py-2.5 bg-muted/30 border-b border-border flex items-center justify-between text-xs text-muted-foreground">
               <span>
-                Exibindo <strong>{filteredUsers.length}</strong> de <strong>{users.length}</strong> usuários
+                Exibindo <strong>{filteredUsers.length}</strong> de <strong>{users.length}</strong>{" "}
+                usuários
               </span>
               {roleFilter !== "all" || userSearch ? (
                 <button
@@ -1125,8 +1146,22 @@ function AdminPage() {
 
             <ul className="divide-y divide-border">
               {filteredUsers.map((u) => (
-                <li key={u.id} className="flex flex-wrap items-center gap-3 p-4 hover:bg-muted/10 transition-colors">
-                  <Initials name={u.name} className="size-9 text-xs font-semibold" />
+                <li
+                  key={u.id}
+                  className="flex flex-wrap items-center gap-3 p-4 hover:bg-muted/10 transition-colors"
+                >
+                  {u.avatarUrl ? (
+                    <img
+                      src={u.avatarUrl}
+                      alt={u.name}
+                      className="size-9 rounded-full object-cover"
+                      loading="lazy"
+                      decoding="async"
+                      draggable={false}
+                    />
+                  ) : (
+                    <Initials name={u.name} className="size-9 text-xs font-semibold" />
+                  )}
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-medium text-foreground">{u.name}</p>
@@ -1145,7 +1180,9 @@ function AdminPage() {
                     value={u.role}
                     aria-label={`Papel de ${u.name}`}
                     disabled={u.id === session?.user?.id}
-                    onChange={(e) => setRoleM.mutate({ userId: u.id, role: e.target.value as Role })}
+                    onChange={(e) =>
+                      setRoleM.mutate({ userId: u.id, role: e.target.value as Role })
+                    }
                     className="rounded-md border border-input bg-card px-2.5 py-1.5 text-xs disabled:opacity-60 font-medium"
                   >
                     {roles.map((r) => (
@@ -1267,7 +1304,8 @@ function AdminPage() {
           <div className="rounded-xl border border-border bg-card p-4">
             <h3 className="text-sm font-semibold text-foreground">Stacks de Tecnologia</h3>
             <p className="mt-1 text-xs text-muted-foreground">
-              Cadastre tecnologias usadas no projeto. Visível em Engenharia; gerenciado apenas pelo admin.
+              Cadastre tecnologias usadas no projeto. Visível em Equipe do Projeto; gerenciado apenas pelo
+              admin.
             </p>
             <div className="mt-4 grid gap-2 md:grid-cols-4">
               <input
@@ -1307,19 +1345,30 @@ function AdminPage() {
                   ...(stackIcon.trim() ? { icon: stackIcon.trim() } : {}),
                 })
               }
-              disabled={createStackM.isPending || !stackName.trim() || !stackCategory.trim() || stackDesc.trim().length < 5}
+              disabled={
+                createStackM.isPending ||
+                !stackName.trim() ||
+                !stackCategory.trim() ||
+                stackDesc.trim().length < 5
+              }
               className="mt-3 inline-flex items-center gap-1 rounded-md bg-brand px-4 py-2 text-xs font-medium text-brand-foreground disabled:opacity-50"
             >
-              <Plus className="size-4" /> {createStackM.isPending ? "Adicionando..." : "Adicionar stack"}
+              <Plus className="size-4" />{" "}
+              {createStackM.isPending ? "Adicionando..." : "Adicionar stack"}
             </button>
             <ul className="mt-4 divide-y divide-border">
               {techStack.map((t) => (
                 <li key={t.name} className="flex items-center justify-between py-2.5">
                   <div>
-                    <p className="text-sm font-medium text-foreground">{t.name} <span className="text-xs text-muted-foreground">· {t.category}</span></p>
+                    <p className="text-sm font-medium text-foreground">
+                      {t.name} <span className="text-xs text-muted-foreground">· {t.category}</span>
+                    </p>
                     <p className="text-xs text-muted-foreground">{t.description}</p>
                   </div>
-                  <DeleteButton label={t.name} onConfirm={() => deleteStackM.mutate({ name: t.name })} />
+                  <DeleteButton
+                    label={t.name}
+                    onConfirm={() => deleteStackM.mutate({ name: t.name })}
+                  />
                 </li>
               ))}
               {techStack.length === 0 ? (
@@ -1328,9 +1377,12 @@ function AdminPage() {
             </ul>
           </div>
           <div className="mt-4 rounded-xl border border-border bg-card p-4">
-            <h3 className="text-sm font-semibold text-foreground">Mapa de Riscos — Geração Automática</h3>
+            <h3 className="text-sm font-semibold text-foreground">
+              Mapa de Riscos — Geração Automática
+            </h3>
             <p className="mt-1 text-xs text-muted-foreground">
-              Gera riscos automaticamente a partir de tarefas atrasadas e controles vencidos. Evita duplicatas por título.
+              Gera riscos automaticamente a partir de tarefas atrasadas e controles vencidos. Evita
+              duplicatas por título.
             </p>
             <button
               onClick={() => autoRiskM.mutate()}

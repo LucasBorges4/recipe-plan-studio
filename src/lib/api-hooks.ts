@@ -1,4 +1,5 @@
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
+import { toast } from "sonner";
 import {
   listPublicUsersFn,
   meFn,
@@ -13,8 +14,13 @@ import {
   revokeAllSessionsFn,
   globalSearchFn,
   listInvitesFn,
+  getPublicUserFn,
+  listTeamMembersFn,
+  linkTeamProfileFn,
+  unlinkTeamProfileFn,
 } from "@/lib/portal-api";
 import type { PublicUser } from "@/lib/rbac";
+import type { TeamMemberLinked } from "@/lib/team-photos";
 import type { AuditEntry, PortalStatePayload } from "@/lib/records";
 import type { N8nWorkflow } from "@/server/n8n";
 
@@ -147,6 +153,15 @@ export function useGlobalSearch(q: string) {
   });
 }
 
+export function usePublicUser(userId: string | undefined) {
+  return useQuery({
+    queryKey: ["public-user", userId] as const,
+    queryFn: () => getPublicUserFn({ data: { userId: userId! } }),
+    enabled: !!userId,
+    staleTime: 60_000,
+  });
+}
+
 export function useInvites() {
   return useQuery({
     queryKey: ["invites"] as const,
@@ -154,3 +169,45 @@ export function useInvites() {
     staleTime: 30_000,
   });
 }
+
+export function useTeamMembers() {
+  return useQuery({
+    queryKey: ["team-members"] as const,
+    queryFn: () => listTeamMembersFn(),
+    staleTime: 60_000,
+  });
+}
+
+export function useLinkTeamProfile() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (memberId: string) => linkTeamProfileFn({ data: { memberId } }),
+    onSuccess: (res) => {
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      queryClient.invalidateQueries({ queryKey: ["team-members"] });
+      queryClient.invalidateQueries({ queryKey: qk.session });
+      queryClient.invalidateQueries({ queryKey: ["public-users"] });
+    },
+  });
+}
+
+export function useUnlinkTeamProfile() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => unlinkTeamProfileFn(),
+    onSuccess: (res) => {
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      queryClient.invalidateQueries({ queryKey: ["team-members"] });
+      queryClient.invalidateQueries({ queryKey: qk.session });
+      queryClient.invalidateQueries({ queryKey: ["public-users"] });
+    },
+  });
+}
+
+export type { TeamMemberLinked };

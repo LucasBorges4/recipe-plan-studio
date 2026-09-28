@@ -96,7 +96,7 @@ export function InvitesPanel() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="pessoa@grupogeos.com.br"
+              placeholder="pessoa@grupogwg.com.br"
               required
             />
           </div>
@@ -185,7 +185,9 @@ export function InvitesPanel() {
               </p>
             </div>
             <StatusBadge
-              tone={i.status === "Pendente" ? "info" : i.status === "Utilizado" ? "success" : "warning"}
+              tone={
+                i.status === "Pendente" ? "info" : i.status === "Utilizado" ? "success" : "warning"
+              }
             >
               {i.status}
             </StatusBadge>

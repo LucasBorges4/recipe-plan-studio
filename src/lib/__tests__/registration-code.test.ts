@@ -21,8 +21,8 @@ describe("expectedRegistrationCode", () => {
     expect(expectedRegistrationCode()).toBeNull();
   });
   it("retorna REGISTRATION_CODE quando definido", () => {
-    process.env["REGISTRATION_CODE"] = "GEOS2026";
-    expect(expectedRegistrationCode()).toBe("GEOS2026");
+    process.env["REGISTRATION_CODE"] = "GWG2026";
+    expect(expectedRegistrationCode()).toBe("GWG2026");
   });
   it("usa alias INVITE_CODE", () => {
     delete process.env["REGISTRATION_CODE"];
@@ -34,7 +34,7 @@ describe("expectedRegistrationCode", () => {
     expect(expectedRegistrationCode()).toBeNull();
   });
   it("trim do código", () => {
-    process.env["REGISTRATION_CODE"] = "  GEOS2026  ";
-    expect(expectedRegistrationCode()).toBe("GEOS2026");
+    process.env["REGISTRATION_CODE"] = "  GWG2026  ";
+    expect(expectedRegistrationCode()).toBe("GWG2026");
   });
 });

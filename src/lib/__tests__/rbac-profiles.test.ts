@@ -19,12 +19,10 @@ describe("roleProfiles", () => {
     expect(can("admin", "wiki.write")).toBe(true);
     expect(can("admin", "wiki.delete")).toBe(true);
     expect(can("admin", "journal.manage")).toBe(true);
-    expect(can("admin", "patent.manage")).toBe(true);
   });
   it("auditor não tem permissões de escrita", () => {
     expect(can("auditor", "risk.manage")).toBe(false);
     expect(can("auditor", "wiki.write")).toBe(false);
-    expect(can("auditor", "patent.manage")).toBe(false);
   });
   it("gestor e desenvolvedor têm wiki.write", () => {
     expect(can("gestor", "wiki.write")).toBe(true);

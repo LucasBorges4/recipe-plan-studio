@@ -21,7 +21,9 @@ export class TursoStorage extends SqliteBackend {
 
   static async open(url: string, authToken?: string): Promise<TursoStorage | null> {
     try {
-      const client = createClient({ url, authToken: authToken ?? "" } as unknown as Parameters<typeof createClient>[0]);
+      const client = createClient({ url, authToken: authToken ?? "" } as unknown as Parameters<
+        typeof createClient
+      >[0]);
       // testa conexão
       await client.execute("SELECT 1");
       const store = new TursoStorage(client, url);
@@ -36,12 +38,17 @@ export class TursoStorage extends SqliteBackend {
 
   private async execSchema() {
     // Importa SCHEMA do SqliteBackend via execução direta
-    const { SCHEMA } = await import("./storage");
+    const { SCHEMA, ensureTasksMigration } = await import("./storage");
     // SCHEMA é string com múltiplos CREATE TABLE — libera via exec
     await this.exec(SCHEMA);
+    // Migração aditiva (idempotente)
+    await ensureTasksMigration((sql: string) => this.exec(sql));
   }
 
-  protected override async one(sql: string, ...params: (string | number | null | Uint8Array)[]): Promise<Record<string, any> | undefined> {
+  protected override async one(
+    sql: string,
+    ...params: (string | number | null | Uint8Array)[]
+  ): Promise<Record<string, any> | undefined> {
     const r = await this.client.execute({ sql, args: params as any });
     const row: any = r.rows[0];
     if (!row) return undefined;

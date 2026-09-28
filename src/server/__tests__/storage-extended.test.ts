@@ -20,9 +20,11 @@ describe.each(factories())("$name: perfis e clearAllUsers", ({ make }) => {
       jobTitle: "Gestora",
       department: "Operações",
       bio: "Lidera operações",
+      avatarUrl: null,
       passwordHash: "h",
       passwordSalt: "s",
       createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
     });
     const got = await s.getUserByEmail("ana@x.com");
     expect(got?.department).toBe("Operações");
@@ -44,9 +46,11 @@ describe.each(factories())("$name: perfis e clearAllUsers", ({ make }) => {
       jobTitle: null,
       department: null,
       bio: null,
+      avatarUrl: null,
       passwordHash: "h",
       passwordSalt: "s",
       createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     });
     await s.insertSession({
       tokenHash: "h1",
@@ -167,9 +171,11 @@ describe.each(factories())("$name: funções por usuário (user_functions)", ({ 
       jobTitle: null,
       department: null,
       bio: null,
+      avatarUrl: null,
       passwordHash: "h",
       passwordSalt: "s",
       createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
     });
     return id;
   }

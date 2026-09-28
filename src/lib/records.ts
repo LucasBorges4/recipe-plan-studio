@@ -1,5 +1,6 @@
 import type {
   ComplianceControl,
+  JournalEntry,
   Milestone,
   Module,
   PatentStage,
@@ -84,12 +85,14 @@ export interface PortalStatePayload {
   persistent: boolean;
   storagePath?: string | undefined;
   storageInitError?: string | null | undefined;
-  storageEnv?: {
-    postgresUrl: boolean;
-    postgresNonPooling: boolean;
-    tursoUrl: boolean;
-    databaseUrl: boolean;
-  } | undefined;
+  storageEnv?:
+    | {
+        postgresUrl: boolean;
+        postgresNonPooling: boolean;
+        tursoUrl: boolean;
+        databaseUrl: boolean;
+      }
+    | undefined;
   lastBackupAt?: string | null | undefined;
   tasks: Task[];
   columns: string[];
@@ -101,6 +104,7 @@ export interface PortalStatePayload {
   wiki: WikiArticle[];
   milestones: Milestone[];
   releases: Release[];
+  journal: JournalEntry[];
   patentStages: PatentStage[];
   techStack: TechItem[];
   nextSteps: NextStepRecord[];

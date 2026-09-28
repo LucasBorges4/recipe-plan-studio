@@ -1,8 +1,15 @@
 import { describe, it, expect } from "vitest";
-import { SqliteStorage, MemoryStorage, type Storage, type UserRow, type RoleFunctionRow } from "@/server/storage";
+import {
+  SqliteStorage,
+  MemoryStorage,
+  type Storage,
+  type UserRow,
+  type RoleFunctionRow,
+} from "@/server/storage";
 import { type Role } from "@/lib/rbac";
 import type { Task, ComplianceControl, Module } from "@/data/types";
 import type { EvidenceRecord, AuditEntry, CommentRecord } from "@/lib/records";
+import { columnToStage, inferProgressFromStage, isWaitingOnClient } from "@/lib/task-stages";
 
 function factories(): { name: string; make: () => Promise<Storage> }[] {
   return [
@@ -20,13 +27,16 @@ function user(id: string, email: string, role: UserRow["role"]): UserRow {
     jobTitle: null,
     department: null,
     bio: null,
+    avatarUrl: null,
     passwordHash: "hash",
     passwordSalt: "salt",
     createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
   };
 }
 
 function task(id: string, column: string): Task {
+  const stage = columnToStage(column);
   return {
     id,
     title: `Tarefa ${id}`,
@@ -35,6 +45,10 @@ function task(id: string, column: string): Task {
     priority: "Média",
     tags: ["x"],
     assignee: "eu",
+    stage,
+    progress: inferProgressFromStage(stage),
+    responsible: null,
+    waitingOnClient: isWaitingOnClient(stage),
   };
 }
 
@@ -219,7 +233,9 @@ describe.each(factories())("$name: role_functions", ({ make }) => {
 
   it("deleteRoleFunctions remove todas as funções de uma role", async () => {
     const storage = await make();
-    await storage.syncRoleFunctions("admin", [{ key: "users.manage", description: "Gerenciar usuários" }]);
+    await storage.syncRoleFunctions("admin", [
+      { key: "users.manage", description: "Gerenciar usuários" },
+    ]);
     expect(await storage.listRoleFunctions("admin")).toHaveLength(1);
     await storage.deleteRoleFunctions("admin");
     expect(await storage.listRoleFunctions("admin")).toHaveLength(0);
@@ -232,7 +248,9 @@ describe.each(factories())("$name: role_functions", ({ make }) => {
 
   it("syncRoleFunctions substitui funções existentes da role", async () => {
     const storage = await make();
-    await storage.syncRoleFunctions("gestor", [{ key: "tasks.manage", description: "Gerenciar tarefas" }]);
+    await storage.syncRoleFunctions("gestor", [
+      { key: "tasks.manage", description: "Gerenciar tarefas" },
+    ]);
     expect(await storage.listRoleFunctions("gestor")).toHaveLength(1);
     await storage.syncRoleFunctions("gestor", [{ key: "new.key", description: "Nova função" }]);
     const all = await storage.listAllRoleFunctions();

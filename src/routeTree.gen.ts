@@ -15,7 +15,7 @@ import { Route as AuditoriaRouteImport } from './routes/auditoria'
 import { Route as AutomacoesRouteImport } from './routes/automacoes'
 import { Route as ComplianceRouteImport } from './routes/compliance'
 import { Route as DiarioRouteImport } from './routes/diario'
-import { Route as EngenhariaRouteImport } from './routes/engenharia'
+import { Route as EquipeRouteImport } from './routes/equipe'
 import { Route as LgpdRouteImport } from './routes/lgpd'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as PerfilRouteImport } from './routes/perfil'
@@ -23,6 +23,7 @@ import { Route as RiscosRouteImport } from './routes/riscos'
 import { Route as TarefasRouteImport } from './routes/tarefas'
 import { Route as TermosRouteImport } from './routes/termos'
 import { Route as WikiRouteImport } from './routes/wiki'
+import { Route as PerfilUserIdRouteImport } from './routes/perfil.$userId'
 import { Route as WikiIndexRouteImport } from './routes/wiki.index'
 import { Route as WikiSlugRouteImport } from './routes/wiki.$slug'
 
@@ -56,9 +57,9 @@ const DiarioRoute = DiarioRouteImport.update({
   path: '/diario',
   getParentRoute: () => rootRouteImport,
 } as any)
-const EngenhariaRoute = EngenhariaRouteImport.update({
-  id: '/engenharia',
-  path: '/engenharia',
+const EquipeRoute = EquipeRouteImport.update({
+  id: '/equipe',
+  path: '/equipe',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LgpdRoute = LgpdRouteImport.update({
@@ -96,6 +97,11 @@ const WikiRoute = WikiRouteImport.update({
   path: '/wiki',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PerfilUserIdRoute = PerfilUserIdRouteImport.update({
+  id: '/$userId',
+  path: '/$userId',
+  getParentRoute: () => PerfilRoute,
+} as any)
 const WikiIndexRoute = WikiIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -114,14 +120,15 @@ export interface FileRoutesByFullPath {
   '/automacoes': typeof AutomacoesRoute
   '/compliance': typeof ComplianceRoute
   '/diario': typeof DiarioRoute
-  '/engenharia': typeof EngenhariaRoute
+  '/equipe': typeof EquipeRoute
   '/lgpd': typeof LgpdRoute
   '/login': typeof LoginRoute
-  '/perfil': typeof PerfilRoute
+  '/perfil': typeof PerfilRouteWithChildren
   '/riscos': typeof RiscosRoute
   '/tarefas': typeof TarefasRoute
   '/termos': typeof TermosRoute
   '/wiki': typeof WikiRouteWithChildren
+  '/perfil/$userId': typeof PerfilUserIdRoute
   '/wiki/$slug': typeof WikiSlugRoute
   '/wiki/': typeof WikiIndexRoute
 }
@@ -132,13 +139,14 @@ export interface FileRoutesByTo {
   '/automacoes': typeof AutomacoesRoute
   '/compliance': typeof ComplianceRoute
   '/diario': typeof DiarioRoute
-  '/engenharia': typeof EngenhariaRoute
+  '/equipe': typeof EquipeRoute
   '/lgpd': typeof LgpdRoute
   '/login': typeof LoginRoute
-  '/perfil': typeof PerfilRoute
+  '/perfil': typeof PerfilRouteWithChildren
   '/riscos': typeof RiscosRoute
   '/tarefas': typeof TarefasRoute
   '/termos': typeof TermosRoute
+  '/perfil/$userId': typeof PerfilUserIdRoute
   '/wiki/$slug': typeof WikiSlugRoute
   '/wiki': typeof WikiIndexRoute
 }
@@ -150,14 +158,15 @@ export interface FileRoutesById {
   '/automacoes': typeof AutomacoesRoute
   '/compliance': typeof ComplianceRoute
   '/diario': typeof DiarioRoute
-  '/engenharia': typeof EngenhariaRoute
+  '/equipe': typeof EquipeRoute
   '/lgpd': typeof LgpdRoute
   '/login': typeof LoginRoute
-  '/perfil': typeof PerfilRoute
+  '/perfil': typeof PerfilRouteWithChildren
   '/riscos': typeof RiscosRoute
   '/tarefas': typeof TarefasRoute
   '/termos': typeof TermosRoute
   '/wiki': typeof WikiRouteWithChildren
+  '/perfil/$userId': typeof PerfilUserIdRoute
   '/wiki/$slug': typeof WikiSlugRoute
   '/wiki/': typeof WikiIndexRoute
 }
@@ -170,7 +179,7 @@ export interface FileRouteTypes {
     | '/automacoes'
     | '/compliance'
     | '/diario'
-    | '/engenharia'
+    | '/equipe'
     | '/lgpd'
     | '/login'
     | '/perfil'
@@ -178,6 +187,7 @@ export interface FileRouteTypes {
     | '/tarefas'
     | '/termos'
     | '/wiki'
+    | '/perfil/$userId'
     | '/wiki/$slug'
     | '/wiki/'
   fileRoutesByTo: FileRoutesByTo
@@ -188,13 +198,14 @@ export interface FileRouteTypes {
     | '/automacoes'
     | '/compliance'
     | '/diario'
-    | '/engenharia'
+    | '/equipe'
     | '/lgpd'
     | '/login'
     | '/perfil'
     | '/riscos'
     | '/tarefas'
     | '/termos'
+    | '/perfil/$userId'
     | '/wiki/$slug'
     | '/wiki'
   id:
@@ -205,7 +216,7 @@ export interface FileRouteTypes {
     | '/automacoes'
     | '/compliance'
     | '/diario'
-    | '/engenharia'
+    | '/equipe'
     | '/lgpd'
     | '/login'
     | '/perfil'
@@ -213,6 +224,7 @@ export interface FileRouteTypes {
     | '/tarefas'
     | '/termos'
     | '/wiki'
+    | '/perfil/$userId'
     | '/wiki/$slug'
     | '/wiki/'
   fileRoutesById: FileRoutesById
@@ -224,10 +236,10 @@ export interface RootRouteChildren {
   AutomacoesRoute: typeof AutomacoesRoute
   ComplianceRoute: typeof ComplianceRoute
   DiarioRoute: typeof DiarioRoute
-  EngenhariaRoute: typeof EngenhariaRoute
+  EquipeRoute: typeof EquipeRoute
   LgpdRoute: typeof LgpdRoute
   LoginRoute: typeof LoginRoute
-  PerfilRoute: typeof PerfilRoute
+  PerfilRoute: typeof PerfilRouteWithChildren
   RiscosRoute: typeof RiscosRoute
   TarefasRoute: typeof TarefasRoute
   TermosRoute: typeof TermosRoute
@@ -278,11 +290,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DiarioRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/engenharia': {
-      id: '/engenharia'
-      path: '/engenharia'
-      fullPath: '/engenharia'
-      preLoaderRoute: typeof EngenhariaRouteImport
+    '/equipe': {
+      id: '/equipe'
+      path: '/equipe'
+      fullPath: '/equipe'
+      preLoaderRoute: typeof EquipeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/lgpd': {
@@ -334,6 +346,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WikiRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/perfil/$userId': {
+      id: '/perfil/$userId'
+      path: '/$userId'
+      fullPath: '/perfil/$userId'
+      preLoaderRoute: typeof PerfilUserIdRouteImport
+      parentRoute: typeof PerfilRoute
+    }
     '/wiki/': {
       id: '/wiki/'
       path: '/'
@@ -350,6 +369,17 @@ declare module '@tanstack/react-router' {
     }
   }
 }
+
+interface PerfilRouteChildren {
+  PerfilUserIdRoute: typeof PerfilUserIdRoute
+}
+
+const PerfilRouteChildren: PerfilRouteChildren = {
+  PerfilUserIdRoute: PerfilUserIdRoute,
+}
+
+const PerfilRouteWithChildren =
+  PerfilRoute._addFileChildren(PerfilRouteChildren)
 
 interface WikiRouteChildren {
   WikiSlugRoute: typeof WikiSlugRoute
@@ -370,10 +400,10 @@ const rootRouteChildren: RootRouteChildren = {
   AutomacoesRoute: AutomacoesRoute,
   ComplianceRoute: ComplianceRoute,
   DiarioRoute: DiarioRoute,
-  EngenhariaRoute: EngenhariaRoute,
+  EquipeRoute: EquipeRoute,
   LgpdRoute: LgpdRoute,
   LoginRoute: LoginRoute,
-  PerfilRoute: PerfilRoute,
+  PerfilRoute: PerfilRouteWithChildren,
   RiscosRoute: RiscosRoute,
   TarefasRoute: TarefasRoute,
   TermosRoute: TermosRoute,

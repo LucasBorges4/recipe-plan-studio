@@ -13,9 +13,11 @@ describe("updateUserPassword", () => {
       jobTitle: null,
       department: null,
       bio: null,
+      avatarUrl: null,
       passwordHash: "old",
       passwordSalt: "old",
       createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
     });
     await updateUserPassword(storage, "u1", "newhash", "newsalt");
     const user = await storage.getUserById("u1");

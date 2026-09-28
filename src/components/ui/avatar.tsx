@@ -4,14 +4,23 @@ import * as React from "react";
 import * as AvatarPrimitive from "@radix-ui/react-avatar";
 
 import { cn } from "@/lib/utils";
+import { PHOTO_ASPECT_CSS } from "@/lib/photo-frame";
 
+/**
+ * Avatar do portal: a moldura é 4:3 (`PHOTO_ASPECT_CSS`), não um círculo.
+ * A largura sai da proporção — passe **apenas a altura** (`h-10`); `size-*` não
+ * serve, porque fixa as duas dimensões e anula o `aspect-ratio`.
+ */
 const Avatar = React.forwardRef<
   React.ElementRef<typeof AvatarPrimitive.Root>,
   React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Root>
 >(({ className, ...props }, ref) => (
   <AvatarPrimitive.Root
     ref={ref}
-    className={cn("relative flex h-10 w-10 shrink-0 overflow-hidden rounded-full", className)}
+    className={cn(
+      `relative flex h-10 shrink-0 overflow-hidden rounded-lg ${PHOTO_ASPECT_CSS}`,
+      className,
+    )}
     {...props}
   />
 ));
@@ -23,7 +32,7 @@ const AvatarImage = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <AvatarPrimitive.Image
     ref={ref}
-    className={cn("aspect-square h-full w-full", className)}
+    className={cn("h-full w-full object-cover", className)}
     {...props}
   />
 ));
@@ -35,10 +44,7 @@ const AvatarFallback = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <AvatarPrimitive.Fallback
     ref={ref}
-    className={cn(
-      "flex h-full w-full items-center justify-center rounded-full bg-muted",
-      className,
-    )}
+    className={cn("flex h-full w-full items-center justify-center rounded-lg bg-muted", className)}
     {...props}
   />
 ));

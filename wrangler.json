@@ -3,9 +3,7 @@
   "name": "recipe-plan-studio",
   "main": "server.ts",
   "compatibility_date": "2026-09-01",
-  "compatibility_flags": [
-    "nodejs_compat"
-  ],
+  "compatibility_flags": ["nodejs_compat"],
   "d1_databases": [
     {
       "binding": "DB",

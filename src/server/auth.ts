@@ -1,6 +1,7 @@
 import { getCookie, setCookie, deleteCookie, getRequestHeader } from "@tanstack/react-start/server";
 import type { PublicUser } from "@/lib/rbac";
 import { userCan, type Permission } from "@/lib/rbac";
+import { photoForName } from "@/lib/team-photos";
 import type { Storage, UserRow } from "./storage";
 
 /**
@@ -46,6 +47,8 @@ export function publicUser(u: UserRow, functions: readonly string[] = []): Publi
     jobTitle: u.jobTitle,
     department: u.department,
     bio: u.bio,
+    avatarUrl: photoForName(u.name, u.avatarUrl) ?? null,
+    teamMemberId: u.teamMemberId ?? null,
     functions: [...functions],
   };
 }

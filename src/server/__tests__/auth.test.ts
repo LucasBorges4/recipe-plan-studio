@@ -12,13 +12,16 @@ describe("publicUser mapeia perfil estendido", () => {
       jobTitle: "Gestora",
       department: "Operações",
       bio: "Bio aqui",
+      avatarUrl: null,
       passwordHash: "h",
       passwordSalt: "s",
       createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
     };
     const pub = publicUser(row);
     expect(pub.department).toBe("Operações");
     expect(pub.bio).toBe("Bio aqui");
+    expect(pub.avatarUrl).toBeNull();
     expect(pub.jobTitle).toBe("Gestora");
     expect((pub as unknown as Record<string, unknown>)["passwordHash"]).toBeUndefined();
   });
@@ -31,12 +34,15 @@ describe("publicUser mapeia perfil estendido", () => {
       jobTitle: null,
       department: null,
       bio: null,
+      avatarUrl: null,
       passwordHash: "h",
       passwordSalt: "s",
       createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
     };
     const pub = publicUser(row);
     expect(pub.jobTitle).toBeNull();
     expect(pub.department).toBeNull();
+    expect(pub.avatarUrl).toBeNull();
   });
 });

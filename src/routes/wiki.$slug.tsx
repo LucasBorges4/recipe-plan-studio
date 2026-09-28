@@ -6,7 +6,7 @@ import { usePortalData } from "@/lib/api-hooks";
 
 export const Route = createFileRoute("/wiki/$slug")({
   head: () => ({
-    meta: [{ title: "Wiki — Grupo W. Geotec CAFUFV" }],
+    meta: [{ title: "Wiki — GWG — Grupo W. Geotec" }],
   }),
   component: WikiArticlePage,
 });
@@ -14,7 +14,8 @@ export const Route = createFileRoute("/wiki/$slug")({
 function WikiArticlePage() {
   const { slug } = Route.useParams();
   const { data: state, isLoading } = usePortalData();
-  if (isLoading) return <div className="animate-pulse rounded-xl border border-border bg-card p-6 h-64" />;
+  if (isLoading)
+    return <div className="animate-pulse rounded-xl border border-border bg-card p-6 h-64" />;
   const wikiArticles = state?.wiki ?? [];
   const index = wikiArticles.findIndex((a) => a.slug === slug);
   if (index === -1) throw notFound();

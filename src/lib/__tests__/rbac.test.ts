@@ -59,12 +59,21 @@ describe("can (matriz RBAC)", () => {
     expect(can("auditor", "task.comment")).toBe(false);
   });
 
+  it("visualizador só lê tarefas e auditoria", () => {
+    expect(can("visualizador", "audit.read")).toBe(true);
+    expect(can("visualizador", "task.create")).toBe(false);
+    expect(can("visualizador", "task.move")).toBe(false);
+    expect(can("visualizador", "task.approve")).toBe(false);
+    expect(can("visualizador", "task.comment")).toBe(false);
+    expect(can("visualizador", "evidence.attach")).toBe(false);
+  });
+
   it("novas contas recebem o papel padrão desenvolvedor", () => {
     expect(defaultRoleForNewUser).toBe("desenvolvedor");
   });
 
   it("roleLabel cobre todos os papéis", () => {
-    const roles: Role[] = ["admin", "diretor", "gestor", "desenvolvedor", "auditor"];
+    const roles: Role[] = ["admin", "diretor", "gestor", "desenvolvedor", "auditor", "visualizador"];
     for (const r of roles) expect(typeof roleLabel[r]).toBe("string");
   });
 });

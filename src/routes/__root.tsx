@@ -89,17 +89,18 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Portal de Governança — Grupo W. Geotec CAFUFV" },
+      { title: "Portal de Governança — GWG — Grupo W. Geotec" },
       {
         name: "description",
         content:
-          "Portal de Governança Corporativa do Grupo W. Geotec CAFUFV: painel executivo, tarefas, compliance, riscos e documentos.",
+          "Portal de Governança Corporativa do GWG — Grupo W. Geotec: painel executivo, tarefas, compliance, riscos e documentos.",
       },
-      { name: "author", content: "Grupo W. Geotec CAFUFV" },
-      { property: "og:title", content: "Portal de Governança — Grupo W. Geotec CAFUFV" },
+      { name: "author", content: "GWG — Grupo W. Geotec" },
+      { property: "og:title", content: "Portal de Governança — GWG — Grupo W. Geotec" },
       {
         property: "og:description",
-        content: "Gestão integrada de governança, compliance e engenharia do Grupo W. Geotec CAFUFV.",
+        content:
+          "Gestão integrada de governança, compliance e engenharia do GWG — Grupo W. Geotec.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -109,7 +110,9 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         rel: "stylesheet",
         href: appCss,
       },
-      { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
+      { rel: "icon", href: "/favicon.ico", sizes: "any" },
+      { rel: "icon", type: "image/png", href: "/favicon-32x32.png", sizes: "32x32" },
+      { rel: "apple-touch-icon", href: "/apple-touch-icon.png", sizes: "180x180" },
     ],
   }),
   shellComponent: RootShell,

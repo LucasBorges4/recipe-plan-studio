@@ -12,10 +12,15 @@ function parsePortalHash(phcHash: string): { saltB64: string; hashB64: string } 
     /^\$argon2(id|i|d)\$v=\d+\$[^$]+\$([A-Za-z0-9+/=]+)\$([A-Za-z0-9+/=]+)$/,
   );
   if (!match) return null;
-  return { saltB64: match[2], hashB64: match[3] };
+  return { saltB64: match![2]!, hashB64: match![3]! };
 }
 
-function verifyPortalArgon2id(plaintext: string, pepper: string, saltB64: string, hashB64: string): boolean {
+function verifyPortalArgon2id(
+  plaintext: string,
+  pepper: string,
+  saltB64: string,
+  hashB64: string,
+): boolean {
   try {
     const { argon2id: nobleArgon2id } = require("@noble/hashes/argon2.js");
     const salt = Buffer.from(saltB64, "base64");
@@ -91,11 +96,11 @@ describe("n8n Registro - Validação de entrada", () => {
   }
 
   it("aceita email e senha válidos", () => {
-    expect(validateRegistration("user@test.com", "Geos@2026!")).toBeNull();
+    expect(validateRegistration("user@test.com", "GWG@2026!")).toBeNull();
   });
 
   it("rejeita email vazio", () => {
-    expect(validateRegistration("", "Geos@2026!")).toBe("E-mail e senha são obrigatórios.");
+    expect(validateRegistration("", "GWG@2026!")).toBe("E-mail e senha são obrigatórios.");
   });
 
   it("rejeita senha vazia", () => {
@@ -103,11 +108,15 @@ describe("n8n Registro - Validação de entrada", () => {
   });
 
   it("rejeita senha curta (< 6 caracteres)", () => {
-    expect(validateRegistration("user@test.com", "abc")).toBe("A senha deve ter pelo menos 6 caracteres.");
+    expect(validateRegistration("user@test.com", "abc")).toBe(
+      "A senha deve ter pelo menos 6 caracteres.",
+    );
   });
 
   it("rejeita senha com exatamente 5 caracteres", () => {
-    expect(validateRegistration("user@test.com", "abcde")).toBe("A senha deve ter pelo menos 6 caracteres.");
+    expect(validateRegistration("user@test.com", "abcde")).toBe(
+      "A senha deve ter pelo menos 6 caracteres.",
+    );
   });
 
   it("aceita senha com exatamente 6 caracteres", () => {
@@ -115,28 +124,30 @@ describe("n8n Registro - Validação de entrada", () => {
   });
 
   it("rejeita email sem @", () => {
-    expect(validateRegistration("usertest.com", "Geos@2026!")).toBe("E-mail inválido.");
+    expect(validateRegistration("usertest.com", "GWG@2026!")).toBe("E-mail inválido.");
   });
 
   it("rejeita email sem domínio", () => {
-    expect(validateRegistration("user@", "Geos@2026!")).toBe("E-mail inválido.");
+    expect(validateRegistration("user@", "GWG@2026!")).toBe("E-mail inválido.");
   });
 
   it("rejeita email com espaços", () => {
-    expect(validateRegistration("user @test.com", "Geos@2026!")).toBe("E-mail inválido.");
+    expect(validateRegistration("user @test.com", "GWG@2026!")).toBe("E-mail inválido.");
   });
 
   it("aceita email com subdomínio", () => {
-    expect(validateRegistration("user@sub.domain.com", "Geos@2026!")).toBeNull();
+    expect(validateRegistration("user@sub.domain.com", "GWG@2026!")).toBeNull();
   });
 
   it("aceita email com caracteres especiais", () => {
-    expect(validateRegistration("user.name+tag@test.com", "Geos@2026!")).toBeNull();
+    expect(validateRegistration("user.name+tag@test.com", "GWG@2026!")).toBeNull();
   });
 
   it("rejeita null/undefined", () => {
-    expect(validateRegistration(null as any, "Geos@2026!")).toBe("E-mail e senha são obrigatórios.");
-    expect(validateRegistration("user@test.com", undefined as any)).toBe("E-mail e senha são obrigatórios.");
+    expect(validateRegistration(null as any, "GWG@2026!")).toBe("E-mail e senha são obrigatórios.");
+    expect(validateRegistration("user@test.com", undefined as any)).toBe(
+      "E-mail e senha são obrigatórios.",
+    );
   });
 });
 
@@ -147,20 +158,20 @@ describe("n8n Registro - Validação de entrada", () => {
 describe("n8n Registro - Bcrypt hashing", () => {
   it("bcryptjs produz hash com prefixo $2a$ ou $2b$", async () => {
     const bcrypt = require("bcryptjs");
-    const hash = await bcrypt.hash("Geos@2026!", 10);
+    const hash = await bcrypt.hash("GWG@2026!", 10);
     expect(hash).toMatch(/^\$2[ab]\$/);
   });
 
   it("bcryptjs verifica senha correta", async () => {
     const bcrypt = require("bcryptjs");
-    const hash = await bcrypt.hash("Geos@2026!", 10);
-    const valid = await bcrypt.compare("Geos@2026!", hash);
+    const hash = await bcrypt.hash("GWG@2026!", 10);
+    const valid = await bcrypt.compare("GWG@2026!", hash);
     expect(valid).toBe(true);
   });
 
   it("bcryptjs rejeita senha errada", async () => {
     const bcrypt = require("bcryptjs");
-    const hash = await bcrypt.hash("Geos@2026!", 10);
+    const hash = await bcrypt.hash("GWG@2026!", 10);
     const valid = await bcrypt.compare("wrongpass", hash);
     expect(valid).toBe(false);
   });
@@ -173,8 +184,8 @@ describe("n8n Registro - Bcrypt hashing", () => {
 
   it("mesma senha produz hashes distintos (bcrypt salt aleatório)", async () => {
     const bcrypt = require("bcryptjs");
-    const h1 = await bcrypt.hash("Geos@2026!", 10);
-    const h2 = await bcrypt.hash("Geos@2026!", 10);
+    const h1 = await bcrypt.hash("GWG@2026!", 10);
+    const h2 = await bcrypt.hash("GWG@2026!", 10);
     expect(h1).not.toBe(h2);
   });
 });
@@ -186,7 +197,7 @@ describe("n8n Registro - Bcrypt hashing", () => {
 describe("n8n Login Portal - parsePortalHash", () => {
   it("extrai salt e hash de hash PHC válido", () => {
     const salt = generateSaltHex();
-    const hash = hashPassword("Geos@2026!", PEPPER, salt);
+    const hash = hashPassword("GWG@2026!", PEPPER, salt);
     const parsed = parsePortalHash(hash);
     expect(parsed).not.toBeNull();
     expect(parsed!.saltB64).toBeTruthy();
@@ -202,7 +213,9 @@ describe("n8n Login Portal - parsePortalHash", () => {
   });
 
   it("retorna null para hash bcrypt", () => {
-    expect(parsePortalHash("$2a$10$abcdefghijklmnopqrstuuABCDEFGHIJKLMNOPQRSTUVWXYZ012")).toBeNull();
+    expect(
+      parsePortalHash("$2a$10$abcdefghijklmnopqrstuuABCDEFGHIJKLMNOPQRSTUVWXYZ012"),
+    ).toBeNull();
   });
 
   it("parse e verificação round-trip", () => {
@@ -211,15 +224,25 @@ describe("n8n Login Portal - parsePortalHash", () => {
     const parsed = parsePortalHash(hash);
     expect(parsed).not.toBeNull();
 
-    const verified = verifyPortalArgon2id("MinhaSenha!@#", PEPPER, parsed!.saltB64, parsed!.hashB64);
+    const verified = verifyPortalArgon2id(
+      "MinhaSenha!@#",
+      PEPPER,
+      parsed!.saltB64,
+      parsed!.hashB64,
+    );
     expect(verified).toBe(true);
   });
 
   it("falha com senha errada no parse + verify", () => {
     const salt = generateSaltHex();
-    const hash = hashPassword("Geos@2026!", PEPPER, salt);
+    const hash = hashPassword("GWG@2026!", PEPPER, salt);
     const parsed = parsePortalHash(hash);
-    const verified = verifyPortalArgon2id("wrongpassword", PEPPER, parsed!.saltB64, parsed!.hashB64);
+    const verified = verifyPortalArgon2id(
+      "wrongpassword",
+      PEPPER,
+      parsed!.saltB64,
+      parsed!.hashB64,
+    );
     expect(verified).toBe(false);
   });
 });
@@ -231,23 +254,28 @@ describe("n8n Login Portal - parsePortalHash", () => {
 describe("n8n Login Portal - Argon2id portal verification", () => {
   it("verifica hash com pepper correta", () => {
     const salt = generateSaltHex();
-    const hash = hashPassword("Geos@2026!", PEPPER, salt);
+    const hash = hashPassword("GWG@2026!", PEPPER, salt);
     const parsed = parsePortalHash(hash)!;
-    const valid = verifyPortalArgon2id("Geos@2026!", PEPPER, parsed.saltB64, parsed.hashB64);
+    const valid = verifyPortalArgon2id("GWG@2026!", PEPPER, parsed.saltB64, parsed.hashB64);
     expect(valid).toBe(true);
   });
 
   it("rejeita com pepper errada", () => {
     const salt = generateSaltHex();
-    const hash = hashPassword("Geos@2026!", PEPPER, salt);
+    const hash = hashPassword("GWG@2026!", PEPPER, salt);
     const parsed = parsePortalHash(hash)!;
-    const valid = verifyPortalArgon2id("Geos@2026!", "outra-pepper-diferente-1234567890", parsed.saltB64, parsed.hashB64);
+    const valid = verifyPortalArgon2id(
+      "GWG@2026!",
+      "outra-pepper-diferente-1234567890",
+      parsed.saltB64,
+      parsed.hashB64,
+    );
     expect(valid).toBe(false);
   });
 
   it("rejeita com senha errada", () => {
     const salt = generateSaltHex();
-    const hash = hashPassword("Geos@2026!", PEPPER, salt);
+    const hash = hashPassword("GWG@2026!", PEPPER, salt);
     const parsed = parsePortalHash(hash)!;
     const valid = verifyPortalArgon2id("SenhaErrada", PEPPER, parsed.saltB64, parsed.hashB64);
     expect(valid).toBe(false);
@@ -255,13 +283,13 @@ describe("n8n Login Portal - Argon2id portal verification", () => {
 
   it("compara com @noble/hashes (compatibilidade cross-runtime)", async () => {
     const salt = generateSaltHex();
-    const phcHash = hashPassword("Geos@2026!", PEPPER, salt);
+    const phcHash = hashPassword("GWG@2026!", PEPPER, salt);
     const parsed = parsePortalHash(phcHash)!;
 
-    const nobleResult = verifyPortalArgon2id("Geos@2026!", PEPPER, parsed.saltB64, parsed.hashB64);
+    const nobleResult = verifyPortalArgon2id("GWG@2026!", PEPPER, parsed.saltB64, parsed.hashB64);
     expect(nobleResult).toBe(true);
 
-    const nobleResult2 = verifyPortalArgon2id("Geos@2026!", PEPPER, parsed.saltB64, parsed.hashB64);
+    const nobleResult2 = verifyPortalArgon2id("GWG@2026!", PEPPER, parsed.saltB64, parsed.hashB64);
     expect(nobleResult2).toBe(true);
   });
 });
@@ -273,8 +301,8 @@ describe("n8n Login Portal - Argon2id portal verification", () => {
 describe("n8n Login Flow completo - simulação", () => {
   it("1. Registro via register-server.js cria usuário no n8n SQLite", async () => {
     const bcrypt = require("bcryptjs");
-    const email = "novo.usuario@grupogeos.com.br";
-    const password = "Geos@2026!";
+    const email = "novo.usuario@grupogwg.com.br";
+    const password = "GWG@2026!";
 
     const bcryptHash = await bcrypt.hash(password, 10);
     const n8nUser: N8nUser = {
@@ -297,16 +325,16 @@ describe("n8n Login Flow completo - simulação", () => {
 
   it("2. Login n8n local com bcryptjs retorna sucesso", async () => {
     const bcrypt = require("bcryptjs");
-    const email = "novo.usuario@grupogeos.com.br";
+    const email = "novo.usuario@grupogwg.com.br";
     const n8nUser = n8nUsers.get(email)!;
 
-    const valid = await bcrypt.compare("Geos@2026!", n8nUser.passwordHash);
+    const valid = await bcrypt.compare("GWG@2026!", n8nUser.passwordHash);
     expect(valid).toBe(true);
   });
 
   it("3. Login n8n local com senha errada falha", async () => {
     const bcrypt = require("bcryptjs");
-    const email = "novo.usuario@grupogeos.com.br";
+    const email = "novo.usuario@grupogwg.com.br";
     const n8nUser = n8nUsers.get(email)!;
 
     const valid = await bcrypt.compare("senhaErrada", n8nUser.passwordHash);
@@ -314,8 +342,8 @@ describe("n8n Login Flow completo - simulação", () => {
   });
 
   it("4. Fallback portal: email não existe no n8n → busca no portal PG", () => {
-    const portalEmail = "portal.user@grupogeos.com.br";
-    const portalUser = createPortalUser(portalEmail, "Geos@2026!", "Portal User", "admin");
+    const portalEmail = "portal.user@grupogwg.com.br";
+    const portalUser = createPortalUser(portalEmail, "GWG@2026!", "Portal User", "admin");
     portalUsers.push(portalUser);
 
     const n8nUser = n8nUsers.get(portalEmail);
@@ -329,7 +357,7 @@ describe("n8n Login Flow completo - simulação", () => {
   it("5. Fallback portal: verificação argon2id com pepper retorna sucesso", () => {
     const portalUser = portalUsers[0]!;
     const parsed = parsePortalHash(portalUser.passwordHash)!;
-    const valid = verifyPortalArgon2id("Geos@2026!", PEPPER, parsed.saltB64, parsed.hashB64);
+    const valid = verifyPortalArgon2id("GWG@2026!", PEPPER, parsed.saltB64, parsed.hashB64);
     expect(valid).toBe(true);
   });
 
@@ -342,7 +370,7 @@ describe("n8n Login Flow completo - simulação", () => {
     const [firstName, ...lastParts] = portalUser.name.trim().split(/\s+/);
     const lastName = lastParts.join(" ") || firstName;
 
-    const bcryptHash = await bcrypt.hash("Geos@2026!", 10);
+    const bcryptHash = await bcrypt.hash("GWG@2026!", 10);
     const n8nUser: N8nUser = {
       id: crypto.randomUUID(),
       email: portalEmail,
@@ -364,10 +392,10 @@ describe("n8n Login Flow completo - simulação", () => {
 
   it("7. Login n8n local funciona após auto-provisioning", async () => {
     const bcrypt = require("bcryptjs");
-    const portalEmail = "portal.user@grupogeos.com.br";
+    const portalEmail = "portal.user@grupogwg.com.br";
     const n8nUser = n8nUsers.get(portalEmail)!;
 
-    const valid = await bcrypt.compare("Geos@2026!", n8nUser.passwordHash);
+    const valid = await bcrypt.compare("GWG@2026!", n8nUser.passwordHash);
     expect(valid).toBe(true);
   });
 
@@ -389,6 +417,7 @@ describe("n8n Role Mapping", () => {
     gestor: "global:member",
     desenvolvedor: "global:member",
     auditor: "global:member",
+    visualizador: "global:member",
   };
 
   it("admin → global:admin", () => {
@@ -426,22 +455,22 @@ describe("n8n Role Mapping", () => {
 describe("n8n Login - Edge cases de segurança", () => {
   it("email case-insensitive no login", async () => {
     const bcrypt = require("bcryptjs");
-    const hash = await bcrypt.hash("Geos@2026!", 10);
-    const email = "TEST@GRUPOGEOS.COM.BR";
+    const hash = await bcrypt.hash("GWG@2026!", 10);
+    const email = "TEST@GRUPOGWG.COM.BR";
     const normalized = email.toLowerCase().trim();
-    expect(normalized).toBe("test@grupogeos.com.br");
+    expect(normalized).toBe("test@grupogwg.com.br");
   });
 
   it("pepper vazia não quebra verificação", () => {
     const salt = generateSaltHex();
-    const hash = hashPassword("Geos@2026!", "", salt);
+    const hash = hashPassword("GWG@2026!", "", salt);
     const parsed = parsePortalHash(hash)!;
-    const valid = verifyPortalArgon2id("Geos@2026!", "", parsed.saltB64, parsed.hashB64);
+    const valid = verifyPortalArgon2id("GWG@2026!", "", parsed.saltB64, parsed.hashB64);
     expect(valid).toBe(true);
   });
 
   it("hash inválido retorn false sem crash", () => {
-    const valid = verifyPortalArgon2id("Geos@2026!", PEPPER, "invalid", "invalid");
+    const valid = verifyPortalArgon2id("GWG@2026!", PEPPER, "invalid", "invalid");
     expect(valid).toBe(false);
   });
 
@@ -469,7 +498,12 @@ describe("n8n Login - Edge cases de segurança", () => {
   it("timing: hash dummy retorna false em tempo constante", () => {
     const start = Date.now();
     for (let i = 0; i < 10; i++) {
-      verifyPortalArgon2id(`password-${i}`, PEPPER, "ZHVtbXlzYWx0MTIzNDU2", "6lJxwn0XWAYosKoFUJ/+/l6Rza3em6cqeygRdkcKc+g");
+      verifyPortalArgon2id(
+        `password-${i}`,
+        PEPPER,
+        "ZHVtbXlzYWx0MTIzNDU2",
+        "6lJxwn0XWAYosKoFUJ/+/l6Rza3em6cqeygRdkcKc+g",
+      );
     }
     const elapsed = Date.now() - start;
     expect(elapsed).toBeGreaterThan(0);
@@ -490,7 +524,7 @@ describe("n8n Login - Cenários de falha", () => {
     const badHash = "$argon2id$v=19$m=19456,t=2,p=1$abc$def";
     const parsed = parsePortalHash(badHash);
     if (parsed) {
-      const valid = verifyPortalArgon2id("Geos@2026!", PEPPER, parsed.saltB64, parsed.hashB64);
+      const valid = verifyPortalArgon2id("GWG@2026!", PEPPER, parsed.saltB64, parsed.hashB64);
       expect(typeof valid).toBe("boolean");
     } else {
       expect(parsed).toBeNull();
@@ -500,13 +534,13 @@ describe("n8n Login - Cenários de falha", () => {
   it("múltiplos logins falhados não alteram hash existente", async () => {
     const bcrypt = require("bcryptjs");
     const email = "stable@test.com";
-    const hash = await bcrypt.hash("Geos@2026!", 10);
+    const hash = await bcrypt.hash("GWG@2026!", 10);
 
     for (let i = 0; i < 5; i++) {
       await bcrypt.compare("wrong", hash);
     }
 
-    const valid = await bcrypt.compare("Geos@2026!", hash);
+    const valid = await bcrypt.compare("GWG@2026!", hash);
     expect(valid).toBe(true);
   });
 });

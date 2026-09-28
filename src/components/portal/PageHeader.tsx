@@ -1,14 +1,17 @@
 import type { LucideIcon } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export function PageHeader({
   icon: Icon,
   title,
+  titleClassName,
   subtitle,
   actions,
 }: {
   icon: LucideIcon;
   title: string;
-  subtitle?: string;
+  titleClassName?: string;
+  subtitle?: React.ReactNode;
   actions?: React.ReactNode;
 }) {
   return (
@@ -18,7 +21,7 @@ export function PageHeader({
           <Icon className="size-5" />
         </span>
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight text-foreground">{title}</h1>
+          <h1 className={cn("text-3xl font-semibold tracking-tight text-foreground", titleClassName)}>{title}</h1>
           {subtitle ? <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p> : null}
         </div>
       </div>

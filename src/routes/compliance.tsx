@@ -30,16 +30,16 @@ import {
 export const Route = createFileRoute("/compliance")({
   head: () => ({
     meta: [
-      { title: "Compliance — Portal de Governança Grupo W. Geotec CAFUFV" },
+      { title: "Compliance — Portal de Governança GWG — Grupo W. Geotec" },
       {
         name: "description",
         content:
           "Controles de conformidade LGPD, ISO 27001 e SOX com responsáveis, evidências e vencimentos calculados.",
       },
-      { property: "og:title", content: "Compliance — Grupo W. Geotec CAFUFV" },
+      { property: "og:title", content: "Compliance — GWG — Grupo W. Geotec" },
       {
         property: "og:description",
-        content: "Acompanhamento das obrigações regulatórias do Grupo W. Geotec CAFUFV.",
+        content: "Acompanhamento das obrigações regulatórias do GWG — Grupo W. Geotec.",
       },
     ],
   }),

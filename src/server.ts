@@ -50,6 +50,22 @@ function isH3SwallowedErrorBody(body: string): boolean {
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     try {
+      // Health check endpoint
+      const url = new URL(request.url);
+      if (url.pathname === "/api/health") {
+        return new Response(
+          JSON.stringify({
+            status: "ok",
+            uptime: process.uptime(),
+            timestamp: new Date().toISOString(),
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+
       const handler = await getServerEntry();
       if (env) {
         const d1 = (env as { DB?: D1DatabaseLike }).DB;

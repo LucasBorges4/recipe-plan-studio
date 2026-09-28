@@ -1,5 +1,7 @@
 import type {
   ComplianceControl,
+  JournalComment,
+  JournalEntry,
   Milestone,
   Module,
   PatentStage,
@@ -18,6 +20,7 @@ import type {
   JsonObject,
 } from "@/lib/records";
 import type { Role, RoleFunction } from "@/lib/rbac";
+import { columnToStage, inferProgressFromStage, isWaitingOnClient } from "@/lib/task-stages";
 
 /**
  * Camada de persistência do portal.
@@ -47,9 +50,13 @@ export interface UserRow {
   jobTitle: string | null;
   department: string | null;
   bio: string | null;
+  avatarUrl: string | null;
+  /** Perfil da equipe (catálogo de /equipe) atrelado a esta conta. */
+  teamMemberId?: string | null;
   passwordHash: string;
   passwordSalt: string;
   createdAt: string;
+  updatedAt: string;
 }
 
 export interface SessionRow {
@@ -73,7 +80,12 @@ export interface Storage {
   insertUser(user: UserRow): Promise<void>;
   updateUser(
     id: string,
-    patch: Partial<Pick<UserRow, "role" | "name" | "jobTitle" | "department" | "bio">>,
+    patch: Partial<
+      Pick<
+        UserRow,
+        "role" | "name" | "jobTitle" | "department" | "bio" | "avatarUrl" | "teamMemberId"
+      >
+    >,
   ): Promise<void>;
   deleteUser(id: string): Promise<void>;
   clearAllUsers(): Promise<number>;
@@ -110,6 +122,10 @@ export interface Storage {
   getTask(id: string): Promise<Task | null>;
   insertTask(task: Task): Promise<void>;
   updateTaskColumn(id: string, column: string): Promise<Task | null>;
+  updateTaskProgress(
+    id: string,
+    data: { progress: number; responsible: string | null; due?: string },
+  ): Promise<Task | null>;
   deleteTask(id: string): Promise<boolean>;
 
   listComments(): Promise<CommentRecord[]>;
@@ -159,6 +175,14 @@ export interface Storage {
   listReleases(): Promise<Release[]>;
   insertRelease(r: Release): Promise<void>;
   deleteRelease(version: string): Promise<boolean>;
+
+  listJournalEntries(): Promise<JournalEntry[]>;
+  insertJournalEntry(e: JournalEntry): Promise<void>;
+  updateJournalEntry(e: JournalEntry): Promise<boolean>;
+  deleteJournalEntry(id: string): Promise<boolean>;
+  addJournalComment(id: string, comment: JournalComment): Promise<boolean>;
+  updateOwnComment(entryId: string, commentId: string, content: string, userId: string): Promise<boolean>;
+  deleteOwnComment(entryId: string, commentId: string, userId: string): Promise<boolean>;
 
   listPatentStages(): Promise<PatentStage[]>;
   getPatentStage(id: string): Promise<PatentStage | null>;
@@ -262,6 +286,7 @@ export interface DatabaseDump {
   wiki: WikiArticle[];
   milestones: Milestone[];
   releases: Release[];
+  journal: import("@/data/types").JournalEntry[];
   patentStages: PatentStage[];
   techStack: TechItem[];
   automationShares: AutomationShare[];
@@ -350,6 +375,8 @@ CREATE TABLE IF NOT EXISTS users (
   job_title TEXT,
   department TEXT,
   bio TEXT,
+  avatar_url TEXT,
+  team_member_id TEXT,
   password_hash TEXT NOT NULL,
   password_salt TEXT NOT NULL,
   created_at TEXT NOT NULL,
@@ -369,10 +396,14 @@ CREATE TABLE IF NOT EXISTS tasks (
   id TEXT PRIMARY KEY,
   title TEXT NOT NULL,
   description TEXT NOT NULL DEFAULT '',
-  column_name TEXT NOT NULL,
+  column_name TEXT,
   priority TEXT NOT NULL,
   tags TEXT NOT NULL DEFAULT '[]',
   assignee TEXT NOT NULL DEFAULT '',
+  stage TEXT NOT NULL DEFAULT 'not_started',
+  progress INTEGER NOT NULL DEFAULT 0,
+  responsible TEXT,
+  waiting_on_client INTEGER NOT NULL DEFAULT 0,
   due TEXT,
   comments INTEGER
 );
@@ -440,7 +471,11 @@ CREATE TABLE IF NOT EXISTS risks (
   role TEXT NOT NULL DEFAULT 'gestor',
   probability INTEGER NOT NULL,
   impact INTEGER NOT NULL,
-  mitigation TEXT NOT NULL
+  mitigation TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'ativo',
+  next_action TEXT NOT NULL DEFAULT '',
+  due TEXT,
+  task_id TEXT
 );
 CREATE TABLE IF NOT EXISTS wiki_articles (
   slug TEXT PRIMARY KEY,
@@ -449,7 +484,8 @@ CREATE TABLE IF NOT EXISTS wiki_articles (
   summary TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   version TEXT NOT NULL,
-  sections TEXT NOT NULL
+  sections TEXT NOT NULL,
+  updated_by TEXT
 );
 CREATE TABLE IF NOT EXISTS milestones (
   id TEXT PRIMARY KEY,
@@ -462,6 +498,22 @@ CREATE TABLE IF NOT EXISTS releases (
   version TEXT PRIMARY KEY,
   date TEXT NOT NULL,
   items TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS journal_entries (
+  id TEXT PRIMARY KEY,
+  type TEXT NOT NULL,
+  title TEXT NOT NULL,
+  description TEXT NOT NULL,
+  occurred_at TEXT NOT NULL,
+  status TEXT NOT NULL,
+  author_id TEXT NOT NULL,
+  author_name TEXT NOT NULL,
+  department TEXT,
+  approved_by TEXT,
+  approved_at TEXT,
+  approved_note TEXT,
+  comments TEXT NOT NULL DEFAULT '[]',
+  attachments TEXT NOT NULL DEFAULT '[]'
 );
 CREATE TABLE IF NOT EXISTS patent_stages (
   id TEXT PRIMARY KEY,
@@ -574,9 +626,12 @@ function rowToUser(r: Record<string, SqlValue>): UserRow {
     jobTitle: nul(r["job_title"]),
     department: nul(r["department"]),
     bio: nul(r["bio"]),
+    avatarUrl: nul(r["avatar_url"]),
+    teamMemberId: nul(r["team_member_id"]),
     passwordHash: str(r["password_hash"]),
     passwordSalt: str(r["password_salt"]),
     createdAt: str(r["created_at"]),
+    updatedAt: str(r["updated_at"], str(r["created_at"])),
   };
 }
 
@@ -700,7 +755,7 @@ export abstract class SqliteBackend implements Storage {
   }
   async insertUser(u: UserRow) {
     await this.run(
-      "INSERT INTO users (id, name, email, role, job_title, department, bio, password_hash, password_salt, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO users (id, name, email, role, job_title, department, bio, avatar_url, team_member_id, password_hash, password_salt, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       u.id,
       u.name,
       u.email,
@@ -708,6 +763,8 @@ export abstract class SqliteBackend implements Storage {
       u.jobTitle ?? null,
       u.department ?? null,
       u.bio ?? null,
+      u.avatarUrl ?? null,
+      u.teamMemberId ?? null,
       u.passwordHash,
       u.passwordSalt,
       u.createdAt,
@@ -716,7 +773,12 @@ export abstract class SqliteBackend implements Storage {
   }
   async updateUser(
     id: string,
-    patch: Partial<Pick<UserRow, "role" | "name" | "jobTitle" | "department" | "bio">>,
+    patch: Partial<
+      Pick<
+        UserRow,
+        "role" | "name" | "jobTitle" | "department" | "bio" | "avatarUrl" | "teamMemberId"
+      >
+    >,
   ) {
     const sets: string[] = [];
     const params: SqlValue[] = [];
@@ -739,6 +801,14 @@ export abstract class SqliteBackend implements Storage {
     if (patch.bio !== undefined) {
       sets.push("bio = ?");
       params.push(patch.bio);
+    }
+    if (patch.avatarUrl !== undefined) {
+      sets.push("avatar_url = ?");
+      params.push(patch.avatarUrl);
+    }
+    if (patch.teamMemberId !== undefined) {
+      sets.push("team_member_id = ?");
+      params.push(patch.teamMemberId);
     }
     if (!sets.length) return;
     sets.push("updated_at = ?");
@@ -818,36 +888,70 @@ export abstract class SqliteBackend implements Storage {
   }
 
   async listTasks() {
-    return (await this.many("SELECT * FROM tasks ORDER BY rowid DESC")).map((r): Task => ({
-      id: str(r["id"]),
-      title: str(r["title"]),
-      description: str(r["description"]),
-      column: str(r["column_name"]),
-      priority: str(r["priority"]) as Priority,
-      tags: safeTags(r["tags"]),
-      assignee: str(r["assignee"]),
-      ...(nul(r["due"]) ? { due: str(r["due"]) } : {}),
-      ...(r["comments"] == null ? {} : { comments: Number(r["comments"]) }),
-    }));
+    return (await this.many("SELECT * FROM tasks ORDER BY rowid DESC")).map((r): Task => {
+      const column = str(r["column_name"]);
+      const stageFromRow = (str(r["stage"]) || "") as import("@/data/types").Stage;
+      const stage = stageFromRow !== "not_started" ? stageFromRow : columnToStage(column);
+      const progressRow = r["progress"] != null ? Number(r["progress"]) : null;
+      const progress =
+        progressRow != null && !isNaN(progressRow) ? progressRow : inferProgressFromStage(stage);
+      const responsible = r["responsible"] == null ? null : String(r["responsible"]);
+      const waitingClientRaw = r["waiting_on_client"];
+      const waitingOnClient =
+        waitingClientRaw == null
+          ? isWaitingOnClient(stage)
+          : Boolean(Number(waitingClientRaw) || isWaitingOnClient(stage));
+      return {
+        id: str(r["id"]),
+        title: str(r["title"]),
+        description: str(r["description"]),
+        column,
+        priority: str(r["priority"]) as Priority,
+        tags: safeTags(r["tags"]),
+        assignee: str(r["assignee"]),
+        stage,
+        progress,
+        responsible,
+        waitingOnClient,
+        ...(nul(r["due"]) ? { due: str(r["due"]) } : {}),
+        ...(r["comments"] == null ? {} : { comments: Number(r["comments"]) }),
+      };
+    });
   }
   async getTask(id: string) {
     const r = await this.one("SELECT * FROM tasks WHERE id = ?", id);
     if (!r) return null;
+    const column = str(r["column_name"]);
+    const stageFromRow = (str(r["stage"]) || "") as import("@/data/types").Stage;
+    const stage = stageFromRow !== "not_started" ? stageFromRow : columnToStage(column);
+    const progressRow = r["progress"] != null ? Number(r["progress"]) : null;
+    const progress =
+      progressRow != null && !isNaN(progressRow) ? progressRow : inferProgressFromStage(stage);
+    const responsible = r["responsible"] == null ? null : String(r["responsible"]);
+    const waitingClientRaw = r["waiting_on_client"];
+    const waitingOnClient =
+      waitingClientRaw == null
+        ? isWaitingOnClient(stage)
+        : Boolean(Number(waitingClientRaw) || isWaitingOnClient(stage));
     return {
       id: str(r["id"]),
       title: str(r["title"]),
       description: str(r["description"]),
-      column: str(r["column_name"]),
+      column,
       priority: str(r["priority"]) as Priority,
       tags: safeTags(r["tags"]),
       assignee: str(r["assignee"]),
+      stage,
+      progress,
+      responsible,
+      waitingOnClient,
       ...(nul(r["due"]) ? { due: str(r["due"]) } : {}),
       ...(r["comments"] == null ? {} : { comments: Number(r["comments"]) }),
     };
   }
   async insertTask(t: Task) {
     await this.run(
-      "INSERT INTO tasks (id, title, description, column_name, priority, tags, assignee, due, comments) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO tasks (id, title, description, column_name, priority, tags, assignee, stage, progress, responsible, waiting_on_client, due, comments) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       t.id,
       t.title,
       t.description,
@@ -855,6 +959,10 @@ export abstract class SqliteBackend implements Storage {
       t.priority,
       JSON.stringify(t.tags),
       t.assignee,
+      t.stage,
+      t.progress,
+      t.responsible ?? null,
+      t.waitingOnClient ? 1 : 0,
       t.due ?? null,
       t.comments ?? null,
     );
@@ -862,9 +970,45 @@ export abstract class SqliteBackend implements Storage {
   async updateTaskColumn(id: string, column: string) {
     const task = await this.getTask(id);
     if (!task) return null;
-    await this.run("UPDATE tasks SET column_name = ? WHERE id = ?", column, id);
-    return { ...task, column };
+    const stage = columnToStage(column);
+    const progress = inferProgressFromStage(stage);
+    const waitingOnClient = isWaitingOnClient(stage) ? 1 : 0;
+    await this.run(
+      "UPDATE tasks SET column_name = ?, stage = ?, progress = ?, waiting_on_client = ? WHERE id = ?",
+      column,
+      stage,
+      progress,
+      waitingOnClient,
+      id,
+    );
+    return {
+      ...task,
+      column,
+      stage,
+      progress,
+      waitingOnClient: Boolean(waitingOnClient),
+    };
   }
+  async updateTaskProgress(
+    id: string,
+    data: { progress: number; responsible: string | null; due?: string },
+  ) {
+    const task = await this.getTask(id);
+    if (!task) return null;
+    const params: (string | number | null)[] = [
+      data.progress,
+      data.responsible ?? null,
+    ];
+    const dueValue = data.due === undefined ? task.due ?? null : data.due ?? null;
+    params.push(dueValue);
+    params.push(id);
+    await this.run(
+      "UPDATE tasks SET progress = ?, responsible = ?, due = ? WHERE id = ?",
+      ...params,
+    );
+    return await this.getTask(id);
+  }
+
   async deleteTask(id: string) {
     const info = await this.run("DELETE FROM tasks WHERE id = ?", id);
     return Number(info.changes) > 0;
@@ -911,7 +1055,20 @@ export abstract class SqliteBackend implements Storage {
     );
   }
   async getControl(id: string) {
-    return (await this.listControls()).find((c) => c.id === id) ?? null;
+    const r = await this.one("SELECT * FROM controls WHERE id = ?", id);
+    if (!r) return null;
+    return {
+      id: str(r["id"]),
+      control: str(r["control"]),
+      norm: str(r["norm"]) as ComplianceControl["norm"],
+      owner: str(r["owner"]),
+      role: (str(r["role"]) || "gestor") as ComplianceControl["role"],
+      status: str(r["status"]),
+      tone: str(r["tone"]) as ComplianceControl["tone"],
+      lastReview: str(r["last_review"]),
+      nextReview: str(r["next_review"]),
+      overdue: Boolean(r["overdue"]),
+    };
   }
   async insertControl(c: ComplianceControl) {
     await this.run(
@@ -964,7 +1121,20 @@ export abstract class SqliteBackend implements Storage {
     );
   }
   async getEvidence(id: string) {
-    return (await this.listEvidences()).find((e) => e.id === id) ?? null;
+    const r = await this.one("SELECT * FROM evidences WHERE id = ?", id);
+    if (!r) return null;
+    return {
+      id: str(r["id"]),
+      controlId: str(r["control_id"]),
+      fileName: str(r["file_name"]),
+      sentById: nul(r["sent_by_id"]),
+      sentByName: str(r["sent_by_name"]),
+      at: str(r["at"]),
+      status: str(r["status"]) as EvidenceRecord["status"],
+      ...(nul(r["reviewer_name"]) ? { reviewerName: str(r["reviewer_name"]) } : {}),
+      ...(nul(r["reviewed_at"]) ? { reviewedAt: str(r["reviewed_at"]) } : {}),
+      ...(nul(r["note"]) ? { note: str(r["note"]) } : {}),
+    };
   }
   async insertEvidence(e: EvidenceRecord) {
     await this.run(
@@ -1016,7 +1186,7 @@ export abstract class SqliteBackend implements Storage {
       id: str(r["id"]),
       at: str(r["at"]),
       actorId: nul(r["actor_id"]),
-      actor: str(r["actor"]),
+      actor: str(r["actor_name"]),
       actorRole: str(r["actor_role"]) as AuditEntry["actorRole"],
       action: str(r["action"]),
       entity: str(r["entity"]),
@@ -1068,6 +1238,10 @@ export abstract class SqliteBackend implements Storage {
       probability: Number(r["probability"]) as Risk["probability"],
       impact: Number(r["impact"]) as Risk["impact"],
       mitigation: str(r["mitigation"]),
+      status: (str(r["status"]) || "ativo") as NonNullable<Risk["status"]>,
+      nextAction: str(r["next_action"]),
+      due: r["due"] != null ? str(r["due"]) : null,
+      taskId: r["task_id"] != null ? str(r["task_id"]) : null,
     }));
   }
   async getRisk(id: string) {
@@ -1082,11 +1256,15 @@ export abstract class SqliteBackend implements Storage {
       probability: Number(r["probability"]) as Risk["probability"],
       impact: Number(r["impact"]) as Risk["impact"],
       mitigation: str(r["mitigation"]),
+      status: (str(r["status"]) || "ativo") as NonNullable<Risk["status"]>,
+      nextAction: str(r["next_action"]),
+      due: r["due"] != null ? str(r["due"]) : null,
+      taskId: r["task_id"] != null ? str(r["task_id"]) : null,
     };
   }
   async insertRisk(r: Risk) {
     await this.run(
-      "INSERT OR IGNORE INTO risks (id, title, category, owner, role, probability, impact, mitigation) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      "INSERT OR IGNORE INTO risks (id, title, category, owner, role, probability, impact, mitigation, status, next_action, due, task_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       r.id,
       r.title,
       r.category,
@@ -1095,6 +1273,10 @@ export abstract class SqliteBackend implements Storage {
       r.probability,
       r.impact,
       r.mitigation,
+      r.status ?? "ativo",
+      r.nextAction ?? "",
+      r.due ?? null,
+      r.taskId ?? null,
     );
   }
   async updateRisk(id: string, patch: Partial<Risk>) {
@@ -1102,7 +1284,7 @@ export abstract class SqliteBackend implements Storage {
     if (!cur) return null;
     const next = { ...cur, ...patch, id };
     await this.run(
-      "UPDATE risks SET title = ?, category = ?, owner = ?, role = ?, probability = ?, impact = ?, mitigation = ? WHERE id = ?",
+      "UPDATE risks SET title = ?, category = ?, owner = ?, role = ?, probability = ?, impact = ?, mitigation = ?, status = ?, next_action = ?, due = ?, task_id = ? WHERE id = ?",
       next.title,
       next.category,
       next.owner,
@@ -1110,6 +1292,10 @@ export abstract class SqliteBackend implements Storage {
       next.probability,
       next.impact,
       next.mitigation,
+      next.status ?? "ativo",
+      next.nextAction ?? "",
+      next.due ?? null,
+      next.taskId ?? null,
       id,
     );
     return next;
@@ -1129,6 +1315,7 @@ export abstract class SqliteBackend implements Storage {
         updatedAt: str(r["updated_at"]),
         version: str(r["version"]),
         sections: safeJson(r["sections"], []),
+        ...(nul(r["updated_by"]) == null ? {} : { updatedBy: str(r["updated_by"]) }),
       }),
     );
   }
@@ -1143,11 +1330,12 @@ export abstract class SqliteBackend implements Storage {
       updatedAt: str(r["updated_at"]),
       version: str(r["version"]),
       sections: safeJson(r["sections"], []),
+      ...(nul(r["updated_by"]) == null ? {} : { updatedBy: str(r["updated_by"]) }),
     };
   }
   async insertWiki(a: WikiArticle) {
     await this.run(
-      "INSERT OR IGNORE INTO wiki_articles (slug, title, category, summary, updated_at, version, sections) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      "INSERT OR IGNORE INTO wiki_articles (slug, title, category, summary, updated_at, version, sections, updated_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
       a.slug,
       a.title,
       a.category,
@@ -1155,6 +1343,7 @@ export abstract class SqliteBackend implements Storage {
       a.updatedAt,
       a.version,
       JSON.stringify(a.sections),
+      a.updatedBy ?? null,
     );
   }
   async updateWiki(slug: string, patch: Partial<WikiArticle>) {
@@ -1162,13 +1351,14 @@ export abstract class SqliteBackend implements Storage {
     if (!cur) return null;
     const next = { ...cur, ...patch, slug };
     await this.run(
-      "UPDATE wiki_articles SET title = ?, category = ?, summary = ?, updated_at = ?, version = ?, sections = ? WHERE slug = ?",
+      "UPDATE wiki_articles SET title = ?, category = ?, summary = ?, updated_at = ?, version = ?, sections = ?, updated_by = COALESCE(?, updated_by) WHERE slug = ?",
       next.title,
       next.category,
       next.summary,
       next.updatedAt,
       next.version,
       JSON.stringify(next.sections),
+      next.updatedBy ?? null,
       slug,
     );
     return next;
@@ -1220,6 +1410,125 @@ export abstract class SqliteBackend implements Storage {
   async deleteRelease(version: string) {
     const res = await this.run("DELETE FROM releases WHERE version = ?", version);
     return Number(res.changes) > 0;
+  }
+
+  async listJournalEntries(): Promise<JournalEntry[]> {
+    return (await this.many("SELECT * FROM journal_entries ORDER BY occurred_at DESC, rowid DESC")).map(
+      (r) => ({
+        id: str(r["id"]),
+        type: str(r["type"]) as JournalEntry["type"],
+        title: str(r["title"]),
+        description: str(r["description"]),
+        occurredAt: str(r["occurred_at"]),
+        status: str(r["status"]) as JournalEntry["status"],
+        authorId: str(r["author_id"]),
+        authorName: str(r["author_name"]),
+        ...(nul(r["department"]) ? { department: str(r["department"]) } : {}),
+        ...(nul(r["approved_by"]) ? { approvedBy: str(r["approved_by"]) } : {}),
+        ...(nul(r["approved_at"]) ? { approvedAt: str(r["approved_at"]) } : {}),
+        ...(nul(r["approved_note"]) ? { approvedNote: str(r["approved_note"]) } : {}),
+        comments: safeJson(r["comments"], [] as import("@/data/types").JournalComment[]),
+        attachments: safeJson(r["attachments"], [] as import("@/data/types").JournalAttachment[]),
+      }),
+    ) as JournalEntry[];
+  }
+
+  async insertJournalEntry(e: JournalEntry) {
+    await this.run(
+      "INSERT OR IGNORE INTO journal_entries (id, type, title, description, occurred_at, status, author_id, author_name, department, approved_by, approved_at, approved_note, comments, attachments) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      e.id,
+      e.type,
+      e.title,
+      e.description,
+      e.occurredAt,
+      e.status,
+      e.authorId,
+      e.authorName,
+      e.department ?? null,
+      e.approvedBy ?? null,
+      e.approvedAt ?? null,
+      e.approvedNote ?? null,
+      JSON.stringify(e.comments ?? []),
+      JSON.stringify(e.attachments ?? []),
+    );
+  }
+
+  async updateJournalEntry(e: JournalEntry): Promise<boolean> {
+    const existing = await this.getJournalEntryByIdInternal(e.id);
+    if (!existing) return false;
+    await this.run(
+      "UPDATE journal_entries SET type = ?, title = ?, description = ?, occurred_at = ?, status = ?, author_id = ?, author_name = ?, department = ?, approved_by = ?, approved_at = ?, approved_note = ?, comments = ?, attachments = ? WHERE id = ?",
+      e.type,
+      e.title,
+      e.description,
+      e.occurredAt,
+      e.status,
+      e.authorId,
+      e.authorName,
+      e.department ?? null,
+      e.approvedBy ?? null,
+      e.approvedAt ?? null,
+      e.approvedNote ?? null,
+      JSON.stringify(e.comments ?? []),
+      JSON.stringify(e.attachments ?? []),
+      e.id,
+    );
+    return true;
+  }
+
+  private async getJournalEntryByIdInternal(id: string): Promise<JournalEntry | null> {
+    const r = await this.one("SELECT * FROM journal_entries WHERE id = ?", id);
+    if (!r) return null;
+    return {
+      id: str(r["id"]),
+      type: str(r["type"]) as JournalEntry["type"],
+      title: str(r["title"]),
+      description: str(r["description"]),
+      occurredAt: str(r["occurred_at"]),
+      status: str(r["status"]) as JournalEntry["status"],
+      authorId: str(r["author_id"]),
+      authorName: str(r["author_name"]),
+      ...(nul(r["department"]) ? { department: str(r["department"]) } : {}),
+      ...(nul(r["approved_by"]) ? { approvedBy: str(r["approved_by"]) } : {}),
+      ...(nul(r["approved_at"]) ? { approvedAt: str(r["approved_at"]) } : {}),
+      ...(nul(r["approved_note"]) ? { approvedNote: str(r["approved_note"]) } : {}),
+      comments: safeJson(r["comments"], [] as import("@/data/types").JournalComment[]),
+      attachments: safeJson(r["attachments"], [] as import("@/data/types").JournalAttachment[]),
+    } as JournalEntry;
+  }
+
+  async deleteJournalEntry(id: string): Promise<boolean> {
+    const res = await this.run("DELETE FROM journal_entries WHERE id = ?", id);
+    return Number(res.changes) > 0;
+  }
+
+  async addJournalComment(id: string, comment: import("@/data/types").JournalComment): Promise<boolean> {
+    const entry = await this.getJournalEntryByIdInternal(id);
+    if (!entry) return false;
+    const comments = [...(entry.comments || []), comment];
+    await this.run("UPDATE journal_entries SET comments = ? WHERE id = ?", JSON.stringify(comments), id);
+    return true;
+  }
+
+  async updateOwnComment(entryId: string, commentId: string, content: string, userId: string): Promise<boolean> {
+    const entry = await this.getJournalEntryByIdInternal(entryId);
+    if (!entry) return false;
+    const idx = entry.comments.findIndex((c) => c.id === commentId);
+    if (idx < 0 || entry.comments[idx]!.authorId !== userId) return false;
+    const updatedComments = [...entry.comments];
+    updatedComments[idx] = { ...updatedComments[idx]!, content, editedAt: new Date().toISOString() };
+    await this.run("UPDATE journal_entries SET comments = ? WHERE id = ?", JSON.stringify(updatedComments), entryId);
+    return true;
+  }
+
+  async deleteOwnComment(entryId: string, commentId: string, userId: string): Promise<boolean> {
+    const entry = await this.getJournalEntryByIdInternal(entryId);
+    if (!entry) return false;
+    const idx = entry.comments.findIndex((c) => c.id === commentId);
+    if (idx < 0 || entry.comments[idx]!.authorId !== userId) return false;
+    const updatedComments = entry.comments.filter((_, i) => i !== idx);
+    await this.run("UPDATE journal_entries SET comments = ? WHERE id = ?", JSON.stringify(updatedComments), entryId);
+    return true;
   }
 
   async listPatentStages() {
@@ -1605,6 +1914,7 @@ export abstract class SqliteBackend implements Storage {
       wiki,
       milestones,
       releases,
+      journal,
       patentStages,
       techStack,
       automationShares,
@@ -1632,6 +1942,7 @@ export abstract class SqliteBackend implements Storage {
       this.listWiki(),
       this.listMilestones(),
       this.listReleases(),
+      this.listJournalEntries(),
       this.listPatentStages(),
       this.listTechStack(),
       this.listAutomationShares(),
@@ -1682,6 +1993,7 @@ export abstract class SqliteBackend implements Storage {
       wiki,
       milestones,
       releases,
+      journal,
       patentStages,
       techStack,
       automationShares,
@@ -1709,6 +2021,7 @@ export abstract class SqliteBackend implements Storage {
         "wiki_articles",
         "milestones",
         "releases",
+        "journal_entries",
         "patent_stages",
         "tech_stack",
         "automation_shares",
@@ -1732,6 +2045,7 @@ export abstract class SqliteBackend implements Storage {
       for (const w of dump.wiki) await this.insertWiki(w);
       for (const m of dump.milestones) await this.insertMilestone(m);
       for (const r of dump.releases) await this.insertRelease(r);
+      for (const j of dump.journal ?? []) await this.insertJournalEntry(j as import("@/data/types").JournalEntry);
       for (const p of dump.patentStages) await this.insertPatentStage(p);
       for (const t of dump.techStack) await this.insertTechStack(t as TechItem);
       for (const a of dump.automationShares) await this.upsertAutomationShare(a);
@@ -1841,7 +2155,7 @@ async function ensureSqliteSchema(exec: AsyncExec, opts?: { skipPragmas?: boolea
     await exec("PRAGMA foreign_keys = ON;");
   }
   await exec(SCHEMA);
-  for (const col of ["department TEXT", "bio TEXT"]) {
+  for (const col of ["department TEXT", "bio TEXT", "avatar_url TEXT", "team_member_id TEXT"]) {
     try {
       await exec(`ALTER TABLE users ADD COLUMN ${col}`);
     } catch {
@@ -1851,6 +2165,10 @@ async function ensureSqliteSchema(exec: AsyncExec, opts?: { skipPragmas?: boolea
   for (const sql of [
     "ALTER TABLE controls ADD COLUMN role TEXT NOT NULL DEFAULT 'gestor'",
     "ALTER TABLE risks ADD COLUMN role TEXT NOT NULL DEFAULT 'gestor'",
+    "ALTER TABLE risks ADD COLUMN status TEXT NOT NULL DEFAULT 'ativo'",
+    "ALTER TABLE risks ADD COLUMN next_action TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE risks ADD COLUMN due TEXT",
+    "ALTER TABLE risks ADD COLUMN task_id TEXT",
   ]) {
     try {
       await exec(sql);
@@ -1879,6 +2197,48 @@ async function ensureSqliteSchema(exec: AsyncExec, opts?: { skipPragmas?: boolea
     await exec("CREATE INDEX IF NOT EXISTS user_functions_user_idx ON user_functions(user_id)");
   } catch {
     void 0;
+  }
+
+  await ensureTasksMigration(exec);
+
+  // Índices de consulta frequente
+  const indexes = [
+    "CREATE INDEX IF NOT EXISTS idx_tasks_column_name ON tasks(column_name)",
+    "CREATE INDEX IF NOT EXISTS idx_comments_task_id ON comments(task_id)",
+    "CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)",
+    "CREATE INDEX IF NOT EXISTS idx_evidences_control_id ON evidences(control_id)",
+    "CREATE INDEX IF NOT EXISTS idx_reset_tokens_expires ON password_reset_tokens(expires_at)",
+  ];
+  for (const sql of indexes) {
+    try { await exec(sql); } catch { void 0; }
+  }
+
+  // Constraints de chave estrangeira
+  const fks = [
+    "ALTER TABLE tasks ADD CONSTRAINT fk_tasks_column FOREIGN KEY (column_name) REFERENCES board_columns(name) ON DELETE SET NULL",
+    "ALTER TABLE comments ADD CONSTRAINT fk_comments_task FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE",
+    "ALTER TABLE evidences ADD CONSTRAINT fk_evidences_control FOREIGN KEY (control_id) REFERENCES controls(id) ON DELETE SET NULL",
+    "ALTER TABLE risks ADD CONSTRAINT fk_risks_task FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE SET NULL",
+  ];
+  for (const sql of fks) {
+    try { await exec(sql); } catch { void 0; }
+  }
+}
+
+export async function ensureTasksMigration(exec: AsyncExec): Promise<void> {
+  const migrations = [
+    "ALTER TABLE tasks ADD COLUMN stage TEXT NOT NULL DEFAULT 'not_started'",
+    "ALTER TABLE tasks ADD COLUMN progress INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE tasks ADD COLUMN responsible TEXT",
+    "ALTER TABLE tasks ADD COLUMN waiting_on_client INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE wiki_articles ADD COLUMN updated_by TEXT",
+  ];
+  for (const sql of migrations) {
+    try {
+      await exec(sql);
+    } catch {
+      void 0;
+    }
   }
 }
 
@@ -2126,6 +2486,7 @@ export class MemoryStorage implements Storage {
   private wiki: WikiArticle[] = [];
   private milestones: Milestone[] = [];
   private releases: Release[] = [];
+  private journalEntries: import("@/data/types").JournalEntry[] = [];
   private patentStages: PatentStage[] = [];
   private techStack: TechItem[] = [];
   private automationShares: AutomationShare[] = [];
@@ -2203,7 +2564,12 @@ export class MemoryStorage implements Storage {
   }
   async updateUser(
     id: string,
-    patch: Partial<Pick<UserRow, "role" | "name" | "jobTitle" | "department" | "bio">>,
+    patch: Partial<
+      Pick<
+        UserRow,
+        "role" | "name" | "jobTitle" | "department" | "bio" | "avatarUrl" | "teamMemberId"
+      >
+    >,
   ) {
     this.users = this.users.map((u) => (u.id === id ? { ...u, ...patch } : u));
   }
@@ -2274,9 +2640,27 @@ export class MemoryStorage implements Storage {
   async updateTaskColumn(id: string, column: string) {
     const task = this.tasks.find((t) => t.id === id);
     if (!task) return null;
+    const stage = columnToStage(column);
+    const progress = inferProgressFromStage(stage);
+    const waitingOnClient = isWaitingOnClient(stage);
     task.column = column;
-    return task;
+    task.stage = stage;
+    task.progress = progress;
+    task.waitingOnClient = waitingOnClient;
+    return { ...task };
   }
+  async updateTaskProgress(
+    id: string,
+    data: { progress: number; responsible: string | null; due?: string },
+  ) {
+    const task = this.tasks.find((t) => t.id === id);
+    if (!task) return null;
+    task.progress = data.progress;
+    task.responsible = data.responsible ?? null;
+    if (data.due !== undefined) task.due = data.due ?? undefined;
+    return { ...task };
+  }
+
   async deleteTask(id: string) {
     const before = this.tasks.length;
     this.tasks = this.tasks.filter((t) => t.id !== id);
@@ -2430,6 +2814,46 @@ export class MemoryStorage implements Storage {
     return this.releases.length < before;
   }
 
+  async listJournalEntries() {
+    return [...this.journalEntries].sort((a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime());
+  }
+  async insertJournalEntry(e: import("@/data/types").JournalEntry) {
+    if (!this.journalEntries.some((x) => x.id === e.id)) this.journalEntries.push({ ...e, comments: [...e.comments], attachments: [...e.attachments] });
+  }
+  async updateJournalEntry(e: import("@/data/types").JournalEntry): Promise<boolean> {
+    const idx = this.journalEntries.findIndex((x) => x.id === e.id);
+    if (idx < 0) return false;
+    this.journalEntries[idx] = { ...e, comments: [...e.comments], attachments: [...e.attachments] };
+    return true;
+  }
+  async deleteJournalEntry(id: string) {
+    const before = this.journalEntries.length;
+    this.journalEntries = this.journalEntries.filter((x) => x.id !== id);
+    return this.journalEntries.length < before;
+  }
+  async addJournalComment(id: string, comment: import("@/data/types").JournalComment): Promise<boolean> {
+    const entry = this.journalEntries.find((x) => x.id === id);
+    if (!entry) return false;
+    entry.comments = [...entry.comments, { ...comment }];
+    return true;
+  }
+  async updateOwnComment(entryId: string, commentId: string, content: string, userId: string): Promise<boolean> {
+    const entry = this.journalEntries.find((x) => x.id === entryId);
+    if (!entry) return false;
+    const idx = entry.comments.findIndex((c) => c.id === commentId);
+    if (idx < 0 || entry.comments[idx]!.authorId !== userId) return false;
+    entry.comments[idx] = { ...entry.comments[idx]!, content, editedAt: new Date().toISOString() };
+    return true;
+  }
+  async deleteOwnComment(entryId: string, commentId: string, userId: string): Promise<boolean> {
+    const entry = this.journalEntries.find((x) => x.id === entryId);
+    if (!entry) return false;
+    const idx = entry.comments.findIndex((c) => c.id === commentId);
+    if (idx < 0 || entry.comments[idx]!.authorId !== userId) return false;
+    entry.comments = entry.comments.filter((_, i) => i !== idx);
+    return true;
+  }
+
   async listPatentStages() {
     return [...this.patentStages];
   }
@@ -2579,6 +3003,7 @@ export class MemoryStorage implements Storage {
       wiki: [...this.wiki],
       milestones: [...this.milestones],
       releases: [...this.releases],
+      journal: [...this.journalEntries],
       patentStages: [...this.patentStages],
       techStack: [...this.techStack],
       automationShares: [...this.automationShares],
@@ -2603,6 +3028,7 @@ export class MemoryStorage implements Storage {
     this.wiki = [...(dump.wiki ?? [])];
     this.milestones = [...(dump.milestones ?? [])];
     this.releases = [...(dump.releases ?? [])];
+    this.journalEntries = [...(dump.journal ?? [])];
     this.patentStages = [...(dump.patentStages ?? [])];
     this.techStack = [...(dump.techStack ?? [])];
     this.automationShares = [...(dump.automationShares ?? [])];
@@ -2968,7 +3394,8 @@ async function initStorage(): Promise<Storage> {
           ""
         ).trim()
       : "";
-  const isPostgres = postgresUrl.startsWith("postgres://") || postgresUrl.startsWith("postgresql://");
+  const isPostgres =
+    postgresUrl.startsWith("postgres://") || postgresUrl.startsWith("postgresql://");
   if (isPostgres) {
     console.info(`[portal] Tentando PostgresStorage (Neon)`);
     try {
@@ -3006,7 +3433,9 @@ async function initStorage(): Promise<Storage> {
       ? (
           process.env["TURSO_DATABASE_URL"] ??
           process.env["LIBSQL_URL"] ??
-          (process.env["DATABASE_URL"]?.startsWith("libsql://") ? process.env["DATABASE_URL"] : "") ??
+          (process.env["DATABASE_URL"]?.startsWith("libsql://")
+            ? process.env["DATABASE_URL"]
+            : "") ??
           ""
         ).trim()
       : "";

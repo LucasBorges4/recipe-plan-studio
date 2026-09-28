@@ -1,11 +1,30 @@
 <style>
-  #app:not(:empty) { display: block !important; }
-  #app:empty { display: none !important; }
-  #custom-login-root { display: block; }
-  #custom-login-root.hidden { display: none !important; }
-  #custom-login-root * { margin: 0; padding: 0; box-sizing: border-box; }
+  #app {
+    display: none !important;
+    visibility: hidden !important;
+  }
+  body.geos-authed #app {
+    display: block !important;
+    visibility: visible !important;
+  }
+  #custom-login-root {
+    display: block;
+  }
+  #custom-login-root.hidden {
+    display: none !important;
+  }
+  #custom-login-root * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
   .geos-bg {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-family:
+      "Inter",
+      -apple-system,
+      BlinkMacSystemFont,
+      "Segoe UI",
+      sans-serif;
     background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
     color: #f8fafc;
     min-height: 100vh;
@@ -17,120 +36,397 @@
     z-index: 99999;
   }
   .geos-bg::before {
-    content: '';
+    content: "";
     position: absolute;
-    top: -50%; left: -50%;
-    width: 200%; height: 200%;
-    background: radial-gradient(ellipse at 30% 50%, rgba(59,130,246,0.12) 0%, transparent 50%),
-                radial-gradient(ellipse at 70% 30%, rgba(99,102,241,0.08) 0%, transparent 50%);
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background:
+      radial-gradient(ellipse at 30% 50%, rgba(59, 130, 246, 0.12) 0%, transparent 50%),
+      radial-gradient(ellipse at 70% 30%, rgba(99, 102, 241, 0.08) 0%, transparent 50%);
     pointer-events: none;
   }
   .geos-card {
-    width: 100%; max-width: 440px;
+    width: 100%;
+    max-width: 440px;
     background: rgba(30, 41, 59, 0.85);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
     border-radius: 20px;
     padding: 56px 44px;
-    box-shadow: 0 25px 60px -12px rgba(0,0,0,0.6), 0 0 0 1px rgba(71,85,105,0.3), inset 0 1px 0 rgba(255,255,255,0.05);
-    border: 1px solid rgba(71,85,105,0.4);
-    position: relative; z-index: 1;
+    box-shadow:
+      0 25px 60px -12px rgba(0, 0, 0, 0.6),
+      0 0 0 1px rgba(71, 85, 105, 0.3),
+      inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(71, 85, 105, 0.4);
+    position: relative;
+    z-index: 1;
     margin: 16px;
   }
-  .geos-brand { text-align: center; margin-bottom: 36px; }
+  .geos-brand {
+    text-align: center;
+    margin-bottom: 36px;
+  }
   .geos-logo {
-    width: 160px; height: 80px;
+    width: 160px;
+    height: 80px;
     border-radius: 14px;
-    display: flex; align-items: center; justify-content: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     margin: 0 auto 18px;
     overflow: hidden;
     background: #ffffff;
-    border: 1px solid rgba(148,163,184,0.35);
+    border: 1px solid rgba(148, 163, 184, 0.35);
     padding: 6px 10px;
   }
   .geos-logo img {
-    width: 100%; height: 100%; object-fit: contain; border-radius: 8px;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    border-radius: 8px;
   }
-  .geos-brand h1 { font-size: 24px; font-weight: 700; letter-spacing: -0.5px; margin-bottom: 6px; color: #f1f5f9; }
-  .geos-brand p { color: #cbd5e1; font-size: 15px; font-weight: 500; }
+  .geos-brand h1 {
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    margin-bottom: 6px;
+    color: #f1f5f9;
+  }
+  .geos-brand p {
+    color: #cbd5e1;
+    font-size: 15px;
+    font-weight: 500;
+  }
   .geos-tabs {
-    display: flex; gap: 0; margin-bottom: 32px;
+    display: flex;
+    gap: 0;
+    margin-bottom: 32px;
     border-bottom: 2px solid #334155;
   }
   .geos-tab {
-    flex: 1; padding: 12px 16px;
-    background: none; border: none;
-    color: #94a3b8; font-size: 15px; font-weight: 600;
-    cursor: pointer; transition: all 0.2s;
+    flex: 1;
+    padding: 12px 16px;
+    background: none;
+    border: none;
+    color: #94a3b8;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
     border-bottom: 2px solid transparent;
     margin-bottom: -2px;
   }
-  .geos-tab:hover { color: #e2e8f0; }
-  .geos-tab.active { color: #60a5fa; border-bottom-color: #60a5fa; }
-  .geos-field { margin-bottom: 22px; }
-  .geos-row { display: flex; gap: 16px; }
-  .geos-row .geos-field { flex: 1; }
+  .geos-tab:hover {
+    color: #e2e8f0;
+  }
+  .geos-tab.active {
+    color: #60a5fa;
+    border-bottom-color: #60a5fa;
+  }
+  .geos-field {
+    margin-bottom: 22px;
+  }
+  .geos-row {
+    display: flex;
+    gap: 16px;
+  }
+  .geos-row .geos-field {
+    flex: 1;
+  }
   .geos-field label {
-    display: block; font-size: 13px; font-weight: 600;
-    color: #cbd5e1; margin-bottom: 8px;
-    text-transform: uppercase; letter-spacing: 0.5px;
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: #cbd5e1;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
   }
   .geos-field input {
-    width: 100%; padding: 14px 16px;
-    background: #1e293b; border: 1px solid #475569;
-    border-radius: 10px; color: #f8fafc;
-    font-size: 15px; transition: all 0.2s; outline: none;
+    width: 100%;
+    padding: 14px 16px;
+    background: #1e293b;
+    border: 1px solid #475569;
+    border-radius: 10px;
+    color: #f8fafc;
+    font-size: 15px;
+    transition: all 0.2s;
+    outline: none;
     line-height: 1.5;
   }
-  .geos-field input::placeholder { color: #64748b; }
-  .geos-field input:focus { border-color: #60a5fa; box-shadow: 0 0 0 3px rgba(96,165,250,0.2); }
-  .geos-btn {
-    width: 100%; padding: 15px;
-    background: linear-gradient(135deg, #3b82f6, #2563eb);
-    color: white; border: none;
-    border-radius: 10px; font-size: 15px; font-weight: 600;
-    cursor: pointer; transition: all 0.2s; margin-top: 8px;
-    letter-spacing: 0.2px;
-    box-shadow: 0 4px 12px rgba(59,130,246,0.3);
+  .geos-field input::placeholder {
+    color: #64748b;
   }
-  .geos-btn:hover { background: linear-gradient(135deg, #2563eb, #1d4ed8); transform: translateY(-1px); box-shadow: 0 6px 20px rgba(59,130,246,0.4); }
-  .geos-btn:active { transform: translateY(0); box-shadow: 0 2px 8px rgba(59,130,246,0.3); }
-  .geos-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+  .geos-field input:focus {
+    border-color: #60a5fa;
+    box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.2);
+  }
+  .geos-btn {
+    width: 100%;
+    padding: 15px;
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-top: 8px;
+    letter-spacing: 0.2px;
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+  }
+  .geos-btn:hover {
+    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+  }
+  .geos-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+  }
+  .geos-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+  }
   .geos-msg {
-    display: none; font-size: 14px; line-height: 1.5;
-    text-align: center; margin-top: 14px; padding: 12px 14px;
-    border-radius: 10px; font-weight: 500;
+    display: none;
+    font-size: 14px;
+    line-height: 1.5;
+    text-align: center;
+    margin-top: 14px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    font-weight: 500;
   }
   .geos-msg.error {
-    display: block; color: #fca5a5;
-    background: rgba(248,113,113,0.1);
-    border: 1px solid rgba(248,113,113,0.2);
+    display: block;
+    color: #fca5a5;
+    background: rgba(248, 113, 113, 0.1);
+    border: 1px solid rgba(248, 113, 113, 0.2);
   }
   .geos-msg.success {
-    display: block; color: #86efac;
-    background: rgba(74,222,128,0.1);
-    border: 1px solid rgba(74,222,128,0.2);
+    display: block;
+    color: #86efac;
+    background: rgba(74, 222, 128, 0.1);
+    border: 1px solid rgba(74, 222, 128, 0.2);
   }
-  .geos-footer { text-align: center; margin-top: 28px; color: #94a3b8; font-size: 12px; line-height: 1.6; }
+  .geos-footer {
+    text-align: center;
+    margin-top: 28px;
+    color: #94a3b8;
+    font-size: 12px;
+    line-height: 1.6;
+  }
+  .geos-legal-links {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 14px;
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid rgba(71, 85, 105, 0.4);
+  }
+  .geos-legal-link {
+    background: none;
+    border: none;
+    color: #8fb3e8;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    padding: 4px 6px;
+    text-decoration: none;
+    transition: color 0.2s;
+    letter-spacing: 0.1px;
+  }
+  .geos-legal-link:hover {
+    color: #c7d9f4;
+    text-decoration: underline;
+  }
+  .geos-legal-sep {
+    color: #475569;
+  }
+  .geos-modal-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 100000;
+    background: rgba(2, 6, 23, 0.72);
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  .geos-modal-backdrop.hidden {
+    display: none;
+  }
+  .geos-modal-card {
+    width: 100%;
+    max-width: 640px;
+    max-height: 82vh;
+    display: flex;
+    flex-direction: column;
+    background: #111a2e;
+    border: 1px solid rgba(71, 85, 105, 0.4);
+    border-radius: 16px;
+    box-shadow: 0 30px 80px -20px rgba(0, 0, 0, 0.8);
+    overflow: hidden;
+  }
+  .geos-modal-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 22px 24px 16px;
+    border-bottom: 1px solid rgba(71, 85, 105, 0.35);
+    background: rgba(30, 41, 59, 0.6);
+  }
+  .geos-modal-head h2 {
+    color: #f1f5f9;
+    font-size: 19px;
+    font-weight: 700;
+    margin-bottom: 3px;
+  }
+  .geos-modal-head p {
+    color: #94a3b8;
+    font-size: 12px;
+    line-height: 1.5;
+    margin: 0;
+  }
+  .geos-modal-close {
+    flex-shrink: 0;
+    background: rgba(71, 85, 105, 0.35);
+    border: none;
+    color: #cbd5e1;
+    width: 34px;
+    height: 34px;
+    border-radius: 9px;
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+  }
+  .geos-modal-close:hover {
+    background: rgba(248, 113, 113, 0.25);
+    color: #fecaca;
+  }
+  .geos-modal-body {
+    padding: 20px 24px 8px;
+    overflow-y: auto;
+  }
+  .geos-modal-body::-webkit-scrollbar {
+    width: 8px;
+  }
+  .geos-modal-body::-webkit-scrollbar-thumb {
+    background: #334155;
+    border-radius: 8px;
+  }
+  .geos-modal-intro {
+    color: #cbd5e1;
+    font-size: 13.5px;
+    line-height: 1.65;
+    margin-bottom: 18px;
+  }
+  .geos-modal-meta {
+    display: flex;
+    gap: 14px;
+    margin-bottom: 14px;
+    font-size: 11.5px;
+    color: #64748b;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+  .geos-modal-meta span {
+    background: rgba(71, 85, 105, 0.25);
+    padding: 4px 9px;
+    border-radius: 6px;
+  }
+  .geos-clause {
+    margin-bottom: 18px;
+    padding-left: 14px;
+    border-left: 3px solid #3b82f6;
+  }
+  .geos-clause h3 {
+    color: #e2e8f0;
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+  .geos-clause p {
+    color: #94a3b8;
+    font-size: 13px;
+    line-height: 1.65;
+    margin: 0;
+  }
+  .geos-modal-foot {
+    padding: 14px 24px 22px;
+    text-align: right;
+  }
+  .geos-modal-btn {
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    color: #fff;
+    border: none;
+    padding: 10px 22px;
+    border-radius: 10px;
+    font-size: 13.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .geos-modal-btn:hover {
+    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+    transform: translateY(-1px);
+  }
   .geos-spinner {
-    display: inline-block; width: 16px; height: 16px;
-    border: 2px solid rgba(255,255,255,0.3); border-radius: 50%;
-    border-top-color: white; animation: geos-spin 0.6s linear infinite;
-    vertical-align: middle; margin-right: 6px;
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    border-top-color: white;
+    animation: geos-spin 0.6s linear infinite;
+    vertical-align: middle;
+    margin-right: 6px;
   }
-  @keyframes geos-spin { to { transform: rotate(360deg); } }
-  .geos-panel { display: none; }
-  .geos-panel.active { display: block; }
+  @keyframes geos-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  .geos-panel {
+    display: none;
+  }
+  .geos-panel.active {
+    display: block;
+  }
   @media (max-width: 480px) {
-    .geos-card { padding: 40px 24px; }
-    .geos-brand h1 { font-size: 22px; }
-    .geos-row { flex-direction: column; gap: 0; }
-    .geos-logo { width: 64px; height: 64px; }
+    .geos-card {
+      padding: 40px 24px;
+    }
+    .geos-brand h1 {
+      font-size: 22px;
+    }
+    .geos-row {
+      flex-direction: column;
+      gap: 0;
+    }
+    .geos-logo {
+      width: 64px;
+      height: 64px;
+    }
   }
 </style>
 <div class="geos-bg">
   <div class="geos-card">
-    <div class="geos-msg" id="net-warn" style="margin-bottom:16px"></div>
+    <div class="geos-msg" id="net-warn" style="margin-bottom: 16px"></div>
     <div class="geos-brand">
       <div class="geos-logo"><img src="assets/logo.jpg" alt="Grupo W. Geotec CAFUFV" /></div>
       <h1>Grupo W. Geotec CAFUFV</h1>
@@ -147,11 +443,24 @@
       <form id="geos-login-form">
         <div class="geos-field">
           <label for="login-email">E-mail</label>
-          <input type="email" id="login-email" placeholder="seu@email.com" required autocomplete="email" autofocus />
+          <input
+            type="email"
+            id="login-email"
+            placeholder="seu@email.com"
+            required
+            autocomplete="email"
+            autofocus
+          />
         </div>
         <div class="geos-field">
           <label for="login-password">Senha</label>
-          <input type="password" id="login-password" placeholder="Sua senha" required autocomplete="current-password" />
+          <input
+            type="password"
+            id="login-password"
+            placeholder="Sua senha"
+            required
+            autocomplete="current-password"
+          />
         </div>
         <button type="submit" class="geos-btn" id="login-btn">Entrar</button>
         <div class="geos-msg" id="login-msg"></div>
@@ -173,168 +482,367 @@
         </div>
         <div class="geos-field">
           <label for="reg-email">E-mail</label>
-          <input type="email" id="reg-email" placeholder="seu@email.com" required autocomplete="email" />
+          <input
+            type="email"
+            id="reg-email"
+            placeholder="seu@email.com"
+            required
+            autocomplete="email"
+          />
         </div>
         <div class="geos-field">
           <label for="reg-password">Senha</label>
-          <input type="password" id="reg-password" placeholder="Mínimo 6 caracteres" required minlength="6" autocomplete="new-password" />
+          <input
+            type="password"
+            id="reg-password"
+            placeholder="Mínimo 6 caracteres"
+            required
+            minlength="6"
+            autocomplete="new-password"
+          />
         </div>
         <button type="submit" class="geos-btn" id="reg-btn">Criar Conta</button>
         <div class="geos-msg" id="reg-msg"></div>
       </form>
     </div>
 
-    <div class="geos-footer">Portal de Automação e Governança — Grupo W. Geotec CAFUFV</div>
+    <div class="geos-footer">
+      Portal de Automação e Governança — Grupo W. Geotec CAFUFV
+      <div class="geos-legal-links">
+        <a href="#" class="geos-legal-link" data-legal-doc="termos">Termos de Uso</a>
+        <span class="geos-legal-sep">•</span>
+        <a href="#" class="geos-legal-link" data-legal-doc="lgpd">Política LGPD</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="geos-modal-backdrop hidden" id="geos-legal-modal">
+  <div class="geos-modal-card">
+    <div class="geos-modal-head">
+      <div>
+        <h2 id="legal-title"></h2>
+        <p id="legal-subtitle"></p>
+      </div>
+      <button type="button" class="geos-modal-close" id="legal-close" aria-label="Fechar">✕</button>
+    </div>
+    <div class="geos-modal-body">
+      <div class="geos-modal-meta">
+        <span id="legal-version"></span>
+        <span id="legal-updated"></span>
+      </div>
+      <p class="geos-modal-intro" id="legal-intro"></p>
+      <div id="legal-clauses"></div>
+    </div>
+    <div class="geos-modal-foot">
+      <button type="button" class="geos-modal-btn" id="legal-ok">Entendi</button>
+    </div>
   </div>
 </div>
 
 <script>
-(function() {
-  var bg = document.querySelector('.geos-bg');
-  var app = document.getElementById('app');
-  var basePath = (typeof window.BASE_PATH !== 'undefined' ? window.BASE_PATH : '') || '';
-  var registerUrl = basePath.replace(/\/$/, '') + '/rest/register';
+  (function () {
+    var bg = document.querySelector(".geos-bg");
+    var app = document.getElementById("app");
+    var basePath = ((typeof window.BASE_PATH !== "undefined" ? window.BASE_PATH : "") || "").replace(/\/+$/, "");
+    var registerUrl = basePath.replace(/\/$/, "") + "/rest/register";
 
-  function readJson(r) {
-    return r.text().then(function(t) {
-      var d = null;
-      try { d = t ? JSON.parse(t) : null; } catch (e) { d = null; }
-      return { ok: r.ok, status: r.status, data: d };
-    });
-  }
-  function apiError(r, fallback) {
-    var d = r.data;
-    return (d && (d.message || d.error)) || (r.status ? ('HTTP ' + r.status) : fallback);
-  }
-  function netError(e) {
-    return 'Erro de conexão (' + ((e && e.message) || 'rede indisponível') + ').';
-  }
+    function readJson(r) {
+      return r.text().then(function (t) {
+        var d = null;
+        try {
+          d = t ? JSON.parse(t) : null;
+        } catch (e) {
+          d = null;
+        }
+        return { ok: r.ok, status: r.status, data: d };
+      });
+    }
+    function apiError(r, fallback) {
+      var d = r.data;
+      return (d && (d.message || d.error)) || (r.status ? "HTTP " + r.status : fallback);
+    }
+    function netError(e) {
+      return "Erro de conexão (" + ((e && e.message) || "rede indisponível") + ").";
+    }
 
-  /* Sonda de conectividade (endpoint anônimo 200, sem erro falso no console):
+    /* Sonda de conectividade (endpoint anônimo 200, sem erro falso no console):
      se o próprio navegador bloqueia requisições (extensão, antivírus, proxy),
      avisa na hora em vez de falhar no login. */
-  fetch(basePath + '/healthz', { method: 'GET', cache: 'no-store' })
-    .then(function() {})
-    .catch(function(e) {
-      if (e && e.message === 'Failed to fetch') {
-        var w = document.getElementById('net-warn');
-        if (w) {
-          w.textContent = 'Seu navegador ou antivírus está bloqueando as requisições deste site. Tente aba anônima ou libere este endereço no bloqueador/antivírus.';
-          w.className = 'geos-msg error';
+    fetch(basePath + "/healthz", { method: "GET", cache: "no-store" })
+      .then(function () {})
+      .catch(function (e) {
+        if (e && e.message === "Failed to fetch") {
+          var w = document.getElementById("net-warn");
+          if (w) {
+            w.textContent =
+              "Seu navegador ou antivírus está bloqueando as requisições deste site. Tente aba anônima ou libere este endereço no bloqueador/antivírus.";
+            w.className = "geos-msg error";
+          }
         }
-      }
+      });
+
+    function checkSession() {
+      fetch(basePath + "/rest/login", { credentials: "include" })
+        .then(readJson)
+        .then(function (r) {
+          var u = r.data && (r.data.data || r.data);
+          if (r.ok && u && u.id) {
+            document.body.classList.add("geos-authed");
+            if (bg) bg.style.display = "none";
+            if (app) app.style.display = "";
+          }
+        })
+        .catch(function () {});
+    }
+
+    checkSession();
+
+    var tabs = document.querySelectorAll(".geos-tab");
+    tabs.forEach(function (tab) {
+      tab.addEventListener("click", function () {
+        tabs.forEach(function (t) {
+          t.classList.remove("active");
+        });
+        document.querySelectorAll(".geos-panel").forEach(function (p) {
+          p.classList.remove("active");
+        });
+        tab.classList.add("active");
+        var panel = document.getElementById("panel-" + tab.getAttribute("data-tab"));
+        if (panel) panel.classList.add("active");
+        document.querySelectorAll(".geos-msg").forEach(function (m) {
+          m.className = "geos-msg";
+        });
+      });
     });
 
-  if (document.cookie.indexOf('n8n-auth=') !== -1) {
-    fetch(basePath + '/rest/login', {credentials: 'include'})
-      .then(readJson)
-      .then(function(r) {
-        var u = r.data && (r.data.data || r.data);
-        if (r.ok && u && u.id) {
-          if (bg) bg.style.display = 'none';
-          if (app) app.style.display = '';
-        }
+    var loginForm = document.getElementById("geos-login-form");
+    var loginBtn = document.getElementById("login-btn");
+    var loginMsg = document.getElementById("login-msg");
+
+    loginForm.addEventListener("submit", function (e) {
+      e.preventDefault();
+      var email = document.getElementById("login-email").value.trim();
+      var password = document.getElementById("login-password").value;
+      if (!email || !password) return;
+
+      loginMsg.className = "geos-msg";
+      loginBtn.disabled = true;
+      loginBtn.innerHTML = '<span class="geos-spinner"></span> Entrando...';
+
+      fetch(basePath + "/rest/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ emailOrLdapLoginId: email, password: password }),
       })
-      .catch(function() {});
-  }
-
-  var tabs = document.querySelectorAll('.geos-tab');
-  tabs.forEach(function(tab) {
-    tab.addEventListener('click', function() {
-      tabs.forEach(function(t) { t.classList.remove('active'); });
-      document.querySelectorAll('.geos-panel').forEach(function(p) { p.classList.remove('active'); });
-      tab.classList.add('active');
-      var panel = document.getElementById('panel-' + tab.getAttribute('data-tab'));
-      if (panel) panel.classList.add('active');
-      document.querySelectorAll('.geos-msg').forEach(function(m) { m.className = 'geos-msg'; });
+        .then(readJson)
+        .then(function (r) {
+          var u = r.data && (r.data.data || r.data);
+          if (r.ok && u && u.id) {
+            window.location.href = basePath + "/home/workflows";
+          } else {
+            loginMsg.textContent = apiError(r, "Credenciais inválidas.");
+            loginMsg.className = "geos-msg error";
+          }
+          loginBtn.disabled = false;
+          loginBtn.textContent = "Entrar";
+        })
+        .catch(function (e) {
+          loginMsg.textContent = netError(e);
+          loginMsg.className = "geos-msg error";
+          loginBtn.disabled = false;
+          loginBtn.textContent = "Entrar";
+        });
     });
-  });
 
-  var loginForm = document.getElementById('geos-login-form');
-  var loginBtn = document.getElementById('login-btn');
-  var loginMsg = document.getElementById('login-msg');
+    var regForm = document.getElementById("geos-register-form");
+    var regBtn = document.getElementById("reg-btn");
+    var regMsg = document.getElementById("reg-msg");
 
-  loginForm.addEventListener('submit', function(e) {
-    e.preventDefault();
-    var email = document.getElementById('login-email').value.trim();
-    var password = document.getElementById('login-password').value;
-    if (!email || !password) return;
+    regForm.addEventListener("submit", function (e) {
+      e.preventDefault();
+      var firstName = document.getElementById("reg-firstName").value.trim();
+      var lastName = document.getElementById("reg-lastName").value.trim();
+      var email = document.getElementById("reg-email").value.trim();
+      var password = document.getElementById("reg-password").value;
+      if (!email || !password || !firstName) return;
 
-    loginMsg.className = 'geos-msg';
-    loginBtn.disabled = true;
-    loginBtn.innerHTML = '<span class="geos-spinner"></span> Entrando...';
+      regMsg.className = "geos-msg";
+      regBtn.disabled = true;
+      regBtn.innerHTML = '<span class="geos-spinner"></span> Criando conta...';
 
-    fetch(basePath + '/rest/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ emailOrLdapLoginId: email, password: password })
-    })
-    .then(readJson)
-    .then(function(r) {
-      var u = r.data && (r.data.data || r.data);
-      if (r.ok && u && u.id) {
-        window.location.href = basePath + '/';
-      } else {
-        loginMsg.textContent = apiError(r, 'Credenciais inválidas.');
-        loginMsg.className = 'geos-msg error';
-      }
-      loginBtn.disabled = false;
-      loginBtn.textContent = 'Entrar';
-    })
-    .catch(function(e) {
-      loginMsg.textContent = netError(e);
-      loginMsg.className = 'geos-msg error';
-      loginBtn.disabled = false;
-      loginBtn.textContent = 'Entrar';
+      fetch(registerUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: email,
+          password: password,
+          firstName: firstName,
+          lastName: lastName,
+        }),
+      })
+        .then(readJson)
+        .then(function (r) {
+          if (r.ok && r.data && r.data.ok) {
+            regMsg.textContent = r.data.message || "Conta criada! Faça login.";
+            regMsg.className = "geos-msg success";
+            regForm.reset();
+            setTimeout(function () {
+              tabs[0].click();
+              document.getElementById("login-email").value = email;
+              document.getElementById("login-password").focus();
+            }, 1500);
+          } else {
+            regMsg.textContent = apiError(r, "Erro ao criar conta.");
+            regMsg.className = "geos-msg error";
+          }
+          regBtn.disabled = false;
+          regBtn.textContent = "Criar Conta";
+        })
+        .catch(function (e) {
+          regMsg.textContent = netError(e);
+          regMsg.className = "geos-msg error";
+          regBtn.disabled = false;
+          regBtn.textContent = "Criar Conta";
+        });
     });
-  });
+  /* Conteúdo legal sincronizado com src/data/legal.ts do portal. */
+    var LEGAL_DOCS = {
+      termos: {
+        title: "Termos de Uso",
+        subtitle:
+          "Portal de Governança Corporativa — GWG — Grupo W. Geotec — Geociências Aplicadas e Tecnologias",
+        version: "v1.2",
+        updatedAt: "Fev 2026",
+        intro:
+          "Estes Termos de Uso regulam as condições gerais de uso do Portal de Governança Corporativa do GWG — Grupo W. Geotec — Geociências Aplicadas e Tecnologias. A utilização do Portal implica na aceitação plena e irrestrita de todas as cláusulas e condições aqui descritas. Recomendamos a leitura atenta antes de prosseguir.",
+        clauses: [
+          {
+            title: "Objeto",
+            body: 'Estes Termos de Uso regulam o acesso e a utilização do Portal de Governança Corporativa do GWG — Grupo W. Geotec — Geociências Aplicadas e Tecnologias ("Portal"), uma plataforma digital destinada à gestão integrada de processos de governança, compliance, gestão de riscos e operações de engenharia. Ao acessar o Portal, o usuário declara ter lido e concordado integralmente com os termos aqui dispostos.',
+          },
+          {
+            title: "Acesso e Credenciais",
+            body: "O acesso ao Portal é restrito a colaboradores, gestores e parceiros devidamente autorizados pelo GWG — Grupo W. Geotec — Geociências Aplicadas e Tecnologias. Cada usuário receberá credenciais individuais e intransferíveis. O compartilhamento de senhas ou o uso indevido de credenciais de terceiros constitui infração grave, sujeita a sanções disciplinares e legais. O usuário é integralmente responsável por todas as ações realizadas sob suas credenciais.",
+          },
+          {
+            title: "Propriedade Intelectual",
+            body: "Todo o conteúdo do Portal — incluindo código-fonte, layout, marcas, logotipos, textos, imagens, bases de dados e documentação técnica — é de propriedade exclusiva do GWG — Grupo W. Geotec — Geociências Aplicadas e Tecnologias, sendo vedada qualquer reprodução, distribuição ou engenharia reversa sem autorização expressa por escrito.",
+          },
+          {
+            title: "Uso Aceitável",
+            body: "É vedado ao usuário: (i) tentar burlar mecanismos de segurança ou controle de acesso; (ii) inserir dados falsos, ofensivos ou ilícitos; (iii) utilizar o Portal para finalidade estranha às atividades profissionais autorizadas; (iv) extrair dados em massa sem autorização formal da área de governança.",
+          },
+          {
+            title: "Registro de Atividades",
+            body: "Todas as ações executadas no Portal são registradas em trilha de auditoria, incluindo data, hora, endereço de origem e identificação do usuário. Esses registros podem ser utilizados em auditorias internas, investigações de incidentes e processos administrativos.",
+          },
+          {
+            title: "Disponibilidade e Manutenção",
+            body: "O GWG — Grupo W. Geotec — Geociências Aplicadas e Tecnologias empreenderá esforços razoáveis para manter o Portal disponível, podendo suspender o serviço para manutenções programadas ou emergenciais, com comunicação prévia sempre que possível.",
+          },
+          {
+            title: "Alterações destes Termos",
+            body: "Estes Termos podem ser atualizados a qualquer momento. A versão vigente é sempre a publicada nesta página, identificada pela versão e data de última atualização. O uso continuado do Portal após a publicação implica aceitação da nova versão.",
+          },
+          {
+            title: "Foro e Legislação Aplicável",
+            body: "Estes Termos são regidos pela legislação brasileira. Fica eleito o foro da comarca da sede do GWG — Grupo W. Geotec — Geociências Aplicadas e Tecnologias para dirimir eventuais controvérsias, com renúncia a qualquer outro, por mais privilegiado que seja.",
+          },
+        ],
+      },
+      lgpd: {
+        title: "Política LGPD",
+        subtitle:
+          "Proteção de dados pessoais — GWG — Grupo W. Geotec — Geociências Aplicadas e Tecnologias",
+        version: "v1.1",
+        updatedAt: "Fev 2026",
+        intro:
+          "Esta Política descreve como o GWG — Grupo W. Geotec — Geociências Aplicadas e Tecnologias trata dados pessoais no âmbito do Portal de Governança Corporativa, em conformidade com a Lei nº 13.709/2018 (Lei Geral de Proteção de Dados Pessoais).",
+        clauses: [
+          {
+            title: "Dados Tratados",
+            body: "São tratados dados de identificação (nome, e-mail corporativo, matrícula), dados de acesso (endereço IP, registros de login, ações no sistema) e dados profissionais (cargo, área, atribuições em tarefas e aprovações).",
+          },
+          {
+            title: "Finalidades do Tratamento",
+            body: "Os dados são tratados para autenticar usuários, controlar níveis de acesso, registrar trilhas de auditoria, gerar indicadores de governança e cumprir obrigações legais e regulatórias.",
+          },
+          {
+            title: "Bases Legais",
+            body: "O tratamento se fundamenta na execução de contrato de trabalho ou de prestação de serviços, no cumprimento de obrigação legal e regulatória e no legítimo interesse do controlador para fins de segurança da informação.",
+          },
+          {
+            title: "Compartilhamento",
+            body: "Dados podem ser compartilhados com operadores de infraestrutura em nuvem e ferramentas de auditoria contratadas, sempre sob contrato com cláusulas de proteção de dados e restrição de finalidade.",
+          },
+          {
+            title: "Retenção e Descarte",
+            body: "Registros de auditoria são retidos por 5 anos. Dados cadastrais são mantidos durante o vínculo do usuário e por período legal adicional, sendo posteriormente anonimizados ou eliminados de forma segura.",
+          },
+          {
+            title: "Segurança da Informação",
+            body: "São adotados controles de criptografia em trânsito e em repouso, autenticação de múltiplos fatores, segregação de ambientes, anonimização de bases em ambientes de teste e revisão periódica de privilégios.",
+          },
+          {
+            title: "Direitos do Titular",
+            body: "O titular pode solicitar confirmação de tratamento, acesso, correção, anonimização, portabilidade e informação sobre compartilhamentos, mediante pedido ao Encarregado de Dados.",
+          },
+          {
+            title: "Encarregado de Dados (DPO)",
+            body: "As solicitações e dúvidas relativas a esta Política devem ser encaminhadas ao Encarregado de Dados do GWG — Grupo W. Geotec — Geociências Aplicadas e Tecnologias pelo canal interno de privacidade.",
+          },
+        ],
+      },
+    };
 
-  var regForm = document.getElementById('geos-register-form');
-  var regBtn = document.getElementById('reg-btn');
-  var regMsg = document.getElementById('reg-msg');
+    var legalModal = document.getElementById("geos-legal-modal");
+    var legalClose = document.getElementById("legal-close");
+    var legalOk = document.getElementById("legal-ok");
 
-  regForm.addEventListener('submit', function(e) {
-    e.preventDefault();
-    var firstName = document.getElementById('reg-firstName').value.trim();
-    var lastName = document.getElementById('reg-lastName').value.trim();
-    var email = document.getElementById('reg-email').value.trim();
-    var password = document.getElementById('reg-password').value;
-    if (!email || !password || !firstName) return;
+    function renderLegalDoc(key) {
+      var doc = LEGAL_DOCS[key];
+      if (!doc) return;
+      document.getElementById("legal-title").textContent = doc.title;
+      document.getElementById("legal-subtitle").textContent = doc.subtitle;
+      document.getElementById("legal-version").textContent = "Versão " + doc.version;
+      document.getElementById("legal-updated").textContent = "Atualizado em " + doc.updatedAt;
+      document.getElementById("legal-intro").textContent = doc.intro;
+      var wrap = document.getElementById("legal-clauses");
+      wrap.innerHTML = "";
+      doc.clauses.forEach(function (c) {
+        var el = document.createElement("div");
+        el.className = "geos-clause";
+        var h = document.createElement("h3");
+        h.textContent = c.title;
+        var p = document.createElement("p");
+        p.textContent = c.body;
+        el.appendChild(h);
+        el.appendChild(p);
+        wrap.appendChild(el);
+      });
+      legalModal.classList.remove("hidden");
+      document.querySelector(".geos-modal-body").scrollTop = 0;
+    }
 
-    regMsg.className = 'geos-msg';
-    regBtn.disabled = true;
-    regBtn.innerHTML = '<span class="geos-spinner"></span> Criando conta...';
+    function closeLegalModal() {
+      legalModal.classList.add("hidden");
+    }
 
-    fetch(registerUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: email, password: password, firstName: firstName, lastName: lastName })
-    })
-    .then(readJson)
-    .then(function(r) {
-      if (r.ok && r.data && r.data.ok) {
-        regMsg.textContent = r.data.message || 'Conta criada! Faça login.';
-        regMsg.className = 'geos-msg success';
-        regForm.reset();
-        setTimeout(function() {
-          tabs[0].click();
-          document.getElementById('login-email').value = email;
-          document.getElementById('login-password').focus();
-        }, 1500);
-      } else {
-        regMsg.textContent = apiError(r, 'Erro ao criar conta.');
-        regMsg.className = 'geos-msg error';
-      }
-      regBtn.disabled = false;
-      regBtn.textContent = 'Criar Conta';
-    })
-    .catch(function(e) {
-      regMsg.textContent = netError(e);
-      regMsg.className = 'geos-msg error';
-      regBtn.disabled = false;
-      regBtn.textContent = 'Criar Conta';
+    document.querySelectorAll(".geos-legal-link").forEach(function (link) {
+      link.addEventListener("click", function (e) {
+        e.preventDefault();
+        renderLegalDoc(link.getAttribute("data-legal-doc"));
+      });
     });
-  });
-})();
+    if (legalClose) legalClose.addEventListener("click", closeLegalModal);
+    if (legalOk) legalOk.addEventListener("click", closeLegalModal);
+    legalModal.addEventListener("click", function (e) {
+      if (e.target === legalModal) closeLegalModal();
+    });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && !legalModal.classList.contains("hidden")) closeLegalModal();
+    });
+  })();
 </script>

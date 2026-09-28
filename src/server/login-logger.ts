@@ -10,23 +10,39 @@ function ensureDir() {
   }
 }
 
+function maskEmail(email: string): string {
+  const atIndex = email.indexOf("@");
+  if (atIndex <= 0) return "***@***";
+  return `***@${email.slice(atIndex + 1)}`;
+}
+
+function maskIp(ip: string | null): string | null {
+  if (!ip) return null;
+  const parts = ip.split(".");
+  if (parts.length === 4) {
+    return `${parts[0]}.${parts[1]}.${parts[2]}.***`;
+  }
+  return ip;
+}
+
 export interface LoginLogEntry {
   ts: string;
   email: string;
   ip: string | null;
   outcome: "success" | "failure" | "rate_limited" | "error";
-  reason?: string;
-  userFound?: boolean;
-  passwordValid?: boolean;
-  pepperSource?: "env" | "meta";
-  passwordHashPrefix?: string;
-  error?: string;
+  reason?: string | undefined;
+  error?: string | undefined;
 }
 
 export function logLoginAttempt(entry: LoginLogEntry): void {
   try {
     ensureDir();
-    appendFileSync(LOG_FILE, JSON.stringify(entry) + "\n", "utf-8");
+    const safeEntry = {
+      ...entry,
+      email: maskEmail(entry.email),
+      ip: maskIp(entry.ip),
+    };
+    appendFileSync(LOG_FILE, JSON.stringify(safeEntry) + "\n", "utf-8");
   } catch {
     // nunca deve travar o login por falha de log
   }
