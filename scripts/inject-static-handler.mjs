@@ -7,10 +7,15 @@ const serverPath = join(__dirname, "..", ".output", "server", "index.mjs");
 
 let code = readFileSync(serverPath, "utf-8");
 
-// Skip if already injected
-if (code.includes("custom-static-files")) {
-  console.log("✅ Static file handler already injected");
-  process.exit(0);
+// Always inject the handler - remove any previous version first
+const marker = "//#region custom-static-files";
+const markerEnd = "//#endregion\n";
+const markerStartIdx = code.indexOf(marker);
+const markerEndIdx = code.indexOf(markerEnd, markerStartIdx);
+
+if (markerStartIdx !== -1 && markerEndIdx !== -1) {
+  // Remove old version
+  code = code.slice(0, markerStartIdx) + code.slice(markerEndIdx + markerEnd.length);
 }
 
 // Static file handler code using already-imported modules
@@ -61,10 +66,21 @@ if (!code.includes("existsSync")) {
 }
 
 // Insert the static handler code before the static.mjs region
-const marker = "//#region node_modules/nitro/dist/runtime/internal/static.mjs";
-const idx = code.indexOf(marker);
+const regionMarker = "//#region node_modules/nitro/dist/runtime/internal/static.mjs";
+const idx = code.indexOf(regionMarker);
 if (idx !== -1) {
   code = code.slice(0, idx) + staticHandlerCode + "\n" + code.slice(idx);
+} else {
+  // Fallback: insert at the beginning
+  code = staticHandlerCode + "\n" + code;
+}
+
+// Validate the final code has all required pieces
+const required = ["staticFileHandler", "globalMiddleware", "existsSync", "statSync", "resolve", "promises"];
+const missing = required.filter(r => !code.includes(r));
+if (missing.length > 0) {
+  console.error("❌ Injection incomplete, missing:", missing);
+  process.exit(1);
 }
 
 writeFileSync(serverPath, code);

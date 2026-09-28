@@ -15,6 +15,10 @@ module.exports = {
       autorestart: true,
       watch: false,
       max_memory_restart: "500M",
+      max_restarts: 10,
+      restart_delay: 4000,
+      min_uptime: "10s",
+      exp_backoff_restart_delay: 4000,
     },
   ],
 };
