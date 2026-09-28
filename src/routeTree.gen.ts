@@ -18,6 +18,7 @@ import { Route as DiarioRouteImport } from './routes/diario'
 import { Route as EquipeRouteImport } from './routes/equipe'
 import { Route as LgpdRouteImport } from './routes/lgpd'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as MentoriaRouteImport } from './routes/mentoria'
 import { Route as PerfilRouteImport } from './routes/perfil'
 import { Route as RiscosRouteImport } from './routes/riscos'
 import { Route as TarefasRouteImport } from './routes/tarefas'
@@ -72,6 +73,11 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const MentoriaRoute = MentoriaRouteImport.update({
+  id: '/mentoria',
+  path: '/mentoria',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PerfilRoute = PerfilRouteImport.update({
   id: '/perfil',
   path: '/perfil',
@@ -123,6 +129,7 @@ export interface FileRoutesByFullPath {
   '/equipe': typeof EquipeRoute
   '/lgpd': typeof LgpdRoute
   '/login': typeof LoginRoute
+  '/mentoria': typeof MentoriaRoute
   '/perfil': typeof PerfilRouteWithChildren
   '/riscos': typeof RiscosRoute
   '/tarefas': typeof TarefasRoute
@@ -142,6 +149,7 @@ export interface FileRoutesByTo {
   '/equipe': typeof EquipeRoute
   '/lgpd': typeof LgpdRoute
   '/login': typeof LoginRoute
+  '/mentoria': typeof MentoriaRoute
   '/perfil': typeof PerfilRouteWithChildren
   '/riscos': typeof RiscosRoute
   '/tarefas': typeof TarefasRoute
@@ -161,6 +169,7 @@ export interface FileRoutesById {
   '/equipe': typeof EquipeRoute
   '/lgpd': typeof LgpdRoute
   '/login': typeof LoginRoute
+  '/mentoria': typeof MentoriaRoute
   '/perfil': typeof PerfilRouteWithChildren
   '/riscos': typeof RiscosRoute
   '/tarefas': typeof TarefasRoute
@@ -182,6 +191,7 @@ export interface FileRouteTypes {
     | '/equipe'
     | '/lgpd'
     | '/login'
+    | '/mentoria'
     | '/perfil'
     | '/riscos'
     | '/tarefas'
@@ -201,6 +211,7 @@ export interface FileRouteTypes {
     | '/equipe'
     | '/lgpd'
     | '/login'
+    | '/mentoria'
     | '/perfil'
     | '/riscos'
     | '/tarefas'
@@ -219,6 +230,7 @@ export interface FileRouteTypes {
     | '/equipe'
     | '/lgpd'
     | '/login'
+    | '/mentoria'
     | '/perfil'
     | '/riscos'
     | '/tarefas'
@@ -239,6 +251,7 @@ export interface RootRouteChildren {
   EquipeRoute: typeof EquipeRoute
   LgpdRoute: typeof LgpdRoute
   LoginRoute: typeof LoginRoute
+  MentoriaRoute: typeof MentoriaRoute
   PerfilRoute: typeof PerfilRouteWithChildren
   RiscosRoute: typeof RiscosRoute
   TarefasRoute: typeof TarefasRoute
@@ -309,6 +322,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/mentoria': {
+      id: '/mentoria'
+      path: '/mentoria'
+      fullPath: '/mentoria'
+      preLoaderRoute: typeof MentoriaRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/perfil': {
@@ -403,6 +423,7 @@ const rootRouteChildren: RootRouteChildren = {
   EquipeRoute: EquipeRoute,
   LgpdRoute: LgpdRoute,
   LoginRoute: LoginRoute,
+  MentoriaRoute: MentoriaRoute,
   PerfilRoute: PerfilRouteWithChildren,
   RiscosRoute: RiscosRoute,
   TarefasRoute: TarefasRoute,
