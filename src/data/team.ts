@@ -116,7 +116,7 @@ export const teamMembers: TeamMember[] = [
     group: "projeto",
     name: "Lucas Borges",
     role: "Gerente de Tecnologia e Soluções Digitais",
-    area: "Tecnologia",
+    area: "Tecnologia e Soluções Digitais",
     tier: "member",
     photo: "/team/lucas-borges.png",
     email: "lucas.borges@gwg.com",
