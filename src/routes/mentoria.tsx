@@ -192,15 +192,10 @@ export default function MentoriaPage() {
 
   return (
     <div className="flex min-h-screen bg-surface">
-      <aside className="hidden w-72 shrink-0 flex-col bg-sidebar lg:flex lg:fixed lg:inset-y-0">
-        <Brand />
-        <NavList />
-        <SidebarFooter />
-      </aside>
+      <Header />
 
-      <div className="flex min-w-0 flex-1 flex-col lg:pl-72">
-        <Header />
-        <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-8 lg:px-8 lg:py-10">
+      <div className="flex min-w-0 flex-1 flex-col lg:pl-64">
+        <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 lg:px-8 lg:py-10">
           <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-8">
             <section className="space-y-6">
               <Card className="shadow-sm border-border bg-white">
@@ -259,7 +254,7 @@ export default function MentoriaPage() {
               </Card>
             </section>
 
-            <aside className="space-y-4">
+            <div className="space-y-4">
               {featureCards.map((card, index) => (
                 <Card key={index} className="shadow-sm border-border bg-white hover:shadow-md transition-shadow">
                   <CardContent className="pt-6">
@@ -275,7 +270,7 @@ export default function MentoriaPage() {
                   </CardContent>
                 </Card>
               ))}
-            </aside>
+            </div>
           </div>
         </main>
       </div>

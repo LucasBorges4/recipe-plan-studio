@@ -8,14 +8,14 @@ describe("team data (Equipe e Projeto)", () => {
     expect(ger?.tier).toBe("lead");
     expect(cam?.tier).toBe("secondary");
     expect(cam?.primaryContact).toBe(true);
-    expect(ger?.role).toBe("CSO");
-    expect(cam?.role).toBe("CPO");
+    expect(ger?.role).toBe("Presidente Científico e Estratégico");
+    expect(cam?.role).toBe("Diretora Executiva Geral");
   });
 
-  it("todos os cargos definidos estão em inglês (RF03)", () => {
+  it("todos os cargos definidos estão em português (RF03)", () => {
     for (const m of teamMembers) {
       if (m.role) {
-        expect(m.role).toMatch(/^[A-Za-z0-9 &.,'()/-]+$/);
+        expect(m.role).toMatch(/^[\w\sáéíóúâêôãõçàèìòùäëïöüñÁÉÍÓÚÂÊÔÃÕÇÀÈÌÒÙÄËÏÖÜÑ\s.,-]+$/);
       }
     }
   });
