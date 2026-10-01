@@ -1,4 +1,4 @@
-import { Link, createFileRoute } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { cn } from "@/lib/utils";
 import { useSession } from "@/lib/api-hooks";
 import {
@@ -66,11 +66,16 @@ export default function MentoriaPage() {
                     size="lg"
                     className="h-14 px-6 bg-brand text-brand-foreground font-semibold shadow-sm hover:shadow-md hover:bg-brand/90 transition-all"
                   >
-                    <Link to="#" className="flex items-center gap-2">
+                    <a
+                      href="https://grupo-zaggo.pages.dev/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2"
+                    >
                       <ExternalLink className="size-4" />
                       Acessar portal da mentoria
                       <ExternalLink className="size-4" />
-                    </Link>
+                    </a>
                   </Button>
                   <p className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
                     <Info className="size-4 text-info" />

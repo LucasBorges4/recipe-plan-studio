@@ -35,7 +35,7 @@ export function TeamSection({ teamList }: TeamSectionProps) {
           {sortedList.map((tm) => (
             <li key={tm.id}>
               <div className="flex items-center gap-3 rounded-lg px-2 py-2">
-                <Avatar name={tm.name} avatarUrl={tm.photo ?? photoForName(tm.name)} size="md" />
+                <Avatar name={tm.name} avatarUrl={tm.photo ?? photoForName(tm.name) ?? null} size="md" />
                 <div className="min-w-0">
                   <p className="text-sm font-bold truncate text-foreground">{tm.name}</p>
                   <p className="text-[11px] text-muted-foreground truncate">

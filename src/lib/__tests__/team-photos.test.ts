@@ -11,12 +11,12 @@ import {
 import { teamPhotosManifest } from "@/lib/team-photos.generated";
 
 const FIXED_SLUGS = new Set([
-  "gerson",
-  "camila",
+  "gerson-santos",
+  "camila-barcelos",
   "daniel-melo",
   "ana-soares",
-  "tome",
-  "arthur",
+  "tome-melo",
+  "arthur-senra",
   "michael-barbosa",
   "lucas-borges",
 ]);
@@ -51,8 +51,8 @@ describe("matchTeamPhoto (sincronização de foto por nome)", () => {
   });
 
   it("encontra ignorando acentos e pontuação", () => {
-    expect(matchTeamPhoto("Gérson")).toBe("/team/gerson.png");
-    expect(matchTeamPhoto("Tomé")).toBe("/team/tome.png");
+    expect(matchTeamPhoto("Gérson Santos")).toBe("/team/gerson-santos.png");
+    expect(matchTeamPhoto("Tomé Melo")).toBe("/team/tome-melo.png");
     expect(matchTeamPhoto("Michael Barbosa (Berg)")).toBe("/team/michael-barbosa.png");
   });
 
