@@ -25,32 +25,33 @@ describe("can (matriz RBAC)", () => {
     for (const p of todas) expect(can("admin", p)).toBe(true);
   });
 
-  it("diretor só tem aprovar/comentar/revisar/auditar", () => {
+  it("diretor só tem aprovar/comentar/revisar/auditar/criar", () => {
     expect(can("diretor", "task.approve")).toBe(true);
     expect(can("diretor", "evidence.review")).toBe(true);
     expect(can("diretor", "audit.read")).toBe(true);
     expect(can("diretor", "task.comment")).toBe(true);
-    expect(can("diretor", "task.create")).toBe(false);
-    expect(can("diretor", "task.move")).toBe(false);
+    expect(can("diretor", "task.create")).toBe(true);
+    expect(can("diretor", "task.move")).toBe(true);
     expect(can("diretor", "evidence.attach")).toBe(false);
     expect(can("diretor", "admin.manage")).toBe(false);
   });
 
-  it("gestor pode criar/mover/comentar/anexar mas não aprovar nem admin", () => {
+  it("gestor pode criar/mover/comentar/anexar e aprovar, mas não admin", () => {
     expect(can("gestor", "task.create")).toBe(true);
     expect(can("gestor", "task.move")).toBe(true);
     expect(can("gestor", "task.comment")).toBe(true);
     expect(can("gestor", "evidence.attach")).toBe(true);
-    expect(can("gestor", "task.approve")).toBe(false);
+    expect(can("gestor", "task.approve")).toBe(true);
     expect(can("gestor", "admin.manage")).toBe(false);
   });
 
-  it("desenvolvedor só move/comenta/anexa", () => {
+  it("desenvolvedor cria, move, comenta, anexa e compartilha automações", () => {
+    expect(can("desenvolvedor", "task.create")).toBe(true);
     expect(can("desenvolvedor", "task.move")).toBe(true);
     expect(can("desenvolvedor", "task.comment")).toBe(true);
     expect(can("desenvolvedor", "evidence.attach")).toBe(true);
     expect(can("desenvolvedor", "task.approve")).toBe(false);
-    expect(can("desenvolvedor", "task.create")).toBe(false);
+    expect(can("desenvolvedor", "automation.share")).toBe(true);
   });
 
   it("auditor só lê auditoria", () => {
@@ -59,17 +60,17 @@ describe("can (matriz RBAC)", () => {
     expect(can("auditor", "task.comment")).toBe(false);
   });
 
-  it("visualizador só lê tarefas e auditoria", () => {
+  it("visualizador lê auditoria e comenta", () => {
     expect(can("visualizador", "audit.read")).toBe(true);
+    expect(can("visualizador", "task.comment")).toBe(true);
     expect(can("visualizador", "task.create")).toBe(false);
     expect(can("visualizador", "task.move")).toBe(false);
     expect(can("visualizador", "task.approve")).toBe(false);
-    expect(can("visualizador", "task.comment")).toBe(false);
     expect(can("visualizador", "evidence.attach")).toBe(false);
   });
 
-  it("novas contas recebem o papel padrão desenvolvedor", () => {
-    expect(defaultRoleForNewUser).toBe("desenvolvedor");
+  it("novas contas recebem o papel padrão cliente (menor privilégio)", () => {
+    expect(defaultRoleForNewUser).toBe("cliente");
   });
 
   it("roleLabel cobre todos os papéis", () => {
@@ -92,8 +93,8 @@ describe("movePermission (regra de aprovação)", () => {
     expect(can("desenvolvedor", movePermission("Concluído"))).toBe(false);
   });
 
-  it("diretor/gestor origem Em Aprovação ainda exigem aprovação no destino Concluído", () => {
-    expect(can("gestor", movePermission("Concluído"))).toBe(false);
+  it("gestor/diretor origem Em Aprovação podem concluir direto", () => {
+    expect(can("gestor", movePermission("Concluído"))).toBe(true);
     expect(can("diretor", movePermission("Concluído"))).toBe(true);
   });
 
@@ -105,7 +106,7 @@ describe("movePermission (regra de aprovação)", () => {
 describe("userCan (role + funções concedidas)", () => {
   it("aceita apenas a role (string)", () => {
     expect(userCan("gestor", "task.create")).toBe(true);
-    expect(userCan("gestor", "task.approve")).toBe(false);
+    expect(userCan("gestor", "task.approve")).toBe(true);
     expect(userCan("diretor", "task.approve")).toBe(true);
   });
 

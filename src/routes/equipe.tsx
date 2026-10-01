@@ -16,6 +16,8 @@ import { usePortalData } from "@/lib/api-hooks";
 import { buildTeamCatalog } from "@/lib/team-photos";
 import { timelineEvents } from "@/data/timeline";
 import { filterEvents, hasActiveFilters } from "@/lib/equipe-utils";
+import { teamRoleMap } from "@/data/team";
+import { roleLabel } from "@/lib/rbac";
 
 export const Route = createFileRoute("/equipe")({
   head: () => ({
@@ -71,7 +73,17 @@ function EquipePage() {
         {members.length > 0 && (
           <div className="grid gap-4 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
             {members.map((m) => (
-              <MemberCard key={m.id} member={m} />
+              <div key={m.id} className="flex flex-col items-center gap-1">
+                <MemberCard member={m} />
+                {m.id && (() => {
+                  const r = teamRoleMap[m.id];
+                  return r ? (
+                    <span className="text-[10px] font-semibold text-brand/70 uppercase tracking-wide">
+                      {roleLabel[r]}
+                    </span>
+                  ) : null;
+                })()}
+              </div>
             ))}
           </div>
         )}

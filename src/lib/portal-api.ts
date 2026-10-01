@@ -86,7 +86,15 @@ export const registerFn = createServerFn({ method: "POST" })
       .object({
         name: z.string().trim().min(2, "Nome muito curto").max(80, "Nome muito longo"),
         email: z.string().trim().email("E-mail inválido").max(120, "E-mail muito longo"),
-        password: z.string().trim().min(8, "Senha muito curta").max(200, "Senha muito longa"),
+        password: z
+          .string()
+          .trim()
+          .min(8, "Senha muito curta (mínimo 8 caracteres)")
+          .max(200, "Senha muito longa")
+          .refine(
+            (v) => /[A-Z]/.test(v) && /[a-z]/.test(v) && /[0-9]/.test(v) && /[^A-Za-z0-9]/.test(v),
+            "A senha precisa de maiúscula, minúscula, número e caractere especial.",
+          ),
         jobTitle: z.string().trim().max(80, "Cargo muito longo").optional(),
         department: z.string().trim().max(80, "Departamento muito longo").optional(),
         bio: z.string().trim().max(300, "Bio muito longa").optional(),

@@ -45,6 +45,7 @@ import {
   userCan,
 } from "@/lib/rbac";
 import type { Role, PublicUser, Permission } from "@/lib/rbac";
+import { teamRoleMap } from "@/data/team";
 import {
   setUserRoleFn,
   deleteUserFn,
@@ -1185,6 +1186,20 @@ function AdminPage() {
                     <p className="text-xs text-muted-foreground">
                       {u.email} {u.jobTitle ? `· ${u.jobTitle}` : ""}{" "}
                       {u.department ? `· ${u.department}` : ""}
+                      {u.teamMemberId && (
+                        <>
+                          {" · "}
+                          <span className="text-brand">Equipe: {u.teamMemberId}</span>
+                        </>
+                      )}
+                      {u.teamMemberId && (() => {
+                        const r = teamRoleMap[u.teamMemberId!];
+                        return r ? (
+                          <span className="ml-1 rounded bg-brand-soft px-1.5 py-0.5 text-[10px] font-semibold text-brand">
+                            {roleLabel[r]}
+                          </span>
+                        ) : null;
+                      })()}
                     </p>
                   </div>
                   <select

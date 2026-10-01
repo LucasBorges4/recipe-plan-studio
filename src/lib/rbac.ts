@@ -169,6 +169,18 @@ export type Permission =
   | "record.manage"
   | "invite.manage";
 
+/**
+ * Matriz de permissões por role.
+ *
+ * Regras de atribuição (princípio do menor privilégio + separação de deveres):
+ * - admin: tudo (mantém auto-recuperação e gestão completa)
+ * - diretor: aprova tarefas do time, revisa evidências, gerencia riscos e documentos
+ * - gestor: cria e move tarefas, aprova conclusões do próprio time, anexa evidências
+ * - desenvolvedor: cria tarefas, move, comenta, anexa evidências, escreve wiki, automações
+ * - auditor: somente leitura de auditoria + validação de conformidade (via funções)
+ * - visualizador: acompanha tarefas e comenta (sem criar/mover)
+ * - cliente: comenta e acompanha (sem criar/mover)
+ */
 export const matrix: Record<Role, Permission[]> = {
   admin: [
     "task.create",
@@ -191,12 +203,16 @@ export const matrix: Record<Role, Permission[]> = {
     "invite.manage",
   ],
   diretor: [
+    "task.create",
+    "task.move",
     "task.approve",
     "task.comment",
     "evidence.review",
     "audit.read",
     "risk.manage",
     "wiki.write",
+    "wiki.delete",
+    "journal.manage",
     "automation.read",
     "automation.create",
     "automation.share",
@@ -205,6 +221,7 @@ export const matrix: Record<Role, Permission[]> = {
   gestor: [
     "task.create",
     "task.move",
+    "task.approve",
     "task.comment",
     "evidence.attach",
     "wiki.write",
@@ -216,15 +233,17 @@ export const matrix: Record<Role, Permission[]> = {
     "record.manage",
   ],
   desenvolvedor: [
+    "task.create",
     "task.move",
     "task.comment",
     "evidence.attach",
     "wiki.write",
     "automation.read",
     "automation.create",
+    "automation.share",
   ],
   auditor: ["audit.read", "automation.read"],
-  visualizador: ["audit.read"],
+  visualizador: ["audit.read", "task.comment"],
   cliente: ["task.comment"],
 };
 
@@ -382,8 +401,15 @@ export function isAdminRole(role: Role) {
   return role === "admin";
 }
 
-/** Papel atribuído a novas contas. A primeira conta do banco torna-se admin. */
-export const defaultRoleForNewUser: Role = "desenvolvedor";
+/**
+ * Papel atribuído a novas contas por omissão.
+ *
+ * Princípio do menor privilégio: novo utilizador sem convite nem
+ * código de registo começa como CLIENTE (acesso restrito). Admins
+ * promovem manualmente após atrelar à equipe e validar função.
+ * A primeira conta do banco continua a tornar-se admin (auto-recuperação).
+ */
+export const defaultRoleForNewUser: Role = "cliente";
 
 export const CLIENT_ROUTES: readonly string[] = ["/", "/perfil", "/termos", "/lgpd", "/tarefas", "/riscos", "/equipe"];
 

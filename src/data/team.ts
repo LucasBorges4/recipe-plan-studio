@@ -1,6 +1,29 @@
 import type { TechItem, TeamMember } from "./types";
+import type { Role } from "@/lib/rbac";
 
 export const stack: TechItem[] = [];
+
+/**
+ * Mapeamento cargo organizacional → role RBAC.
+ *
+ * Regras de atribuição (princípio do menor privilégio):
+ * - Presidente / Diretora Executiva → diretor (aprovam, revisam, governam)
+ * - Gerentes → gestor (criam/movem/aprovam tarefas do seu domínio)
+ * - Supervisor → desenvolvedor (executa, reporta, comenta)
+ *
+ * O admin do portal ajusta no cadastro do utilizador; esta tabela é a
+ * sugestão padrão ao atrelar uma conta a um membro da equipe (RNF13).
+ */
+export const teamRoleMap: Record<string, Role> = {
+  gerson: "diretor",
+  camila: "diretor",
+  "daniel-melo": "desenvolvedor",
+  "ana-soares": "gestor",
+  tome: "gestor",
+  arthur: "gestor",
+  "michael-barbosa": "gestor",
+  "lucas-borges": "gestor",
+};
 
 /** Equipe fixa do projeto. Emails sincronizados com o portal (RNF13). */
 export const teamMembers: TeamMember[] = [
