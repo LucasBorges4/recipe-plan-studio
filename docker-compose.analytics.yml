@@ -137,6 +137,11 @@ services:
       ]
     environment:
       SPARK_NO_DAEMONIZE: "true"
+    volumes:
+      # O state store do Structured Streaming é escrito pelos executores
+      # (worker), não pelo driver. O mesmo volume precisa estar nos dois
+      # containers para sobreviver a restarts/recreates.
+      - spark_checkpoints:/opt/spark/work-dir/checkpoints
     ports:
       - "127.0.0.1:8082:8081"
 

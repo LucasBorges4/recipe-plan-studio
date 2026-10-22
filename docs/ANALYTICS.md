@@ -114,8 +114,9 @@ Schema `analytics` no banco `portal` (`analytics/postgres/init.sql`):
 
 O Spark grava cada microbatch em tabelas `*_stage` via JDBC e faz
 `INSERT … ON CONFLICT` no driver (idempotente a reprocessamentos). Checkpoints
-ficam no volume `spark_checkpoints`; apagar o volume reinicia o consumo em
-`latest`.
+ficam no volume `spark_checkpoints`, montado **no driver e no worker** — o state
+store das agregações é escrito pelos executores. Apagar o volume reinicia o
+consumo em `earliest`; os eventos brutos são idempotentes por `event_id`.
 
 ## Painel no portal
 
@@ -170,6 +171,7 @@ Zeppelin ~1,5 GB (limites do compose). A stack cabe nos 16 GB livres da VM.
 | Eventos não chegam ao Postgres | Spark job reiniciando | `docker logs zaggo-spark-job --tail=200` |
 | Kafka unhealthy | storage/CLUSTER_ID | `docker logs zaggo-kafka --tail=200` |
 | Zeppelin não abre | build ARM ainda em andamento | `docker compose … logs -f zeppelin` |
+| `FileNotFoundException: ... .delta does not exist` | worker sem o volume de checkpoints | garanta o volume no worker e recrie a stack; se o estado estiver corrompido, limpe `spark_checkpoints` |
 | Zeppelin login falha | shiro.ini desatualizado | `npm run analytics:setup` e recriar o container |
 | IP sempre nulo | proxy sem `X-Forwarded-For` | configure o proxy para repassar o header |
 
