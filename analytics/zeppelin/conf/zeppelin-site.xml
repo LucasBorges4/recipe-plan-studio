@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
+<!-- Configuração do Zeppelin (não versionar segredos aqui). -->
+<configuration>
+  <property>
+    <name>zeppelin.server.addr</name>
+    <value>0.0.0.0</value>
+  </property>
+  <property>
+    <name>zeppelin.server.port</name>
+    <value>8080</value>
+  </property>
+  <property>
+    <name>zeppelin.server.context.path</name>
+    <value>/</value>
+  </property>
+  <property>
+    <name>zeppelin.notebook.dir</name>
+    <value>/opt/zeppelin/notebook</value>
+  </property>
+  <property>
+    <name>zeppelin.interpreter.remote.rm.port</name>
+    <value>0</value>
+  </property>
+  <property>
+    <name>zeppelin.server.ssl.enabled</name>
+    <value>false</value>
+  </property>
+  <property>
+    <name>zeppelin.anonymous.allowed</name>
+    <value>false</value>
+  </property>
+  <property>
+    <name>zeppelin.notebook.default.owner.username</name>
+    <value>admin</value>
+  </property>
+</configuration>

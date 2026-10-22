@@ -4,6 +4,7 @@ import {
   Link,
   createRootRouteWithContext,
   useRouter,
+  useRouterState,
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
@@ -15,6 +16,7 @@ import { AppShell } from "@/components/portal/AppSidebar";
 import { Toaster } from "@/components/ui/sonner";
 import { qk } from "@/lib/api-hooks";
 import { meFn, getPortalStateFn } from "@/lib/portal-api";
+import { startTracker, trackPageView } from "@/lib/tracker";
 
 function NotFoundComponent() {
   return (
@@ -137,6 +139,14 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const pagePath = useRouterState({
+    select: (state) => state.location.pathname,
+  });
+
+  useEffect(() => {
+    startTracker();
+    trackPageView(pagePath);
+  }, [pagePath]);
 
   return (
     <QueryClientProvider client={queryClient}>

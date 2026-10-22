@@ -21,7 +21,13 @@
     "format": "prettier --write .",
     "postinstall": "node scripts/patch-unenv.mjs",
     "photos:sync": "node scripts/sync-team-photos.mjs",
-    "brand:assets": "node scripts/generate-brand-assets.mjs"
+    "brand:assets": "node scripts/generate-brand-assets.mjs",
+    "analytics:setup": "bash scripts/setup-analytics.sh",
+    "analytics:up": "docker compose --env-file .env.analytics -f docker-compose.analytics.yml up -d --build",
+    "analytics:down": "docker compose --env-file .env.analytics -f docker-compose.analytics.yml down",
+    "analytics:status": "docker compose --env-file .env.analytics -f docker-compose.analytics.yml ps",
+    "analytics:logs": "docker compose --env-file .env.analytics -f docker-compose.analytics.yml logs -f --tail=120",
+    "analytics:demo": "node scripts/analytics-demo.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
@@ -68,6 +74,7 @@
     "dotenv": "^17.4.2",
     "embla-carousel-react": "^8.6.0",
     "input-otp": "^1.4.2",
+    "kafkajs": "^2.2.4",
     "lucide-react": "^0.575.0",
     "pg": "^8.23.0",
     "react": "^19.2.0",

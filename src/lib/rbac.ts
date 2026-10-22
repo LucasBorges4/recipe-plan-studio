@@ -413,8 +413,15 @@ export const defaultRoleForNewUser: Role = "cliente";
 
 export const CLIENT_ROUTES: readonly string[] = ["/", "/perfil", "/termos", "/lgpd", "/tarefas", "/riscos", "/equipe"];
 
+/** Papéis com acesso ao painel de comportamento (/analytics) e à API de métricas. */
+export const ANALYTICS_ROLES: readonly Role[] = ["admin", "diretor", "gestor", "auditor"];
+
+export function canViewAnalytics(role: Role): boolean {
+  return ANALYTICS_ROLES.includes(role);
+}
+
 /** Rotas ocultas para o papel visualizador (somente leitura). */
-export const VIEWER_HIDDEN_ROUTES: readonly string[] = ["/admin", "/automacoes"];
+export const VIEWER_HIDDEN_ROUTES: readonly string[] = ["/admin", "/automacoes", "/analytics"];
 
 export function pageAllowedForRole(role: Role, path: string): boolean {
   if (role === "cliente") {

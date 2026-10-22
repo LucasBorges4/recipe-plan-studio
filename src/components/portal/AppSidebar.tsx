@@ -17,6 +17,7 @@ import {
   Search,
   UsersRound,
   Zap,
+  BarChart3,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useQueryClient, useMutation } from "@tanstack/react-query";
@@ -36,6 +37,7 @@ const mainNav = [
   { to: "/automacoes", label: "Automações", icon: Bot },
   { to: "/diario", label: "Diário de Bordo", icon: BookOpen },
   { to: "/compliance", label: "Compliance", icon: ShieldCheck },
+  { to: "/analytics", label: "Comportamento", icon: BarChart3 },
   { to: "/mentoria", label: "Mentoria IA", icon: Zap },
   { to: "/wiki", label: "Wiki", icon: Library },
   { to: "/riscos", label: "Mapa de Riscos", icon: AlertTriangle },

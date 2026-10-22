@@ -1,0 +1,251 @@
+# ============================================================================
+# ZAGGO — pipeline de comportamento em tempo real
+# Kafka (KRaft) → Spark Structured Streaming → PostgreSQL → Zeppelin
+#
+# Suba com:  npm run analytics:setup && npm run analytics:up
+# Portas expostas apenas em 127.0.0.1 (acesse via túnel SSH).
+# ============================================================================
+name: zaggo-analytics
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+networks:
+  portal:
+    external: true
+    name: recipe-plan-studio_default
+
+volumes:
+  kafka_data:
+  spark_checkpoints:
+  zeppelin_notebooks:
+
+services:
+  # -------------------------------------------------------------------------
+  # Kafka single-node em KRaft (sem Zookeeper)
+  # -------------------------------------------------------------------------
+  kafka:
+    image: apache/kafka:3.9.0
+    container_name: zaggo-kafka
+    restart: unless-stopped
+    mem_limit: 1g
+    logging: *default-logging
+    networks: [portal]
+    ports:
+      - "127.0.0.1:9094:9094"
+    environment:
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://127.0.0.1:9094
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      KAFKA_HEAP_OPTS: -Xms512m -Xmx512m
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null 2>&1",
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 40s
+
+  kafka-init:
+    image: apache/kafka:3.9.0
+    container_name: zaggo-kafka-init
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks: [portal]
+    restart: "no"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092
+        --create --if-not-exists --topic portal.events
+        --partitions 3 --replication-factor 1
+        --config retention.ms=604800000
+        --config cleanup.policy=delete
+        && echo "[zaggo] tópico portal.events pronto"
+
+  # -------------------------------------------------------------------------
+  # Spark standalone (master + worker + job de streaming)
+  # -------------------------------------------------------------------------
+  spark-master:
+    build:
+      context: ./analytics/spark
+    image: zaggo-spark:3.5.3
+    container_name: zaggo-spark-master
+    restart: unless-stopped
+    mem_limit: 1g
+    logging: *default-logging
+    networks: [portal]
+    entrypoint: []
+    command:
+      [
+        "/opt/spark/bin/spark-class",
+        "org.apache.spark.deploy.master.Master",
+        "--host",
+        "spark-master",
+        "--port",
+        "7077",
+        "--webui-port",
+        "8080",
+      ]
+    environment:
+      SPARK_NO_DAEMONIZE: "true"
+    ports:
+      - "127.0.0.1:8081:8080"
+
+  spark-worker:
+    image: zaggo-spark:3.5.3
+    container_name: zaggo-spark-worker
+    restart: unless-stopped
+    mem_limit: 3g
+    logging: *default-logging
+    networks: [portal]
+    entrypoint: []
+    depends_on:
+      - spark-master
+    command:
+      [
+        "/opt/spark/bin/spark-class",
+        "org.apache.spark.deploy.worker.Worker",
+        "spark://spark-master:7077",
+        "--webui-port",
+        "8081",
+        "--cores",
+        "2",
+        "--memory",
+        "2g",
+      ]
+    environment:
+      SPARK_NO_DAEMONIZE: "true"
+    ports:
+      - "127.0.0.1:8082:8081"
+
+  spark-job:
+    image: zaggo-spark:3.5.3
+    container_name: zaggo-spark-job
+    restart: unless-stopped
+    mem_limit: 1536m
+    logging: *default-logging
+    networks: [portal]
+    entrypoint: ["/bin/bash", "/opt/job/entrypoint.sh"]
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully
+      spark-master:
+        condition: service_started
+    environment:
+      KAFKA_BROKERS: kafka:9092
+      KAFKA_TOPIC: portal.events
+      CHECKPOINT_DIR: /opt/spark/work-dir/checkpoints
+      PG_HOST: portal-postgres
+      PG_PORT: "5432"
+      PG_DB: ${PG_DB:-portal}
+      PG_USER: ${PG_USER:-portal}
+      PG_PASSWORD: ${PORTAL_PG_PASSWORD:?defina PORTAL_PG_PASSWORD em .env.analytics}
+    volumes:
+      - spark_checkpoints:/opt/spark/work-dir/checkpoints
+
+  # -------------------------------------------------------------------------
+  # Apache Zeppelin (dashboards SQL sobre as views analytics.*)
+  # -------------------------------------------------------------------------
+  zeppelin:
+    build:
+      context: ./analytics/zeppelin
+      args:
+        ZEPPELIN_DIST_URL: ${ZEPPELIN_DIST_URL:-https://archive.apache.org/dist/zeppelin/zeppelin-0.11.2/zeppelin-0.11.2-bin-all.tgz}
+    image: zaggo-zeppelin:0.11.2
+    container_name: zaggo-zeppelin
+    restart: unless-stopped
+    mem_limit: 2g
+    logging: *default-logging
+    networks: [portal]
+    ports:
+      - "127.0.0.1:8090:8080"
+    volumes:
+      - zeppelin_notebooks:/opt/zeppelin/notebook
+      - ./analytics/zeppelin/conf/shiro.ini:/opt/zeppelin/conf/shiro.ini:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/api/version >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 90s
+
+  zeppelin-bootstrap:
+    image: python:3.12-alpine
+    container_name: zaggo-zeppelin-bootstrap
+    restart: "no"
+    networks: [portal]
+    depends_on:
+      zeppelin:
+        condition: service_healthy
+      analytics-db-init:
+        condition: service_completed_successfully
+    environment:
+      ZEPPELIN_URL: http://zeppelin:8080
+      ZEPPELIN_USER: ${ZEPPELIN_ADMIN_USER:-admin}
+      ZEPPELIN_PASSWORD: ${ZEPPELIN_ADMIN_PASSWORD:?defina ZEPPELIN_ADMIN_PASSWORD em .env.analytics}
+      PG_HOST: portal-postgres
+      PG_PORT: "5432"
+      PG_DB: ${PG_DB:-portal}
+      PG_USER: ${PG_USER:-portal}
+      PG_PASSWORD: ${PORTAL_PG_PASSWORD}
+    volumes:
+      - ./analytics/zeppelin/bootstrap.py:/bootstrap.py:ro
+      - ./analytics/zeppelin/notebook.json:/notebook.json:ro
+    command: ["python3", "/bootstrap.py"]
+
+  # -------------------------------------------------------------------------
+  # Inicialização do schema + retenção (LGPD)
+  # -------------------------------------------------------------------------
+  analytics-db-init:
+    image: postgres:16-alpine
+    container_name: zaggo-analytics-db-init
+    restart: "no"
+    networks: [portal]
+    environment:
+      PGPASSWORD: ${PORTAL_PG_PASSWORD:?defina PORTAL_PG_PASSWORD em .env.analytics}
+    volumes:
+      - ./analytics/postgres/init.sql:/init.sql:ro
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >
+        until pg_isready -h portal-postgres -p 5432 -U ${PG_USER:-portal} >/dev/null 2>&1; do sleep 2; done;
+        psql -h portal-postgres -p 5432 -U ${PG_USER:-portal} -d ${PG_DB:-portal}
+        -v ON_ERROR_STOP=1 -f /init.sql
+        && echo "[zaggo] schema analytics pronto"
+
+  analytics-retention:
+    image: postgres:16-alpine
+    container_name: zaggo-analytics-retention
+    restart: unless-stopped
+    networks: [portal]
+    environment:
+      PGHOST: portal-postgres
+      PGPORT: "5432"
+      PGUSER: ${PG_USER:-portal}
+      PGDATABASE: ${PG_DB:-portal}
+      PGPASSWORD: ${PORTAL_PG_PASSWORD:?defina PORTAL_PG_PASSWORD em .env.analytics}
+    volumes:
+      - ./analytics/postgres/retention.sh:/retention.sh:ro
+    entrypoint: ["/bin/sh", "/retention.sh"]

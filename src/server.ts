@@ -50,8 +50,21 @@ function isH3SwallowedErrorBody(body: string): boolean {
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     try {
-      // Health check endpoint
       const url = new URL(request.url);
+
+      // Tracker comportamental (same-origin, sem PII). Ver docs/ANALYTICS.md.
+      if (url.pathname === "/api/track") {
+        const { handleTrackRequest } = await import("./server/analytics");
+        return handleTrackRequest(request);
+      }
+
+      // Métricas agregadas para o painel /analytics (papéis de gestão).
+      if (url.pathname === "/api/analytics/summary") {
+        const { handleAnalyticsSummaryRequest } = await import("./server/analytics");
+        return handleAnalyticsSummaryRequest(request);
+      }
+
+      // Health check endpoint
       if (url.pathname === "/api/health") {
         return new Response(
           JSON.stringify({

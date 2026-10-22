@@ -1,0 +1,172 @@
+{
+  "name": "ZAGGO — Comportamento em Tempo Real",
+  "defaultInterpreterGroup": "jdbc",
+  "paragraphs": [
+    {
+      "title": "KPIs — últimos 5 minutos",
+      "text": "%jdbc\nSELECT\n  events           AS \"Eventos\",\n  sessions         AS \"Sessões\",\n  users            AS \"Usuários\",\n  avg_duration_ms  AS \"Tempo médio (ms)\",\n  avg_scroll_pct   AS \"Scroll médio (%)\",\n  rage_clicks      AS \"Rage clicks\",\n  page_views       AS \"Page views\"\nFROM analytics.v_live_kpis",
+      "config": {
+        "editorMode": "ace/mode/sql",
+        "colWidth": 12,
+        "fontSize": 9,
+        "enabled": true,
+        "results": {},
+        "editorHide": true,
+        "tableDisplay": {}
+      }
+    },
+    {
+      "title": "Eventos por minuto — últimos 60 minutos",
+      "text": "%jdbc\nSELECT\n  bucket      AS \"Minuto\",\n  events      AS \"Eventos\",\n  sessions    AS \"Sessões\",\n  page_views  AS \"Page views\",\n  rage_clicks AS \"Rage clicks\"\nFROM analytics.v_events_per_minute\nORDER BY bucket",
+      "config": {
+        "editorMode": "ace/mode/sql",
+        "colWidth": 12,
+        "fontSize": 9,
+        "enabled": true,
+        "results": {},
+        "editorHide": true,
+        "tableDisplay": {},
+        "graph": {
+          "mode": "line",
+          "height": 400,
+          "option": {
+            "isStacked": false,
+            "fill": 0,
+            "display": true
+          },
+          "commonSetting": {}
+        }
+      }
+    },
+    {
+      "title": "Páginas mais vistas — 15 minutos",
+      "text": "%jdbc\nSELECT\n  path            AS \"Página\",\n  views           AS \"Views\",\n  sessions        AS \"Sessões\",\n  avg_dwell_ms    AS \"Dwell médio (ms)\",\n  avg_scroll_pct  AS \"Scroll (%)\"\nFROM analytics.v_top_pages_15m",
+      "config": {
+        "editorMode": "ace/mode/sql",
+        "colWidth": 6,
+        "fontSize": 9,
+        "enabled": true,
+        "results": {},
+        "editorHide": true,
+        "tableDisplay": {},
+        "graph": {
+          "mode": "bar",
+          "height": 360,
+          "option": {
+            "isStacked": false,
+            "display": true
+          },
+          "commonSetting": {}
+        }
+      }
+    },
+    {
+      "title": "Cliques e atrito — 15 minutos",
+      "text": "%jdbc\nSELECT\n  element       AS \"Elemento\",\n  path          AS \"Página\",\n  clicks        AS \"Cliques\",\n  rage_clicks   AS \"Rage clicks\",\n  rage_rate_pct AS \"Taxa rage (%)\"\nFROM analytics.v_click_heatmap_15m",
+      "config": {
+        "editorMode": "ace/mode/sql",
+        "colWidth": 6,
+        "fontSize": 9,
+        "enabled": true,
+        "results": {},
+        "editorHide": true,
+        "tableDisplay": {}
+      }
+    },
+    {
+      "title": "Funil de uso — 24 horas",
+      "text": "%jdbc\nSELECT\n  step     AS \"Etapa\",\n  sessions AS \"Sessões\"\nFROM analytics.v_funnel_24h\nORDER BY step",
+      "config": {
+        "editorMode": "ace/mode/sql",
+        "colWidth": 6,
+        "fontSize": 9,
+        "enabled": true,
+        "results": {},
+        "editorHide": true,
+        "tableDisplay": {},
+        "graph": {
+          "mode": "bar",
+          "height": 320,
+          "option": {
+            "isStacked": false,
+            "display": true
+          },
+          "commonSetting": {}
+        }
+      }
+    },
+    {
+      "title": "Dispositivos — 15 minutos",
+      "text": "%jdbc\nSELECT\n  device   AS \"Dispositivo\",\n  events   AS \"Eventos\",\n  sessions AS \"Sessões\"\nFROM analytics.v_device_breakdown_15m",
+      "config": {
+        "editorMode": "ace/mode/sql",
+        "colWidth": 6,
+        "fontSize": 9,
+        "enabled": true,
+        "results": {},
+        "editorHide": true,
+        "tableDisplay": {},
+        "graph": {
+          "mode": "pie",
+          "height": 320,
+          "option": {
+            "display": true
+          },
+          "commonSetting": {}
+        }
+      }
+    },
+    {
+      "title": "Atividade por papel — 15 minutos",
+      "text": "%jdbc\nSELECT\n  role     AS \"Papel\",\n  events   AS \"Eventos\",\n  sessions AS \"Sessões\",\n  users    AS \"Usuários\"\nFROM analytics.v_role_activity_15m",
+      "config": {
+        "editorMode": "ace/mode/sql",
+        "colWidth": 6,
+        "fontSize": 9,
+        "enabled": true,
+        "results": {},
+        "editorHide": true,
+        "tableDisplay": {}
+      }
+    },
+    {
+      "title": "Sessões por usuário — 15 minutos",
+      "text": "%jdbc\nSELECT\n  user_id   AS \"Usuário (pseudônimo)\",\n  role      AS \"Papel\",\n  sessions  AS \"Sessões\",\n  events    AS \"Eventos\",\n  last_seen AS \"Último evento\"\nFROM analytics.v_user_activity_15m",
+      "config": {
+        "editorMode": "ace/mode/sql",
+        "colWidth": 6,
+        "fontSize": 9,
+        "enabled": true,
+        "results": {},
+        "editorHide": true,
+        "tableDisplay": {}
+      }
+    },
+    {
+      "title": "Páginas com maior tempo de permanência — 15 minutos",
+      "text": "%jdbc\nSELECT\n  path           AS \"Página\",\n  leaves         AS \"Saídas\",\n  avg_dwell_ms   AS \"Dwell médio (ms)\",\n  p90_dwell_ms   AS \"P90 (ms)\",\n  avg_scroll_pct AS \"Scroll (%)\"\nFROM analytics.v_slow_pages_15m",
+      "config": {
+        "editorMode": "ace/mode/sql",
+        "colWidth": 6,
+        "fontSize": 9,
+        "enabled": true,
+        "results": {},
+        "editorHide": true,
+        "tableDisplay": {}
+      }
+    },
+    {
+      "title": "Eventos recentes",
+      "text": "%jdbc\nSELECT\n  event_ts    AS \"Horário\",\n  event       AS \"Evento\",\n  path        AS \"Página\",\n  role        AS \"Papel\",\n  device      AS \"Dispositivo\",\n  element     AS \"Elemento\",\n  duration_ms AS \"Duração (ms)\"\nFROM analytics.events\nORDER BY event_ts DESC\nLIMIT 50",
+      "config": {
+        "editorMode": "ace/mode/sql",
+        "colWidth": 12,
+        "fontSize": 9,
+        "enabled": true,
+        "results": {},
+        "editorHide": true,
+        "tableDisplay": {}
+      }
+    }
+  ]
+}

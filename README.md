@@ -55,14 +55,31 @@ autenticação real (substitui o antigo estado em `localStorage`).
   _timing-safe_ (hash dummy quando o e-mail não existe).
 - **Sessões**: cookie `httpOnly` `geos_session` com token opaco; o banco guarda
   apenas o SHA-256 do token.
-- **Papéis (RBAC)**: `admin`, `diretor`, `gestor`, `desenvolvedor`, `auditor`.
-  A primeira conta criada torna-se `admin`; as demais começam como
-  `desenvolvedor`. Toda mutação é revalidada no servidor.
+- **Papéis (RBAC)**: `admin`, `diretor`, `gestor`, `desenvolvedor`, `auditor`,
+  `cliente` e `visualizador`. A primeira conta criada torna-se `admin`; as
+  demais começam como `cliente` (menor privilégio). Toda mutação é revalidada no
+  servidor.
 - **Auditoria**: trilha somente-inserção de todas as ações relevantes.
 - **API**: server functions (`@tanstack/react-start`) em `src/lib/portal-api.ts`
   consumidas via hooks em `src/lib/api-hooks.ts`.
 
 Configuração em `.env.example`. Em produção defina `DATABASE_PATH` para volume persistente ou troque `Storage` por Postgres.
+
+## Analytics de comportamento (Kafka → Spark → Zeppelin)
+
+O portal coleta eventos de navegação **pseudonimizados** (sem PII) e os processa
+em tempo real com Kafka, Spark Structured Streaming e PostgreSQL; os dashboards
+SQL ficam no Apache Zeppelin e o resumo executivo em `/analytics`.
+
+```sh
+npm run analytics:setup   # gera .env.analytics + shiro.ini
+npm run analytics:up      # Kafka, Spark, Zeppelin e schema analytics
+npm run deploy            # portal com /api/track e /analytics
+npm run analytics:demo    # eventos sintéticos para validar
+```
+
+Arquitetura, modelo de dados, privacidade/LGPD, retenção e troubleshooting:
+[`docs/ANALYTICS.md`](docs/ANALYTICS.md).
 
 ## Operação (produto final)
 
