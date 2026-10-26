@@ -24,7 +24,7 @@ import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { LogOut, LogIn } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { roleLabel, menuAllowed } from "@/lib/rbac";
+import { roleLabel, roleProfiles, menuAllowed } from "@/lib/rbac";
 import { useGlobalSearch } from "@/lib/api-hooks";
 import { useSession, qk } from "@/lib/api-hooks";
 import { logoutFn } from "@/lib/portal-api";
@@ -81,6 +81,9 @@ function SessionBox() {
   }
 
   const user = session.user;
+  // O rodapé reflete o papel efetivo do usuário autenticado (RBAC),
+  // não um rótulo fixo de administrador.
+  const roleSummary = `${roleLabel[user.role]} · ${roleProfiles[user.role].position}`;
   return (
     <div className="border-t border-sidebar-border/60 px-4 py-5">
       <div className="flex items-center gap-3">
@@ -90,8 +93,15 @@ function SessionBox() {
           </div>
         </div>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-bold text-sidebar-primary-foreground tracking-tight">Administrador</p>
-          <p className="truncate text-[11px] text-sidebar-foreground/60">Administrador - {roleLabel[user.role]}</p>
+          <p
+            className="truncate text-sm font-bold text-sidebar-primary-foreground tracking-tight"
+            title={user.name}
+          >
+            {user.name}
+          </p>
+          <p className="truncate text-[11px] text-sidebar-foreground/60" title={roleSummary}>
+            {roleSummary}
+          </p>
         </div>
       </div>
       <button
